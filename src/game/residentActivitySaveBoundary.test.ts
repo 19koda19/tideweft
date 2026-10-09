@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { createWorld, serializeWorld } from "../sim/public";
 import {
+  canonicalizeResidentActivity,
+  RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID,
+  RESIDENT_ENVIRONMENT_ACTIVITY_VERSION,
+} from "../sim/residentActivity";
+import {
   captureResidentActivityEventLocus,
   RESIDENT_ACTIVITY_EVENT_LOCUS_DATA_KEYS,
 } from "../sim/residentActivityEventLocus";
@@ -15,6 +20,7 @@ import {
 import {
   residentActivitiesMatchPerceptionInterval,
   residentActivitySaveExtensionsAbsent,
+  residentActivitySaveExtensionsValid,
 } from "./residentActivitySaveBoundary";
 import { resolveResidentWorldPlacement } from "./residentSpatial";
 import { WORLD_POSITION_UNITS_PER_TILE, worldPositionDelta } from "./worldPosition";
@@ -70,6 +76,30 @@ function firstEvent(world: WorldState) {
   return event;
 }
 
+function environmentFixture(phase: number, withObservedHold: boolean) {
+  const world = adoptedFixture(phase);
+  const selected = world.residents.find((resident) => resident.activity?.restTask?.origin === "selected");
+  if (selected?.activity?.restTask === undefined || selected.activity.restTask === null) {
+    throw new Error("Successor codec fixture needs its native selected-rest approach");
+  }
+  const selectedId = selected.identity.stableId;
+  const selectedTask = selected.activity.restTask;
+  world.residents = world.residents.map((resident) => {
+    // Explicit successor codec evidence. This changes no body pose and does
+    // not claim the model's dry target was actually observed under water.
+    const activity = canonicalizeResidentActivity({ ...resident.activity,
+      version: RESIDENT_ENVIRONMENT_ACTIVITY_VERSION,
+      ownerId: RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID,
+      restTask: withObservedHold && resident.identity.stableId === selectedId
+        ? { ...selectedTask, phase: "waiting", waitReason: "observed-water" } : null,
+      rationTask: null, materialTask: null, inspectionTask: null,
+    }, { actorId: resident.identity.stableId, tick: world.meta.completedTick, phase });
+    if (activity === null) throw new Error("Successor codec fixture lost its native body history");
+    return { ...resident, activity };
+  });
+  return world;
+}
+
 describe("resident activity save capability and interval boundary", () => {
   it.each([0, 1, 9])("keeps genuinely absent legacy bodies absent at accepted phase %s", (phase) => {
     const world = freshWorld();
@@ -94,6 +124,27 @@ describe("resident activity save capability and interval boundary", () => {
     expect(world.residents).toBe(residents);
     expect(detached).toEqual(residents);
     expect(serializeWorld(world)).toBe(before);
+  });
+
+  it.each([0, 4, 9])("requires the explicit environment outer capability at retained phase %s, even with every task null", (phase) => {
+    for (const withObservedHold of [false, true]) {
+      const world = environmentFixture(phase, withObservedHold);
+      const before = serializeWorld(world);
+      const clone = structuredClone(world);
+      expect(world.residents.every((resident) => resident.activity?.version === RESIDENT_ENVIRONMENT_ACTIVITY_VERSION)).toBe(true);
+      expect(world.residents.filter((resident) => resident.activity?.restTask !== null)).toHaveLength(withObservedHold ? 1 : 0);
+      expect(residentActivitySaveExtensionsValid(world, true, true, true, true)).toBe(false);
+      expect(residentActivitySaveExtensionsValid(world, true, true, true, true, false)).toBe(false);
+      expect(residentActivitySaveExtensionsValid(world, true, true, true, true, true)).toBe(true);
+      expect(residentActivitySaveExtensionsValid(clone, true, true, true, true, true)).toBe(true);
+      expect(residentActivitiesMatchPerceptionInterval(clone.residents, world.meta.completedTick, phase)).toBe(true);
+      for (const [bodies, services, civic, inspection, environment] of [[false, true, true, true, true], [true, false, true, true, true],
+        [true, true, false, true, true], [true, true, true, false, true]] as const) {
+        expect(residentActivitySaveExtensionsValid(world, bodies, services, civic, inspection, environment)).toBe(false);
+      }
+      expect(serializeWorld(world)).toBe(before);
+      expect(serializeWorld(clone)).toBe(before);
+    }
   });
 
   it("rejects a partial roster, including a missing final body, without repairing it", () => {

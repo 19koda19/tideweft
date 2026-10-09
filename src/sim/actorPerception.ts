@@ -43,7 +43,8 @@ export type ActorObservationChannel = (typeof ACTOR_OBSERVATION_CHANNELS)[number
 /** Compatibility alias retained for consumers of the first implementation. */
 export type F0ObservationChannel = ActorObservationChannel;
 export type ObservationIdentification = "anonymous" | "classified" | "identified";
-export type ObservationInterrupt = "none" | "strong";
+/** Information can retain classified surface facts without inventing threat pressure. */
+export type ObservationInterrupt = "none" | "strong" | "information";
 export type ActorSuspicionState =
   | "unaware"
   | "noticed"
@@ -390,7 +391,8 @@ export function stepActorPerception(
     elapsed,
   );
   const strongestSignal = selectedByBelief.reduce(
-    (best, observation) => Math.max(best, observationStrength(observation)),
+    (best, observation) => observation.interrupt === "information"
+      ? best : Math.max(best, observationStrength(observation)),
     0,
   );
   if (strongestSignal >= MIN_PRESSURE_SIGNAL) {
@@ -620,6 +622,10 @@ function canonicalObservation(value: unknown): ActorObservation | null {
   ) return null;
   const area = canonicalArea(value.area);
   if (area === null) return null;
+  // This explicit producer choice is qualitative visual task information,
+  // not a way to neutralize spoken warnings, sound or identified threats.
+  if (value.interrupt === "information" && (value.channel !== "vision"
+    || value.identification !== "classified" || value.subjectId !== null)) return null;
 
   if (value.channel === "hearing") {
     if (
@@ -1240,7 +1246,7 @@ function isIdentification(value: unknown): value is ObservationIdentification {
 }
 
 function isInterrupt(value: unknown): value is ObservationInterrupt {
-  return value === "none" || value === "strong";
+  return value === "none" || value === "strong" || value === "information";
 }
 
 function isSuspicion(value: unknown): value is ActorSuspicionState {

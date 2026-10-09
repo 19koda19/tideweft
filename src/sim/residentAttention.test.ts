@@ -15,7 +15,9 @@ import {
   type ActorPerceptionState,
 } from "./actorPerception";
 import { createRegionCoord } from "./regions";
-import { RESIDENT_NEUTRAL_GLANCE_TICKS, queryResidentAttentionState } from "./residentAttention";
+import { RESIDENT_NEUTRAL_GLANCE_TICKS, queryResidentAttentionState, residentAttentionFocus } from "./residentAttention";
+import { residentCircadianWatchReference } from "./livingCircadian";
+import { residentRestSurfaceObservationId } from "./residentSurfaceKnowledge";
 
 const OBSERVER_ID = "human:resident-attention-test";
 
@@ -49,6 +51,19 @@ function anonymousSound(tick: number, strong = false): ActorObservation {
     salience: strong ? 980_000 : 650_000,
     identification: "anonymous",
     interrupt: strong ? "strong" : "none",
+  });
+}
+
+/** Synthetic task facts test appraisal, not a real selected task or sight. */
+function surfaceSight(tick: number, dry = false, strong = false): ActorObservation {
+  const target = createWorldPosition(createRegionCoord(0, 0), 18_500, 16_500);
+  return sighting(tick, {
+    id: residentRestSurfaceObservationId(OBSERVER_ID, target),
+    perceivedClass: dry ? "dry-ground" : "water-covered-ground",
+    subjectId: null,
+    area: { center: target, radiusUnits: 0 },
+    confidence: 1_000_000, salience: 300_000,
+    identification: "classified", interrupt: strong ? "strong" : "information",
   });
 }
 
@@ -243,6 +258,101 @@ describe("resident appraisal of shared perception", () => {
     expect(state.suspicion).toBe("identified");
     expect(queryActorAttention(state)[0]?.subjectId).toBeNull();
     expect(queryResidentAttentionState(state)).toBe("identified");
+  });
+
+  it("keeps qualitative task-ground information out of watch duty while preserving its accepted facts", () => {
+    let state = createActorPerceptionState(OBSERVER_ID);
+    for (let tick = 1; tick <= 3; tick += 1) {
+      state = advance(state, tick, [surfaceSight(tick, tick >= 2)]);
+      const before = serializeActorPerceptionState(state);
+      expect(state.suspicionPressure).toBe(0);
+      expect(state.suspicion).toBe("unaware");
+      expect(queryResidentAttentionState(state)).toBe("none");
+      expect(residentAttentionFocus(state)).toBeUndefined();
+      expect(residentCircadianWatchReference(state)).toBeNull();
+      expect(queryActorAttention(state)[0]).toMatchObject({
+        perceivedClass: tick >= 2 ? "dry-ground" : "water-covered-ground",
+        subjectId: null, identification: "classified", firstObservedTick: 1, lastObservedTick: tick,
+      });
+      expect(state.search).toBeNull();
+      expect(state.salientMemory).toEqual([]);
+      expect(queryResidentAttentionState(deserializeActorPerceptionState(before))).toBe("none");
+      expect(serializeActorPerceptionState(state)).toBe(before);
+    }
+    expect(queryResidentAttentionState(advance(state, 4))).toBe("none");
+  });
+
+  it("retains actual strong warnings even when task-ground information is also attended", () => {
+    const state = advance(createActorPerceptionState(OBSERVER_ID), 1, [surfaceSight(1), anonymousSound(1, true)]);
+    expect(state.suspicion).toBe("alert");
+    expect(queryResidentAttentionState(state)).toBe("alert");
+    expect(residentCircadianWatchReference(state)).toBe("perception:alert");
+    expect(queryActorAttention(state)[0]).toMatchObject({ channel: "hearing", strongInterrupt: true, subjectId: null });
+    const groundInterrupt = advance(createActorPerceptionState(OBSERVER_ID), 1, [surfaceSight(1, false, true)]);
+    expect(queryResidentAttentionState(groundInterrupt)).toBe("alert");
+    expect(residentCircadianWatchReference(groundInterrupt)).toBe("perception:alert");
+  });
+
+  it("preserves identified predator attention and lost-contact search beneath a stronger surface fact", () => {
+    const predator = sighting(1, { perceivedClass: "large-predator", subjectId: "animal:surface-adjacent-predator",
+      confidence: 500_000, salience: 500_000 });
+    const seen = advance(createActorPerceptionState(OBSERVER_ID), 1, [surfaceSight(1), predator]);
+    expect(queryActorAttention(seen)[0]?.perceivedClass).toBe("water-covered-ground");
+    expect(residentAttentionFocus(seen)).toBe(seen.beliefs.find(
+      ({ subjectId }) => subjectId === "animal:surface-adjacent-predator",
+    ));
+    expect(queryResidentAttentionState(seen)).toBe("identified");
+    expect(residentCircadianWatchReference(seen)).toBe("perception:identified");
+    const lost = advance(seen, 2, [surfaceSight(2, true)]);
+    const before = serializeActorPerceptionState(lost);
+    expect(queryActorSearch(lost)?.subjectId).toBe("animal:surface-adjacent-predator");
+    expect(queryResidentAttentionState(lost)).toBe("searching");
+    expect(residentCircadianWatchReference(lost)).toBe("perception:searching");
+    expect(queryResidentAttentionState(deserializeActorPerceptionState(before))).toBe("searching");
+    expect(serializeActorPerceptionState(lost)).toBe(before);
+  });
+
+  it("retains genuine residual warning pressure after its weak contact expires despite fresh ground information", () => {
+    const warning = sighting(1, {
+      id: "weak-real-warning", channel: "hearing", perceivedClass: "danger-sound",
+      subjectId: null, identification: "anonymous", interrupt: "strong",
+      area: { center: createWorldPosition(createRegionCoord(0, 0), 18_000, 16_000), radiusUnits: 1_000 },
+      confidence: 100_000, salience: 100_000,
+    });
+    let bare = createActorPerceptionState(OBSERVER_ID);
+    let informed = createActorPerceptionState(OBSERVER_ID);
+    for (let tick = 1; tick <= 8; tick += 1) {
+      const signals = tick === 1 ? [warning] : [];
+      bare = advance(bare, tick, signals);
+      informed = advance(informed, tick, [...signals, surfaceSight(tick, true)]);
+      const before = serializeActorPerceptionState(informed);
+      const cold = deserializeActorPerceptionState(before);
+      if (cold === null) throw new Error("Residual warning fixture must reload");
+      expect(informed.suspicionPressure).toBe(1_000_000 - (tick - 1) * 80_000);
+      expect(informed.suspicionPressure).toBe(bare.suspicionPressure);
+      expect(informed.suspicion).toBe(bare.suspicion);
+      expect(informed.search).toEqual(bare.search);
+      expect(queryResidentAttentionState(informed)).toBe(queryResidentAttentionState(bare));
+      expect(residentCircadianWatchReference(informed)).toBe(residentCircadianWatchReference(bare));
+      expect(queryResidentAttentionState(cold)).toBe(queryResidentAttentionState(bare));
+      expect(residentCircadianWatchReference(structuredClone(informed))).toBe(residentCircadianWatchReference(bare));
+      if (tick >= 4) {
+        expect(bare.beliefs).toEqual([]);
+        expect(informed.beliefs.map(({ perceivedClass }) => perceivedClass)).toEqual(["dry-ground"]);
+      }
+      expect(serializeActorPerceptionState(cold)).toBe(before);
+      expect(serializeActorPerceptionState(informed)).toBe(before);
+    }
+  });
+
+  it("retains historical uncertainty pressure when an ordinary contact has no information admission marker", () => {
+    const ordinary = sighting(1, { ...surfaceSight(1, true), interrupt: "none" });
+    const state = advance(createActorPerceptionState(OBSERVER_ID), 1, [ordinary]);
+    expect(state.suspicionPressure).toBe(675_000);
+    expect(state.suspicion).toBe("suspicious");
+    expect(queryResidentAttentionState(state)).toBe(state.suspicion);
+    // Existing circadian policy does not turn lower suspicious pressure into watch.
+    expect(residentCircadianWatchReference(state)).toBeNull();
   });
 
   it("fails malformed saved perception closed rather than treating it as harmless", () => {

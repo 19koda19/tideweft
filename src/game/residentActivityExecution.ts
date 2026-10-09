@@ -14,6 +14,9 @@ import {
   RESIDENT_CIVIC_ACTIVITY_VERSION,
   RESIDENT_INSPECTION_ACTIVITY_OWNER_ID,
   RESIDENT_INSPECTION_ACTIVITY_VERSION,
+  RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID,
+  RESIDENT_ENVIRONMENT_ACTIVITY_VERSION,
+  residentActivitySupportsEnvironment,
   residentActivitySupportsInspection,
   residentActivitySupportsMaterials,
   residentActivitySupportsRations,
@@ -23,6 +26,7 @@ import {
   type ResidentRationTask,
   type ResidentMaterialTask,
   type ResidentInspectionTask,
+  type ResidentPhysicalWaitReason,
 } from "../sim/residentActivity";
 import {
   canonicalResidentActivityForWorld,
@@ -38,6 +42,7 @@ import { residentServicePriorityAvailable } from "../sim/residentRationUse";
 import type { SettlementEcologyState } from "./settlementEcology";
 import { settlementKeeperInspectionCauseForWorld } from "./settlementKeeperInspection";
 import { waterDepthAt } from "../sim/terrain";
+import { residentRestSurfaceKnowledge } from "../sim/residentSurfaceKnowledge";
 import type { ResidentState, WorldState } from "../sim/types";
 import { createLivingActorAddress, headingFromRadians } from "./livingActor";
 import {
@@ -208,9 +213,11 @@ export function prepareResidentRestActivities(
       // never invents prior poses or turns an old rest arrival into meal use.
       const activity = canonicalizeResidentActivity({
         ...priorActivity,
-        version: inspectionSettlement !== null || residentActivitySupportsInspection(priorActivity)
+        version: inspectionSettlement !== null || residentActivitySupportsEnvironment(priorActivity)
+          ? RESIDENT_ENVIRONMENT_ACTIVITY_VERSION : residentActivitySupportsInspection(priorActivity)
           ? RESIDENT_INSPECTION_ACTIVITY_VERSION : RESIDENT_CIVIC_ACTIVITY_VERSION,
-        ownerId: inspectionSettlement !== null || residentActivitySupportsInspection(priorActivity)
+        ownerId: inspectionSettlement !== null || residentActivitySupportsEnvironment(priorActivity)
+          ? RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID : residentActivitySupportsInspection(priorActivity)
           ? RESIDENT_INSPECTION_ACTIVITY_OWNER_ID : RESIDENT_CIVIC_ACTIVITY_OWNER_ID,
         rationTask: priorActivity.rationTask ?? null,
         materialTask: priorActivity.materialTask ?? null,
@@ -258,8 +265,18 @@ export function prepareResidentRestActivities(
           origin: "selected", legacySettlementOrdinal: null,
           phase: "approaching", waitReason: null,
         };
-      } else if (task.phase === "waiting" && task.nextReassessmentAtTick <= tick) {
-        task = { ...task, phase: "approaching", waitReason: null };
+      }
+      if (task !== null && task.origin === "selected" && task.phase !== "arrived") {
+        const knowledge = residentActivitySupportsEnvironment(activity)
+          ? residentRestSurfaceKnowledge(resident.perception, task.target, tick) : "unknown";
+        if (knowledge === null) return false;
+        if (knowledge === "wet") task = waitForRest(task, tick, "observed-water");
+        else if (task.phase === "waiting" && task.nextReassessmentAtTick <= tick) {
+          if (task.waitReason === "observed-water"
+            && (knowledge !== "dry" || !residentRestTargetHasDrySupport(world, task.target))) {
+            task = { ...task, nextReassessmentAtTick: tick + 1 };
+          } else task = { ...task, phase: "approaching", waitReason: null };
+        }
       }
       let inspectionTask = activity.inspectionTask ?? null;
       const service = residentServicePriorityAvailable(resident, world.weather, duty !== null, tick);
@@ -445,6 +462,8 @@ function arriveAtRest<T extends ResidentRestTask | ResidentRationTask | Resident
   return { ...task, phase: "arrived", waitReason: null, lastProgressAtTick: tick, nextReassessmentAtTick: tick + 1 };
 }
 
+function waitForRest(task: ResidentRestTask, tick: number, reason: ResidentRestTask["waitReason"]): ResidentRestTask;
+function waitForRest<T extends ResidentRestTask | ResidentRationTask | ResidentMaterialTask | ResidentInspectionTask>(task: T, tick: number, reason: ResidentPhysicalWaitReason): T;
 function waitForRest<T extends ResidentRestTask | ResidentRationTask | ResidentMaterialTask | ResidentInspectionTask>(task: T, tick: number, reason: ResidentRestTask["waitReason"]): T {
   return { ...task, phase: "waiting", waitReason: reason, nextReassessmentAtTick: tick + 1 };
 }

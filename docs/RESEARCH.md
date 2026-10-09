@@ -4372,6 +4372,87 @@ Full report SHA256 is
 Maintained smoke6files/105PASS in4.49s and typecheckPASS. These are correctness
 durations, not production performance measurements or a new cumulative pass.
 
+### Observed settlement-rest water response — 2026-10-08
+
+The unpublished candidate on `b8fd422` connects one real selected-rest target
+to lawful qualitative sight and a durable waiting/reassessment consumer.
+[Architecture](./ARCHITECTURE.md#observed-settlement-rest-support) owns the
+behavior, admission limits and v5/outer55 capability. Supported50–54, frozen
+v1–v4, world4/rules6 and carry14 remain supported; no save is retired.
+
+Native seed `marsh wait 41` supplies a generated dry bank and flooded target.
+Only existing need/weather/offer pressure is controlled; tests assign no
+intended body, task, belief, terrain, tide or successful result. Closing sight
+from physical421 is still wet when admitted422, despite the newly dry physical
+support. The informed actor retains its hold through422, receives actual dry
+sight423, then physically arrives/rests424. Removing only that target sight
+restores physical-only retry/arrival423. The original off-frame `marsh wait`
+control remains physical-only. Cold29+11 equals uninterrupted40 across every
+authoritative save root under the existing recap/integrity comparison exception.
+Late interval failure restores the held task, wet knowledge and every root;
+only the deliberate integrity warning plays, not rejected world audio.
+
+Explicit adapter/codec tests additionally retain the hold through stale,
+missing, evicted or foreign knowledge; fresh dry knowledge still requires
+independent physical support. Producer fixtures exercise actual heading,
+night light, window absence, foreign-target rejection and authenticated sleep
+gating. Ten retained player phases plus8voices/8physical contacts preserve all
+26 hearing observations and one ground fact,37 total within the unchanged48
+cap. These controlled contract fixtures are not native gameplay certification.
+
+Review caught a genuine appraisal edge: a weak warning belief can expire while
+its suspicion pressure remains. Surface-only neutrality now requires zero
+pressure; an eight-tick cold-clone counterfactual preserves the exact warning
+pressure, search and appraisal. Ordinary `none` observations keep their prior
+rules; explicit classified/null-subject visual `information` does not add
+threat pressure. Its semantic eligibility remains the producer's responsibility,
+not an automatic classifier of every possible hazard.
+
+Independent real stationary captures from detached `b8fd422` and the candidate
+each process30 accepted steps/3advances/3human observation collections for the
+existing estuary/dense seeds. Each pair has exactly87 differences:42 body
+versions4→5,42 owner IDs, outer54→55 and resulting world checksum/envelope
+integrity. Every other task, body, knowledge, event, stock, player, session and
+ecology value is equal; neither save was downgraded, normalized or resealed.
+These controls contain no new ground receipt and do not prove the water hold.
+The local differential SHA256 is
+`77773e3e787b47101faa36773d7a798aa8daeb2fba9ec7ab5c145b34906a0693`.
+Save sizes remain1,844,683/1,900,967bytes. The permanent telemetry tests retain
+full instrumented/uninstrumented equality and all meaningful body/store/BIO0
+witnesses before checking the independently captured current hashes:
+
+| Scenario | Current body SHA256 | Current whole-save SHA256 |
+| --- | --- | --- |
+| estuary | `323dbb3ffee3b3f83d269abfb90623409736c83ec40b2d5de771d4793eb86c36` | `413fda33df75b4549c8b47f9ee480b27bb25e9c8b2502c2cb84c52f1aa06158d` |
+| dense | `3844f7e7e9ec5ed08eb9f2ce03677d90e03ce94ff795e9e60dacba441148ea30` | `70e93665725d24f4b559b65f2641ef84b80bf35d3663d88d16ca27ac7634b17d` |
+
+Final native/runtime command:
+
+```sh
+npx vitest run src/game/runtime.performanceTelemetry.test.ts src/game/runtime.residentRest.integration.test.ts src/game/runtime.keeperInspection.integration.test.ts src/game/runtime.test.ts -t 'runtime performance telemetry|ordinary runtime resident rest execution|keeper inspection|rolls back introduction facts, save, and vocal audio when later interval closure fails' --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/resident-environment-native-final.json
+```
+
+It passes4files/39selected tests (97unselected) in114.83s, report SHA256
+`87d5c46e0dd14927df0115f970b3adc3b4d47a150438e6f46b3989827fbe0f19`.
+The broader34-file actor/perception/circadian/body/save/publication/service
+selection passes611tests in49.52s, report
+`cee2c5892671cb78f0217284f2118f7ebceb16e9d36e8a2b62cdf96aa39c716a`.
+Its original33-file attempt remains600PASS/1FAIL: the proposed49 total cap
+contradicted the unchanged48 contract; capacity was retained, not the test
+weakened. The new producer fixture's initial night-clock recipe schedule and
+rollback-audio expectation were corrected against their existing owners.
+Maintained smoke105PASS in4.17s and typecheckPASS. Detailed local command/input
+records and synthetic captures remain ignored; the temporary baseline worktree
+was removed after preservation, and the capture source is retained as a fixture
+rather than an auto-discovered test.
+
+Read coverage includes the complete active execution contract, affected
+perception/task/save owners and relevant runtime interval/publication ingress;
+it is not a whole-runtime inspection. No manual visual play, production FPS,
+general current/load/crossing alternative, cat evacuation, full WORLD0 closure,
+new cumulative certificate or public release is claimed. Correctness remains
+uncapped; extended profiling/soaks remain deferred to full Living Foliage.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

@@ -8,7 +8,7 @@ import {
   type WorldPosition,
 } from "../game/worldPosition";
 import { canonicalizeLivingCircadianPersistentState } from "./livingCircadian";
-import { canonicalizeResidentActivity, residentActivitySupportsInspection, residentActivitySupportsMaterials, type ResidentActivity } from "./residentActivity";
+import { canonicalizeResidentActivity, residentActivitySupportsEnvironment, residentActivitySupportsInspection, residentActivitySupportsMaterials, type ResidentActivity } from "./residentActivity";
 import { waterDepthAt } from "./terrain";
 import type { ResidentState, TideState, WorldState } from "./types";
 import { RESOURCE_KINDS } from "./types";
@@ -17,6 +17,7 @@ import { RESOURCE_KINDS } from "./types";
 export function residentCivicActivityCohortIsUniform(residents: readonly ResidentState[]): boolean {
   let civic = 0;
   let inspection = 0;
+  let environment = 0;
   for (const resident of residents) {
     const activity = Object.getOwnPropertyDescriptor(resident, "activity");
     const version = activity !== undefined && Object.hasOwn(activity, "value")
@@ -26,10 +27,13 @@ export function residentCivicActivityCohortIsUniform(residents: readonly Residen
       && residentActivitySupportsMaterials({ version: version.value })) civic += 1;
     if (version !== undefined && Object.hasOwn(version, "value")
       && residentActivitySupportsInspection({ version: version.value })) inspection += 1;
+    if (version !== undefined && Object.hasOwn(version, "value")
+      && residentActivitySupportsEnvironment({ version: version.value })) environment += 1;
   }
   // This checks mode only. The existing shape/world validators remain binding.
   return (civic === 0 || civic === residents.length)
-    && (inspection === 0 || inspection === residents.length);
+    && (inspection === 0 || inspection === residents.length)
+    && (environment === 0 || environment === residents.length);
 }
 
 /** A rest point belongs to the existing settlement; this creates no house/bed. */

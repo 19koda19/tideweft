@@ -120,7 +120,12 @@ parallel owner. It does not claim that the reserved gameplay is available.
 Human `actor-perception` and `circadian-routine` consumers also inherit the
 [recognition/appraisal distinction](./ARCHITECTURE.md#resident-recognition-and-enacted-attention):
 knowing a neutral person is not indefinite watch duty or a reason to deny rest.
-The current local consumer does not establish physical refuge approach.
+The bounded local rest consumer also joins
+[observed settlement-rest support](./ARCHITECTURE.md#observed-settlement-rest-support):
+qualitative local sight is task information, not threat pressure; stale or absent
+knowledge cannot erase an observed hold, and fresh evidence never replaces
+independent physical legality. This does not grant general crossing, support,
+equipment, route knowledge or remote perception.
 
 ## Mandatory feature inheritance audit
 

@@ -104,6 +104,7 @@ import {
   FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION,
   FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION,
   FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION,
+  FIRST_RESIDENT_ENVIRONMENT_GAME_SAVE_VERSION,
   RELEASED_LIVING_VOICE_GAME_SAVE_VERSION,
   SAVE_COMPATIBILITY_POLICY,
 } from "./saveCompatibilityPolicy";
@@ -1390,6 +1391,7 @@ const SUPPORTED_GAME_SAVE_VERSIONS: ReadonlySet<number> = new Set([
   FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
   FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION,
   FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION,
+  FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION,
 ]);
 const FIRST_CRAFTED_GEAR_ID = DEFAULT_WAYKNOT_CAPACITY + 1;
 const MAX_SAFE_CARGO_QUANTITY = Math.floor(
@@ -20466,7 +20468,8 @@ export async function createTideweftRuntime(
     if (!residentActivitySaveExtensionsValid(worldSnapshot, GAME_SAVE_VERSION >= FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
       GAME_SAVE_VERSION >= FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION,
       GAME_SAVE_VERSION >= FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION,
-      GAME_SAVE_VERSION >= FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION)) {
+      GAME_SAVE_VERSION >= FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION,
+      GAME_SAVE_VERSION >= FIRST_RESIDENT_ENVIRONMENT_GAME_SAVE_VERSION)) {
       throw new Error("Refusing to save inconsistent resident body or retained event authority");
     }
     const playerSnapshot = structuredClone(player);
@@ -25068,7 +25071,8 @@ async function loadAutosave(repository: SaveRepository): Promise<LoadedAutosave 
     if (!residentActivitySaveExtensionsValid(world, decoded.version >= FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
       decoded.version >= FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION,
       decoded.version >= FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION,
-      decoded.version >= FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION)) {
+      decoded.version >= FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION,
+      decoded.version >= FIRST_RESIDENT_ENVIRONMENT_GAME_SAVE_VERSION)) {
       throw new Error("Session format contains invalid or unsupported resident body authority");
     }
     if (

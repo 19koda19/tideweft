@@ -2181,6 +2181,12 @@ information, not permanent watch or a lost-source search commitment. These
 appraisals preserve the exact shared beliefs and search evidence; neither the
 perception schema nor a dog's own cognition is rewritten.
 
+Qualitative task-ground information uses the shared focus selection in
+`residentAttention.ts` for both appraisal and human sensory gaze. It does not
+become permanent watching or hide another attended contact. The explicit
+`information` admission below preserves prior threat pressure; it does not
+reconstruct or erase that source-less scalar from remaining beliefs.
+
 Circadian priority and restorative physiology consume the same appraisal;
 field sensing, Chart/Relief labels and ABOUT do not present an expired glance
 as permanent watching. Canonical body/pack heading, including an approaching
@@ -2377,8 +2383,9 @@ implementation contract; construction/tests below determine its current proof.
 Local construction now includes the optional immutable resident-owned
 `src/sim/residentActivity.ts` root: segmented body/heading, at most eleven
 current-interval poses, and exclusive authenticated settlement-rest/ration/
-material/inspection tasks. Frozen v1 body/rest, v2 ration and v3 material
-protocols remain deliberately supported; v4 additionally requires an explicit
+material/inspection tasks. Frozen v1 body/rest, v2 ration, v3 material and v4
+inspection protocols remain deliberately supported; v5 adds the selected-rest
+observed-water hold below. Inspection-capable protocols require an explicit
 nullable inspection task. Each protocol retains its exact field/owner mapping.
 Shared version-only capability helpers classify the deliberately recognized
 ration/material/inspection protocols across service, body reanchoring, cohort mode and
@@ -2400,8 +2407,8 @@ courier law requires actual restorative arrival, not a weather-hold flag.
 Normal accepted runtime steps now adopt the entire existing roster only at a
 genuine phase-zero boundary, select through the actual routine/duty owner, and
 advance exactly one bounded approach step per accepted player step. Current
-outer54 preserves the complete bodies, service use and phase0–9 history. Supported
-outer51/52/53 bodies preserve their exact v1/v2/v3 partial interval, upgrading as a
+outer55 preserves the complete bodies, service use and phase0–9 history. Supported
+outer51/52/53/54 bodies preserve their exact v1/v2/v3/v4 partial interval, upgrading as a
 whole cohort through the actual phase-zero routine boundary, not on load.
 Legacy absent records remain absent on load and through an already-partly-consumed interval;
 its actual closure captures the first new anchor rather than inventing old
@@ -2493,7 +2500,8 @@ This remains local/unpublished, without manual visual, natural-rate liveness,
 performance or full-directive proof. Evidence/closure remain in the existing
 store owner; ephemeral sight is reconstructed only by actual world advancement,
 never invented on load or replayed as speech. Carry14 and supported formats
-remain intact; the explicit current outer capability is54.
+remain intact; inspection's first outer capability remains54, supported by
+the current55 writer.
 
 At the runtime's phase-zero routine boundary, a present whole-roster body cohort
 now uses that same atomic rest adapter rather than committing posture alone.
@@ -2596,6 +2604,69 @@ full/coarse transitions, bounded planning and retries, scheduler fairness, and
 measured performance. The [inheritance applicability](./SYSTEM_INHERITANCE.md#existing-human-and-world-response-adoption)
 and [composition repair registry](./SYSTEM_COMPOSITION.md#high-leverage-composition-repair-registry)
 register these obligations without claiming that planned activity is live.
+
+### Observed settlement-rest support
+
+The local, unpublished v5/outer55 consumer adds one qualitative surface sight
+for each pending **selected** rest task in the existing bounded human frame.
+`humanPerception.ts` authenticates the settlement target and uses the actual
+retained terminal body, lawful sensory facing, terrain LOS, weather and shared
+physical outdoor illumination. Off-frame or insufficiently legible ground
+produces no fact. There is no route scan, exact sounding, remote hazard report
+or renderer-generated knowledge. The single fact uses remaining capacity in
+the unchanged 48-observation frame; it cannot displace lawful hearing. Current
+retained-body phases bound player samples to ten, below that total budget.
+
+The shared observation admission recognizes `interrupt: information` only for
+classified, null-subject vision. Confidence, salience, capped belief storage
+and attention retain their ordinary meaning; this explicit non-threat input
+does not add suspicion pressure. Existing pressure still decays normally and
+other observations/strong warnings retain their exact pressure and search
+rules. This avoids turning ordinary dry-ground knowledge into an unrelated
+animal-encounter escalation without adding a second persisted pressure owner
+or attempting to reconstruct historical pressure from evictable beliefs.
+Sound producers do not use this flag. Existing `none`/`strong` inputs remain
+unchanged. Its non-threat eligibility belongs to the trusted domain producer;
+the generic classifier does not decide whether every possible visual class is
+benign. Classified hazards must retain their appropriate ordinary/strong
+admission, not use this flag to erase concern. No persisted perception field
+or carry version changes. Human appraisal also preserves genuine residual
+pressure after its original warning belief expires or is evicted; surface-only
+neutrality requires zero pressure.
+
+`residentSurfaceKnowledge.ts` keys the fact by stable actor plus segmented
+target, not tick, changing wet/dry class or body pose. Wet→dry updates one
+classified contact without actor identity/search/memory. The lower engine's
+normal post-command/sleep admission remains authoritative. Sight comes from
+the closing interval **before** new tide: physical421 wet is admitted422 even
+when the new physical422 support is already dry. Only the subsequent lawful
+dry sight can inform reassessment423.
+
+The v5 selected-rest task can retain `observed-water` as its waiting cause.
+Missing, stale, foreign or evicted sight is unknown, not evidence of safety.
+The hold preserves target, request age, body and lack of arrival/recovery;
+due reassessment requires fresh same-locus dry knowledge **and** independent
+actual dry support. Fine locomotion still validates the bounded physical
+corridor. Higher real duty, storm, urgent need or commitment may revoke rest.
+Older physical-only obstruction retries retain their existing schedule; an
+uninformed actor does not acquire a fabricated informed hold. Continued legacy
+rest admission and ration/material/inspection tasks cannot use this new reason.
+
+Current55 capture/cold load explicitly authorize the v5 capability; older
+envelopes reject it even when all tasks are null. Deliberately supported50–54
+and frozen v1–v4 histories remain exact until genuine whole-roster phase-zero
+adoption. World4, rules6 and perception carry14 remain unchanged. A cold hold
+does not require its original evictable belief, create fresh sight, consume
+steps or replay ephemeral audio.
+
+Native controlled-pressure runtime tests preserve generated terrain and tide:
+the in-frame `marsh wait 41` resident waits through physical drying422,
+reassesses on dry sight423 and physically arrives424. Suppressing only that
+target observation restores physical-only retry/arrival423. The original
+out-of-frame `marsh wait` witness retains its physical-only continuation.
+Equal cold work and source-removal contrasts are representative proof, not
+general crossing/current/load/support capability, known alternative routes,
+cat evacuation, manual visual play, performance or whole-directive completion.
 
 ## First porter-dog living web
 
@@ -4144,6 +4215,13 @@ the existing closure receipt owns completion. Trusted interruption recovery
 may revoke an otherwise valid task without rewriting accepted poses, knowledge
 or consumed acoustic history. No carry14, inner-world4/rules6, generator, release,
 retirement or compatibility-lifecycle change accompanies this capability.
+
+`FIRST_RESIDENT_ENVIRONMENT_GAME_SAVE_VERSION` establishes outer55's explicit
+v5 selected-rest observed-water hold. Older envelopes reject the capability
+even with null tasks; supported50–54 retain their exact partial histories until
+genuine whole-roster phase-zero adoption. The [observed support owner](#observed-settlement-rest-support)
+defines knowledge/retry and cold/rollback law; no new carry, generator, released
+baseline, retirement or migration-policy change is implied.
 
 The runtime currently writes one `autosave` slot on a 600-world-tick interval,
 page visibility loss, page exit, title return, and Quiet Hour. The periodic

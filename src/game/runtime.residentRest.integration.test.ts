@@ -6,7 +6,7 @@ import {
   RESIDENT_ACTIVITY_OWNER_ID,
   RESIDENT_ACTIVITY_VERSION,
   RESIDENT_REST_APPROACH_STEP_UNITS,
-  RESIDENT_INSPECTION_ACTIVITY_VERSION,
+  RESIDENT_ENVIRONMENT_ACTIVITY_VERSION,
   RESIDENT_SERVICE_ACTIVITY_OWNER_ID,
   RESIDENT_SERVICE_ACTIVITY_VERSION,
 } from "../sim/residentActivity";
@@ -19,6 +19,8 @@ import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import type { PlayerState } from "./player";
 import { restorePlayerRegionalTravel } from "./regionalPlayerTravel";
 import * as residentActivityExecution from "./residentActivityExecution";
+import * as humanPerception from "./humanPerception";
+import { residentRestSurfaceObservationId, residentRestSurfaceKnowledge } from "../sim/residentSurfaceKnowledge";
 import * as simulation from "../sim/public";
 import * as situatedExpressionChannelBank from "./situatedExpressionChannelBank";
 import * as residentIntroductionAuthority from "./residentIntroductionAdmissionAuthority";
@@ -30,7 +32,7 @@ import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import {
   CURRENT_GAME_SAVE_VERSION,
   FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION,
-  FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION,
+  FIRST_RESIDENT_ENVIRONMENT_GAME_SAVE_VERSION,
   FIRST_RESIDENT_SERVICE_GAME_SAVE_VERSION,
   RELEASED_LIVING_VOICE_GAME_SAVE_VERSION,
 } from "./saveCompatibilityPolicy";
@@ -189,7 +191,8 @@ async function restFixture(
     const targetIsDry = residentRestTargetHasDrySupport(world, target);
     if (selection === "wet-target" ? targetIsDry : !targetIsDry) return [];
     // A surveyed native witness, not an assigned body, destination or tide.
-    if (selection === "wet-target" && human.identity.stableId !== "H-v1-p0p0-19z0ujg-2-106voth") return [];
+    if (selection === "wet-target" && human.identity.stableId !== (seed === "marsh wait 41"
+      ? "H-v1-p0p0-m0i8t-2-0o03jwb" : "H-v1-p0p0-19z0ujg-2-106voth")) return [];
     const sourceIsDry = residentRestTargetHasDrySupport(world, source);
     if (selection === "wet-source" ? sourceIsDry : !sourceIsDry) return [];
     const delta = worldPositionDelta(source, target);
@@ -247,7 +250,7 @@ function expectBoundedMotion(source: WorldPosition, poses: readonly { position: 
 
 describe("ordinary runtime resident rest execution", () => {
   it.each([4, 9])("selects and executes real rest, preserving equal work across a phase%s cold continuation", async (phase) => {
-    expect(CURRENT_GAME_SAVE_VERSION).toBe(FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION);
+    expect(CURRENT_GAME_SAVE_VERSION).toBe(FIRST_RESIDENT_ENVIRONMENT_GAME_SAVE_VERSION);
     expect(FIRST_RESIDENT_ACTIVITY_GAME_SAVE_VERSION).toBeLessThan(CURRENT_GAME_SAVE_VERSION);
     const fixture = await restFixture();
     const repository = new MemoryRepository(fixture.record);
@@ -643,7 +646,7 @@ describe("ordinary runtime resident rest execution", () => {
     expect(deserializeWorld(boundary.world).residents.every((human) => (
       // Closure itself invokes the existing phase-zero routine owner. There
       // is no extra accepted step or invented pre-boundary history to await.
-      human.activity?.version === RESIDENT_INSPECTION_ACTIVITY_VERSION && human.activity.poses.length === 1
+      human.activity?.version === RESIDENT_ENVIRONMENT_ACTIVITY_VERSION && human.activity.poses.length === 1
       && human.activity.rationTask === null
     ))).toBe(true);
     advanceOrdinaryFixedSteps(runtime, 1);
@@ -651,7 +654,7 @@ describe("ordinary runtime resident rest execution", () => {
     const next = decode(repository.snapshot());
     expect(next.perceptionCarry.playerStepsSinceWorldTick).toBe(1);
     expect(deserializeWorld(next.world).residents.every((human) => (
-      human.activity?.version === RESIDENT_INSPECTION_ACTIVITY_VERSION && human.activity.poses.length === 2
+      human.activity?.version === RESIDENT_ENVIRONMENT_ACTIVITY_VERSION && human.activity.poses.length === 2
       && human.activity.rationTask === null
     ))).toBe(true);
     expect(resident(next, fixture.actorId).activity?.poses.at(-1)?.position).not.toEqual(fixture.source);
@@ -693,7 +696,7 @@ describe("ordinary runtime resident rest execution", () => {
     // civic capability, not successful activity or already-consumed history.
     for (const human of world.residents) {
       const activity = human.activity;
-      if (activity?.version !== RESIDENT_INSPECTION_ACTIVITY_VERSION || activity.materialTask !== null || activity.inspectionTask !== null) {
+      if (activity?.version !== RESIDENT_ENVIRONMENT_ACTIVITY_VERSION || activity.materialTask !== null || activity.inspectionTask !== null) {
         throw new Error("supported52 fixture requires a genuine civic-free body prefix");
       }
       const { materialTask: _materialTask, inspectionTask: _inspectionTask, ...body } = activity;
@@ -731,7 +734,7 @@ describe("ordinary runtime resident rest execution", () => {
     const boundaryWorld = deserializeWorld(boundary.world);
     expect(boundary.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
     expect(boundaryWorld.meta.completedTick).toBe(fixture.tick + 1);
-    expect(boundaryWorld.residents.every((human) => human.activity?.version === RESIDENT_INSPECTION_ACTIVITY_VERSION
+    expect(boundaryWorld.residents.every((human) => human.activity?.version === RESIDENT_ENVIRONMENT_ACTIVITY_VERSION
       && human.activity.poses.length === 1 && human.activity.materialTask === null)).toBe(true);
     expect(resident(boundary, fixture.actorId).activity?.rationTask).toMatchObject({
       phase: "arrived", selectedAtTick: fixture.tick, usedAtTick: null,
@@ -911,18 +914,38 @@ describe("ordinary runtime resident rest execution", () => {
     expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(uninterrupted));
   }, 60_000);
 
-  it("waits on a dry bank for a native tidal target, then physically retries with equal cold continuation", async () => {
-    const fixture = await restFixture("wet-target", "marsh wait");
-    expect(fixture.actorId).toBe("H-v1-p0p0-19z0ujg-2-106voth");
+  it.each([
+    { seed: "marsh wait", observed: false },
+    { seed: "marsh wait 41", observed: true },
+    { seed: "marsh wait 41", observed: false },
+  ])("waits at a native tidal target ($seed, observed-water hold=$observed) with equal cold continuation", async ({ seed, observed }) => {
+    const fixture = await restFixture("wet-target", seed);
+    expect(fixture.actorId).toBe(seed === "marsh wait" ? "H-v1-p0p0-19z0ujg-2-106voth" : "H-v1-p0p0-m0i8t-2-0o03jwb");
     expect(fixture.tick).toBe(420);
-    expect(fixture.source).toEqual({ region: { x: 0, y: 0 }, localX: 87_500, localY: 28_500 });
-    expect(fixture.target).toEqual({ region: { x: 0, y: 0 }, localX: 88_500, localY: 28_500 });
+    expect(fixture.source).toEqual(seed === "marsh wait"
+      ? { region: { x: 0, y: 0 }, localX: 87_500, localY: 28_500 }
+      : { region: { x: 0, y: 0 }, localX: 81_500, localY: 29_500 });
+    expect(fixture.target).toEqual(seed === "marsh wait"
+      ? { region: { x: 0, y: 0 }, localX: 88_500, localY: 28_500 }
+      : { region: { x: 0, y: 0 }, localX: 82_500, localY: 29_500 });
     const original = deserializeWorld(decode(fixture.record).world);
     expect(residentRestTargetHasDrySupport(original, fixture.source)).toBe(true);
     expect(residentRestTargetHasDrySupport(original, fixture.target)).toBe(false);
     expect(residentRestTargetHasDrySupport({ ...original, tide: tideAtTick(fixture.tick + 1) }, fixture.target)).toBe(false);
     expect(residentRestTargetHasDrySupport({ ...original, tide: tideAtTick(fixture.tick + 2) }, fixture.target)).toBe(true);
     const originalTerrain = stableStringify(original.terrain);
+    if (!observed) {
+      // Honest missing-observation counterfactual. Keep every other production
+      // observation, actual tide/body/task and accepted step unchanged.
+      const collect = humanPerception.collectExistingHumanObservations;
+      const id = residentRestSurfaceObservationId(fixture.actorId, fixture.target);
+      vi.spyOn(humanPerception, "collectExistingHumanObservations").mockImplementation((...args) => {
+        const batches = collect(...args);
+        if (humanPerception.humanObservationCollectionRejected(batches)) return batches;
+        return batches.map((batch) => batch.observerId === fixture.actorId
+          ? { ...batch, observations: batch.observations.filter((observation) => observation.id !== id) } : batch);
+      });
+    }
     const repository = new MemoryRepository(fixture.record);
     const runtime = await open(repository);
     let acceptedSteps = 0;
@@ -947,35 +970,44 @@ describe("ordinary runtime resident rest execution", () => {
       expect(waiting.activity?.restTask).toMatchObject({
         cause: "urgent-rest", origin: "selected", phase: "waiting", target: fixture.target,
         selectedAtTick: fixture.tick, lastProgressAtTick: fixture.tick,
-        waitReason: "no-traversable-route", nextReassessmentAtTick: fixture.tick + Math.floor(steps / 10) + 1,
+        waitReason: observed && steps >= 10 ? "observed-water" : "no-traversable-route",
+        nextReassessmentAtTick: fixture.tick + Math.floor(steps / 10) + 1,
       });
       expect(waiting.activity?.poses.every(({ position }) => stableStringify(position) === stableStringify(fixture.source))).toBe(true);
       expect(waiting.condition.exhaustion).toBe(fixture.exhaustion);
       expect(waiting.circadian).toMatchObject({ restDestinationArrived: false, posture: { state: "awake" } });
     }
-    const waitingRecord = await advanceTo(19);
+    const waitingRecord = await advanceTo(observed ? 29 : 19);
     const waiting = decode(waitingRecord);
     expect(resident(waiting, fixture.actorId).activity?.restTask).toMatchObject({
-      phase: "waiting", waitReason: "no-traversable-route", nextReassessmentAtTick: fixture.tick + 2,
+      phase: "waiting", waitReason: observed ? "observed-water" : "no-traversable-route",
+      nextReassessmentAtTick: fixture.tick + (observed ? 3 : 2),
     });
-    expect(residentRestTargetHasDrySupport(deserializeWorld(waiting.world), fixture.target)).toBe(false);
+    expect(residentRestTargetHasDrySupport(deserializeWorld(waiting.world), fixture.target)).toBe(observed);
+    if (observed) {
+      // Sight of physical421 was admitted422 before the new tide: it still
+      // says wet. Dry physics alone must not erase the committed known hold.
+      expect(residentRestSurfaceKnowledge(resident(waiting, fixture.actorId).perception, fixture.target, 422)).toBe("wet");
+      expect(resident(waiting, fixture.actorId).activity?.poses.every(({ position }) => stableStringify(position) === stableStringify(fixture.source))).toBe(true);
+    }
 
     // The real world boundary advances tide and retries. It cannot move the
     // body or grant recovery before subsequent accepted physical steps.
-    const dryBoundary = decode(await advanceTo(20));
+    const dryBoundary = decode(await advanceTo(observed ? 30 : 20));
     const retrying = resident(dryBoundary, fixture.actorId);
     expect(residentRestTargetHasDrySupport(deserializeWorld(dryBoundary.world), fixture.target)).toBe(true);
     expect(retrying.activity?.restTask).toMatchObject({ phase: "approaching", waitReason: null, selectedAtTick: fixture.tick });
     expect(retrying.activity?.poses[0]?.position).toEqual(fixture.source);
     expect(retrying.condition.exhaustion).toBe(fixture.exhaustion);
     expect(retrying.circadian?.restDestinationArrived).toBe(false);
+    if (observed) expect(residentRestSurfaceKnowledge(retrying.perception, fixture.target, 423)).toBe("dry");
 
-    const moving = resident(decode(await advanceTo(24)), fixture.actorId);
+    const moving = resident(decode(await advanceTo(observed ? 34 : 24)), fixture.actorId);
     expect(moving.activity?.restTask?.phase).toBe("approaching");
     expect(moving.activity?.poses.at(-1)?.position).not.toEqual(fixture.source);
     expect(moving.condition.exhaustion).toBe(fixture.exhaustion);
     expectBoundedMotion(fixture.source, moving.activity!.poses);
-    const final = decode(await advanceTo(30));
+    const final = decode(await advanceTo(observed ? 40 : 30));
     const arrived = resident(final, fixture.actorId);
     expect(arrived.activity?.restTask).toMatchObject({ phase: "arrived", selectedAtTick: fixture.tick });
     expect(arrived.activity?.poses[0]?.position).toEqual(fixture.target);
@@ -992,8 +1024,27 @@ describe("ordinary runtime resident rest execution", () => {
     advanceOrdinaryFixedSteps(cold, 11);
     await cold.save();
     expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(final));
-    // This characterizes physical legality and scheduled retry only. It does
-    // not establish observed-water knowledge, an informed hold or route choice.
+    if (observed) {
+      // Later failure must restore the original wet belief and held task even
+      // after the real dry receipt/reassessment was prepared in this step.
+      close(cold);
+      const failedRepository = new MemoryRepository(waitingRecord);
+      const failed = await open(failedRepository);
+      const closure = vi.spyOn(situatedExpressionChannelBank, "closeSituatedExpressionChannelBankInterval")
+        .mockReturnValueOnce(null);
+      soundscapePlay.mockClear();
+      advanceOrdinaryFixedStepsForExpectedFailure(failed, 1);
+      expect(closure).toHaveBeenCalled();
+      expect(failed.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+      await failed.save();
+      expect(authoritativeRoots(decode(failedRepository.snapshot()))).toEqual(authoritativeRoots(waiting));
+      // The integrity notification is not committed world audio. No pending
+      // vocal, contact or movement cue may escape the rejected interval.
+      expect(soundscapePlay.mock.calls).toEqual([["warning", 1]]);
+      closure.mockRestore();
+    }
+    // The no-observation branch retains physical retry, not informed safety.
+    // Neither branch establishes wider crossing knowledge or route choice.
   }, 60_000);
 
   it("publishes a genuinely neutral keeper's moving body into the same BIO0 address and current cold save", async () => {

@@ -1,4 +1,4 @@
-import { canonicalizeResidentActivity, RESIDENT_ACTIVITY_MAX_PHASE, residentActivitySupportsInspection, residentActivitySupportsMaterials, residentActivitySupportsRations } from "../sim/residentActivity";
+import { canonicalizeResidentActivity, RESIDENT_ACTIVITY_MAX_PHASE, residentActivitySupportsEnvironment, residentActivitySupportsInspection, residentActivitySupportsMaterials, residentActivitySupportsRations } from "../sim/residentActivity";
 import { hasResidentActivityEventLocus } from "../sim/residentActivityEventLocus";
 import { canonicalResidentActivityForWorld, residentCivicActivityCohortIsUniform } from "../sim/residentActivityWorld";
 import { canonicalizeResidentCircadianState, residentAtSettlementRestDestination } from "../sim/livingCircadian";
@@ -32,6 +32,7 @@ export function residentActivitySaveExtensionsValid(
   supportsServices = false,
   supportsCivicService = false,
   supportsInspection = false,
+  supportsEnvironment = false,
 ): boolean {
   if (!supportsBodies) return residentActivitySaveExtensionsAbsent(world);
   try {
@@ -56,6 +57,7 @@ export function residentActivitySaveExtensionsValid(
       if (!supportsServices && residentActivitySupportsRations(activity)) return false;
       if (!supportsCivicService && residentActivitySupportsMaterials(activity)) return false;
       if (!supportsInspection && residentActivitySupportsInspection(activity)) return false;
+      if (!supportsEnvironment && residentActivitySupportsEnvironment(activity)) return false;
     }
     const residentIds = new Set(world.residents.map(({ id }) => id));
     for (const event of world.events) {

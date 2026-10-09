@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   createActorObservation,
   createActorPerceptionState,
+  serializeActorPerceptionState,
   stepActorPerception,
+  type ActorObservation,
   type ActorPerceptionState,
 } from "../sim/actorPerception";
 import { createRegionCoord } from "../sim/regions";
+import { residentRestSurfaceObservationId } from "../sim/residentSurfaceKnowledge";
 import { FIXED_POINT } from "../sim/types";
 import {
   addActorCargoProvision,
@@ -55,10 +58,11 @@ function position(x: number) {
 function perception(
   tick: number,
   clarity: "none" | "partial" | "identified" = "identified",
+  supplemental: readonly ActorObservation[] = [],
+  initial = createActorPerceptionState(HUMAN_ID),
 ): ActorPerceptionState {
-  const initial = createActorPerceptionState(HUMAN_ID);
   if (clarity === "none") {
-    const empty = stepActorPerception(initial, { tick, observations: [] });
+    const empty = stepActorPerception(initial, { tick, observations: supplemental });
     if (empty === null) throw new Error("Empty perception fixture failed");
     return empty;
   }
@@ -90,9 +94,29 @@ function perception(
     }],
   });
   if (observations === null) throw new Error("Visual perception fixture failed");
-  const result = stepActorPerception(initial, { tick, observations });
+  const result = stepActorPerception(initial, { tick, observations: [...observations, ...supplemental] });
   if (result === null) throw new Error("Actor perception fixture failed");
   return result;
+}
+
+/** Codec/policy counterfactual; this does not claim a real selected task or sight. */
+function groundInformation(tick: number, interrupt: "information" | "none" = "information"): ActorObservation {
+  const target = position(23_500);
+  const observation = createActorObservation({
+    id: residentRestSurfaceObservationId(HUMAN_ID, target),
+    observerId: HUMAN_ID,
+    observedAtTick: tick,
+    channel: "vision",
+    perceivedClass: "dry-ground",
+    subjectId: null,
+    area: { center: target, radiusUnits: 0 },
+    confidence: FIXED_POINT,
+    salience: 300_000,
+    identification: "classified",
+    interrupt,
+  });
+  if (observation === null) throw new Error("Ground information fixture failed");
+  return observation;
 }
 
 function threatPerception(
@@ -298,6 +322,61 @@ describe("deterministic porter food-and-animal response policy", () => {
       foodLotId: null,
       cause: { kind: "perception" },
     });
+  });
+
+  it("does not escalate an uncertain animal response because ordinary ground was learned", () => {
+    const bare = perception(10, "partial");
+    const informed = perception(10, "partial", [groundInformation(10)]);
+    const policy = input(10, {
+      cargo: cargo("secured"),
+      needs: { food: 0, rest: 300_000, belonging: 0 },
+      disposition: {
+        traits: { resolve: 0, empathy: 0, curiosity: 0 },
+        temperament: [],
+      },
+    });
+    const before = serializeActorPerceptionState(informed);
+    const baseline = decide({ ...policy, perception: bare });
+    expect(bare.suspicionPressure).toBe(417_500);
+    expect(baseline.intent).toBe("wait-observe");
+    expect(baseline.scores.find(({ intent }) => intent === "leave")?.score).toBe(306_125);
+    expect(baseline.scores.find(({ intent }) => intent === "wait-observe")?.score).toBe(338_250);
+    expect(informed.suspicionPressure).toBe(bare.suspicionPressure);
+    expect(informed.beliefs.find(({ perceivedClass }) => perceivedClass === "dry-ground")).toMatchObject({
+      confidence: FIXED_POINT, salience: 300_000, identification: "classified", subjectId: null,
+    });
+    expect(decide({ ...policy, perception: informed })).toEqual(baseline);
+    expect(decide({ ...policy, perception: structuredClone(informed) })).toEqual(baseline);
+    expect(serializeActorPerceptionState(informed)).toBe(before);
+
+    // The explicit admission marker, not a hard-coded class exclusion, owns
+    // neutrality. An ordinary NONE contact retains the historical pressure law.
+    const uncertainGround = perception(10, "partial", [groundInformation(10, "none")]);
+    expect(uncertainGround.suspicionPressure).toBe(675_000);
+    expect(decide({ ...policy, perception: uncertainGround }).intent).toBe("leave");
+    const empty = perception(10, "none");
+    const onlyGround = perception(10, "none", [groundInformation(10)]);
+    expect(onlyGround.suspicionPressure).toBe(empty.suspicionPressure);
+    expect(decide({ ...policy, perception: onlyGround })).toEqual(decide({ ...policy, perception: empty }));
+  });
+
+  it("preserves genuine prior danger pressure and response while new ground information is admitted", () => {
+    const prior = threatPerception(9, "danger-sound");
+    const priorBytes = serializeActorPerceptionState(prior);
+    const bare = perception(10, "partial", [], prior);
+    const informed = perception(10, "partial", [groundInformation(10)], prior);
+    const policy = input(10, {
+      cargo: cargo("secured"),
+      needs: { food: 0, rest: 300_000, belonging: 0 },
+      disposition: { traits: { resolve: 0, empathy: 0, curiosity: 0 }, temperament: [] },
+    });
+    expect(prior.suspicionPressure).toBe(FIXED_POINT);
+    expect(bare.suspicionPressure).toBe(920_000);
+    expect(informed.suspicionPressure).toBe(bare.suspicionPressure);
+    expect(informed.suspicion).toBe(bare.suspicion);
+    expect(informed.search).toEqual(bare.search);
+    expect(decide({ ...policy, perception: informed })).toEqual(decide({ ...policy, perception: bare }));
+    expect(serializeActorPerceptionState(prior)).toBe(priorBytes);
   });
 
   it("secures exposed provisions before reacting further to a direct large predator", () => {

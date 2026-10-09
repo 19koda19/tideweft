@@ -10,7 +10,8 @@ import {
   RESIDENT_SERVICE_ACTIVITY_OWNER_ID, RESIDENT_SERVICE_ACTIVITY_VERSION,
   RESIDENT_CIVIC_ACTIVITY_OWNER_ID, RESIDENT_CIVIC_ACTIVITY_VERSION,
   RESIDENT_INSPECTION_ACTIVITY_OWNER_ID, RESIDENT_INSPECTION_ACTIVITY_VERSION,
-  canonicalizeResidentActivity, residentActivitySupportsInspection,
+  RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID, RESIDENT_ENVIRONMENT_ACTIVITY_VERSION,
+  canonicalizeResidentActivity, residentActivitySupportsEnvironment, residentActivitySupportsInspection,
   type ResidentActivity,
 } from "./residentActivity";
 import {
@@ -100,8 +101,8 @@ describe("explicit resident inspection activity protocol", () => {
     const absent = { ...raw };
     delete absent.inspectionTask;
     for (const malformed of [absent, { ...raw, inspectionTask: undefined },
-      { ...raw, version: 5, ownerId: "sim:resident-activity:v5" },
-      { ...frozenProtocol(raw, 1), version: 5, ownerId: "sim:resident-activity:v5" },
+      { ...raw, version: 6, ownerId: "sim:resident-activity:v6" },
+      { ...frozenProtocol(raw, 1), version: 6, ownerId: "sim:resident-activity:v6" },
       { ...raw, ownerId: RESIDENT_CIVIC_ACTIVITY_OWNER_ID }]) {
       expect(canonicalizeResidentActivity(malformed, binding)).toBeNull();
     }
@@ -257,5 +258,135 @@ describe("explicit resident inspection activity protocol", () => {
     expect(canonicalizeResidentActivity(wrongTarget, current.binding)).not.toBeNull();
     install(current, wrongTarget);
     expect(canonicalResidentActivityForWorld(current.world, current.world.residents[current.index]!)).toBeNull();
+  });
+});
+
+// This successor codec represents a committed conservative hold, not a new
+// depth sensor or an assertion that an unseen target remains wet. Actual
+// observation, selection and reassessment are tested at their runtime owners.
+function environmentRestFixture() {
+  const current = fixture();
+  const restTask = {
+    kind: "settlement-rest", settlementId: current.task.settlementId,
+    target: structuredClone(current.target), selectedAtTick: current.binding.tick - 1,
+    cause: "urgent-rest", origin: "selected", legacySettlementOrdinal: null,
+    phase: "waiting", lastProgressAtTick: current.binding.tick - 1,
+    nextReassessmentAtTick: current.binding.tick + 1, waitReason: "observed-water",
+  };
+  const raw = {
+    ...current.raw, version: RESIDENT_ENVIRONMENT_ACTIVITY_VERSION,
+    ownerId: RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID,
+    restTask, rationTask: null, materialTask: null, inspectionTask: null,
+  };
+  return { ...current, raw, restTask };
+}
+
+describe("explicit resident observed-rest environment protocol", () => {
+  it("preserves a selected-rest hold and exact detached frozen clone bytes", () => {
+    const { raw, restTask, binding } = environmentRestFixture();
+    const before = stableStringify(raw);
+    const parsed = canonicalizeResidentActivity(raw, binding);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.version).toBe(RESIDENT_ENVIRONMENT_ACTIVITY_VERSION);
+    expect(parsed?.ownerId).toBe(RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID);
+    expect(residentActivitySupportsEnvironment(parsed)).toBe(true);
+    expect(parsed?.restTask).toEqual(restTask);
+    expect(stableStringify(parsed)).toBe(before);
+    const cold = canonicalizeResidentActivity(structuredClone(parsed), binding);
+    expect(cold).toEqual(parsed);
+    expect(cold).not.toBe(parsed);
+    expect(cold?.restTask).not.toBe(parsed?.restTask);
+    expect(parsed?.restTask).not.toBe(restTask);
+    for (const value of [parsed, parsed!.restTask, parsed!.restTask!.target, parsed!.restTask!.target.region]) {
+      expect(Object.isFrozen(value)).toBe(true);
+    }
+    restTask.nextReassessmentAtTick += 1;
+    expect(stableStringify(parsed)).toBe(before);
+    expect(stableStringify(cold)).toBe(before);
+  });
+
+  it.each([1, 2, 3, 4] as const)("keeps frozen v%i unable to encode observed-water", (version) => {
+    const { raw, restTask, binding } = environmentRestFixture();
+    const old = version === RESIDENT_INSPECTION_ACTIVITY_VERSION
+      ? { ...raw, version, ownerId: RESIDENT_INSPECTION_ACTIVITY_OWNER_ID }
+      : frozenProtocol(raw, version);
+    expect(canonicalizeResidentActivity(old, binding)).toBeNull();
+    const physical = { ...old, restTask: { ...restTask, waitReason: "no-traversable-route" } };
+    const before = stableStringify(physical);
+    expect(stableStringify(canonicalizeResidentActivity(physical, binding))).toBe(before);
+    expect(stableStringify(physical)).toBe(before);
+  });
+
+  it("requires the exact owner and all inherited nullable task fields", () => {
+    const { raw, binding } = environmentRestFixture();
+    for (const field of ["rationTask", "materialTask", "inspectionTask"] as const) {
+      const absent: Record<string, unknown> = { ...raw };
+      delete absent[field];
+      expect(canonicalizeResidentActivity(absent, binding), field).toBeNull();
+      expect(canonicalizeResidentActivity({ ...raw, [field]: undefined }, binding), field).toBeNull();
+    }
+    expect(canonicalizeResidentActivity({ ...raw, ownerId: RESIDENT_INSPECTION_ACTIVITY_OWNER_ID }, binding)).toBeNull();
+    expect(canonicalizeResidentActivity({ ...raw, version: RESIDENT_INSPECTION_ACTIVITY_VERSION }, binding)).toBeNull();
+  });
+
+  it("keeps observed-water exclusive to waiting selected-rest tasks", () => {
+    const { raw, restTask, target, binding } = environmentRestFixture();
+    for (const phase of ["approaching", "arrived"]) {
+      expect(canonicalizeResidentActivity({ ...raw, poses: [{ position: target, heading: 0 }],
+        restTask: { ...restTask, phase } }, binding), phase).toBeNull();
+    }
+    const continued = { ...raw, poses: [{ position: target, heading: 0 }], restTask: {
+      ...restTask, cause: "continued-admission", origin: "continued-admitted-rest",
+      legacySettlementOrdinal: 0, phase: "arrived", waitReason: null,
+    } };
+    expect(canonicalizeResidentActivity(continued, binding)).not.toBeNull();
+    for (const phase of ["waiting", "arrived"]) {
+      expect(canonicalizeResidentActivity({ ...continued,
+        restTask: { ...continued.restTask, phase, waitReason: "observed-water" } }, binding), phase).toBeNull();
+    }
+  });
+
+  it("does not extend ration, material or inspection waiting vocabulary", () => {
+    const { world, index, raw, restTask, task, binding } = environmentRestFixture();
+    const project = world.settlements.find(({ id }) => id === world.residents[index]!.homeSettlementId)!.project;
+    const common = { settlementId: restTask.settlementId, target: restTask.target,
+      selectedAtTick: restTask.selectedAtTick, phase: "waiting", lastProgressAtTick: restTask.lastProgressAtTick,
+      nextReassessmentAtTick: restTask.nextReassessmentAtTick, waitReason: "no-traversable-route" };
+    const otherTasks = [
+      ["rationTask", { ...common, kind: "settlement-ration", usedAtTick: null, foodUsed: false, waterUsed: false }],
+      ["materialTask", { ...common, kind: "settlement-material", projectId: project.id, resource: project.resource, usedAtTick: null }],
+      ["inspectionTask", { ...task, phase: "waiting", waitReason: "no-traversable-route" }],
+    ] as const;
+    for (const [field, otherTask] of otherTasks) {
+      expect(canonicalizeResidentActivity({ ...raw, restTask: null, [field]: otherTask }, binding), field).not.toBeNull();
+      expect(canonicalizeResidentActivity({ ...raw, restTask: null,
+        [field]: { ...otherTask, waitReason: "observed-water" } }, binding), field).toBeNull();
+    }
+  });
+
+  it("rejects mixed v4/v5 cohorts while preserving either complete explicit authority", () => {
+    const current = fixture();
+    const original = stableStringify(current.world);
+    expect(residentCivicActivityCohortIsUniform(current.world.residents)).toBe(true);
+    const resident = current.world.residents[current.index]!;
+    const environment = canonicalizeResidentActivity({ ...resident.activity,
+      version: RESIDENT_ENVIRONMENT_ACTIVITY_VERSION, ownerId: RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID,
+    }, current.binding);
+    expect(environment).not.toBeNull();
+    resident.activity = environment!;
+    const mixed = stableStringify(current.world);
+    expect(residentCivicActivityCohortIsUniform(current.world.residents)).toBe(false);
+    expect(residentActivitySaveExtensionsValid(current.world, true, true, true, true, true)).toBe(false);
+    expect(() => serializeWorld(current.world)).toThrow(/whole-roster/u);
+    expect(stableStringify(current.world)).toBe(mixed);
+    current.world.residents = current.world.residents.map((entry) => ({ ...entry,
+      activity: canonicalizeResidentActivity({ ...entry.activity,
+        version: RESIDENT_ENVIRONMENT_ACTIVITY_VERSION, ownerId: RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID,
+      }, { actorId: entry.identity.stableId, tick: current.binding.tick, phase: 0 })!,
+    }));
+    expect(residentCivicActivityCohortIsUniform(current.world.residents)).toBe(true);
+    expect(residentActivitySaveExtensionsValid(current.world, true, true, true, true, true)).toBe(true);
+    expect(() => serializeWorld(current.world)).not.toThrow();
+    expect(stableStringify(MODEL_WORLD)).toBe(original);
   });
 });

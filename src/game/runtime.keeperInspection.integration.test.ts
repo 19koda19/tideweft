@@ -5,7 +5,7 @@ import { assertWorldInvariants, createWorldView, deserializeWorld, serializeWorl
 import { residentRestTargetHasDrySupport } from "../sim/residentActivityWorld";
 import { queryResidentAttentionState } from "../sim/residentAttention";
 import { tideAtTick } from "../sim/terrain";
-import { RESIDENT_CIVIC_ACTIVITY_OWNER_ID, RESIDENT_CIVIC_ACTIVITY_VERSION, RESIDENT_INSPECTION_ACTIVITY_VERSION } from "../sim/residentActivity";
+import { RESIDENT_CIVIC_ACTIVITY_OWNER_ID, RESIDENT_CIVIC_ACTIVITY_VERSION, RESIDENT_INSPECTION_ACTIVITY_OWNER_ID, RESIDENT_INSPECTION_ACTIVITY_VERSION, RESIDENT_ENVIRONMENT_ACTIVITY_VERSION } from "../sim/residentActivity";
 import type { PlayerState } from "./player";
 import { deserializeBio0Ecology } from "./bio0Ecology";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
@@ -13,7 +13,7 @@ import { restorePlayerRegionalTravel, capturePlayerRegionalTravel, serializePlay
 import { regionLocalToWindowTile } from "./regionalTravel";
 import { resolveResidentWorldPlacement, playerWorldPositionInRegionalWindow } from "./residentSpatial";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
-import { CURRENT_GAME_SAVE_VERSION, FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
+import { CURRENT_GAME_SAVE_VERSION, FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION, FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import {
   deserializeSettlementEcologyState, serializeSettlementEcologyState,
   stageSettlementDomesticFoodUse, resolveSettlementDomesticFoodUse,
@@ -301,7 +301,12 @@ describe("ordinary autonomous keeper inspection", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
   }, 60_000);
 
-  it.each([4, 9])("retains supported53 phase%s history and upgrades inspection only at a real boundary", async (phase) => {
+  it.each([
+    { phase: 4, schema: FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION },
+    { phase: 9, schema: FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION },
+    { phase: 4, schema: FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION },
+    { phase: 9, schema: FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION },
+  ])("retains supported$schema phase$phase history and upgrades only at a real boundary", async ({ phase, schema }) => {
     const base = await fixture("work", true);
     const stagingRepository = new MemoryRepository(base.record);
     const staging = await open(stagingRepository);
@@ -316,11 +321,13 @@ describe("ordinary autonomous keeper inspection", () => {
       expect(activity.inspectionTask).toBeNull();
       // An explicit supported-format reconstruction of actual accepted history,
       // not an archived release or a successful inspection injected into v3.
-      const { inspectionTask: _inspection, ...body } = activity;
-      human.activity = { ...body, version: RESIDENT_CIVIC_ACTIVITY_VERSION, ownerId: RESIDENT_CIVIC_ACTIVITY_OWNER_ID };
+      if (schema === FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION) {
+        const { inspectionTask: _inspection, ...body } = activity;
+        human.activity = { ...body, version: RESIDENT_CIVIC_ACTIVITY_VERSION, ownerId: RESIDENT_CIVIC_ACTIVITY_OWNER_ID };
+      } else human.activity = { ...activity, version: RESIDENT_INSPECTION_ACTIVITY_VERSION, ownerId: RESIDENT_INSPECTION_ACTIVITY_OWNER_ID };
     }
     legacy.world = serializeWorld(world);
-    legacy.version = FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION;
+    legacy.version = schema;
     close(staging);
     const repository = new MemoryRepository(recordWith(record, legacy));
     const runtime = await open(repository);
@@ -332,18 +339,19 @@ describe("ordinary autonomous keeper inspection", () => {
       advance(runtime, 9 - phase);
       await runtime.save();
       const ninth = decode(repository.snapshot());
-      expect(deserializeWorld(ninth.world).residents.every(({ activity }) => activity?.version === RESIDENT_CIVIC_ACTIVITY_VERSION
-        && !Object.hasOwn(activity, "inspectionTask"))).toBe(true);
+      expect(deserializeWorld(ninth.world).residents.every(({ activity }) => schema === FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION
+        ? activity?.version === RESIDENT_CIVIC_ACTIVITY_VERSION && !Object.hasOwn(activity, "inspectionTask")
+        : activity?.version === RESIDENT_INSPECTION_ACTIVITY_VERSION && activity.inspectionTask === null)).toBe(true);
     }
     advance(runtime, 1);
     await runtime.save();
     const boundary = decode(repository.snapshot());
     expect(boundary.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
-    expect(deserializeWorld(boundary.world).residents.every(({ activity }) => activity?.version === RESIDENT_INSPECTION_ACTIVITY_VERSION
+    expect(deserializeWorld(boundary.world).residents.every(({ activity }) => activity?.version === RESIDENT_ENVIRONMENT_ACTIVITY_VERSION
       && activity.poses.length === 1 && activity.inspectionTask === null)).toBe(true);
     close(runtime);
     // Even nullable successor state cannot be smuggled into older outer53.
-    current.version = FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION;
+    current.version = schema;
     const invalidRecord = recordWith(record, current);
     const rejectedRepository = new MemoryRepository(invalidRecord);
     const rejected = await createTideweftRuntime(rejectedRepository);

@@ -15,12 +15,15 @@ export const RESIDENT_ACTIVITY_OWNER_ID = "sim:resident-activity:v1" as const;
 /** The v1 rest/body protocol remains a deliberately supported cold format. */
 export const RESIDENT_SERVICE_ACTIVITY_VERSION = 2 as const;
 export const RESIDENT_SERVICE_ACTIVITY_OWNER_ID = "sim:resident-activity:v2" as const;
-/** Frozen v1/v2 readers remain exact; only v3 owns enacted civic material use. */
+/** Frozen v1/v2 readers remain exact; v3 introduces enacted civic material use. */
 export const RESIDENT_CIVIC_ACTIVITY_VERSION = 3 as const;
 export const RESIDENT_CIVIC_ACTIVITY_OWNER_ID = "sim:resident-activity:v3" as const;
-/** Only v4 owns an evidence-bound approach to the separate physical store. */
+/** v4 introduces an evidence-bound approach to the separate physical store. */
 export const RESIDENT_INSPECTION_ACTIVITY_VERSION = 4 as const;
 export const RESIDENT_INSPECTION_ACTIVITY_OWNER_ID = "sim:resident-activity:v4" as const;
+/** Only v5 can retain a rest hold caused by legitimately observed water. */
+export const RESIDENT_ENVIRONMENT_ACTIVITY_VERSION = 5 as const;
+export const RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID = "sim:resident-activity:v5" as const;
 /** Ten accepted 100ms steps form one existing civil-minute interval. */
 export const RESIDENT_ACTIVITY_MAX_PHASE = 10 as const;
 /** Ordinary human approach uses the current steady-walk distance, not sprint. */
@@ -31,6 +34,8 @@ export interface ResidentBodyPose {
   /** Shared fixed-point clockwise turn; independent of gaze. */
   readonly heading: number;
 }
+
+export type ResidentPhysicalWaitReason = "no-traversable-route" | "outside-local-corridor" | null;
 
 export interface ResidentRestTask {
   readonly kind: "settlement-rest";
@@ -45,7 +50,7 @@ export interface ResidentRestTask {
   readonly phase: "approaching" | "waiting" | "arrived";
   readonly lastProgressAtTick: number;
   readonly nextReassessmentAtTick: number;
-  readonly waitReason: "no-traversable-route" | "outside-local-corridor" | null;
+  readonly waitReason: ResidentPhysicalWaitReason | "observed-water";
 }
 
 export interface ResidentRationTask {
@@ -56,7 +61,7 @@ export interface ResidentRationTask {
   readonly phase: "approaching" | "waiting" | "arrived" | "used";
   readonly lastProgressAtTick: number;
   readonly nextReassessmentAtTick: number;
-  readonly waitReason: ResidentRestTask["waitReason"];
+  readonly waitReason: ResidentPhysicalWaitReason;
   /** One committed use, not reserved food or a replayable entitlement. */
   readonly usedAtTick: number | null;
   readonly foodUsed: boolean;
@@ -73,7 +78,7 @@ export interface ResidentMaterialTask {
   readonly phase: "approaching" | "waiting" | "arrived" | "used";
   readonly lastProgressAtTick: number;
   readonly nextReassessmentAtTick: number;
-  readonly waitReason: ResidentRestTask["waitReason"] | "no-material";
+  readonly waitReason: ResidentPhysicalWaitReason | "no-material";
   /** Exactly one committed unit at the hourly pulse; never portable stock. */
   readonly usedAtTick: number | null;
 }
@@ -89,7 +94,7 @@ export interface ResidentInspectionTask {
   readonly phase: "approaching" | "waiting" | "arrived";
   readonly lastProgressAtTick: number;
   readonly nextReassessmentAtTick: number;
-  readonly waitReason: ResidentRestTask["waitReason"];
+  readonly waitReason: ResidentPhysicalWaitReason;
 }
 
 /**
@@ -99,8 +104,8 @@ export interface ResidentInspectionTask {
  * Phase10 is consumed in memory; ordinary runtime captures persist phases0–9.
  */
 export interface ResidentActivity {
-  readonly version: typeof RESIDENT_ACTIVITY_VERSION | typeof RESIDENT_SERVICE_ACTIVITY_VERSION | typeof RESIDENT_CIVIC_ACTIVITY_VERSION | typeof RESIDENT_INSPECTION_ACTIVITY_VERSION;
-  readonly ownerId: typeof RESIDENT_ACTIVITY_OWNER_ID | typeof RESIDENT_SERVICE_ACTIVITY_OWNER_ID | typeof RESIDENT_CIVIC_ACTIVITY_OWNER_ID | typeof RESIDENT_INSPECTION_ACTIVITY_OWNER_ID;
+  readonly version: typeof RESIDENT_ACTIVITY_VERSION | typeof RESIDENT_SERVICE_ACTIVITY_VERSION | typeof RESIDENT_CIVIC_ACTIVITY_VERSION | typeof RESIDENT_INSPECTION_ACTIVITY_VERSION | typeof RESIDENT_ENVIRONMENT_ACTIVITY_VERSION;
+  readonly ownerId: typeof RESIDENT_ACTIVITY_OWNER_ID | typeof RESIDENT_SERVICE_ACTIVITY_OWNER_ID | typeof RESIDENT_CIVIC_ACTIVITY_OWNER_ID | typeof RESIDENT_INSPECTION_ACTIVITY_OWNER_ID | typeof RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID;
   readonly actorId: string;
   readonly tick: number;
   readonly poses: readonly ResidentBodyPose[];
@@ -124,7 +129,11 @@ export function residentActivitySupportsMaterials(activity: Pick<ResidentActivit
 }
 
 export function residentActivitySupportsInspection(activity: Pick<ResidentActivity, "version"> | undefined | null): boolean {
-  return activity?.version === RESIDENT_INSPECTION_ACTIVITY_VERSION;
+  return activity?.version === RESIDENT_INSPECTION_ACTIVITY_VERSION || residentActivitySupportsEnvironment(activity);
+}
+
+export function residentActivitySupportsEnvironment(activity: Pick<ResidentActivity, "version"> | undefined | null): boolean {
+  return activity?.version === RESIDENT_ENVIRONMENT_ACTIVITY_VERSION;
 }
 
 export interface ResidentActivityBinding {
@@ -150,7 +159,8 @@ export function canonicalizeResidentActivity(
   if (!plainRecord(value)) return null;
   const versionField = Object.getOwnPropertyDescriptor(value, "version");
   if (versionField?.enumerable !== true || !Object.hasOwn(versionField, "value")) return null;
-  const inspectionCapable = value.version === RESIDENT_INSPECTION_ACTIVITY_VERSION;
+  const environmentCapable = value.version === RESIDENT_ENVIRONMENT_ACTIVITY_VERSION;
+  const inspectionCapable = value.version === RESIDENT_INSPECTION_ACTIVITY_VERSION || environmentCapable;
   const civicCapable = value.version === RESIDENT_CIVIC_ACTIVITY_VERSION || inspectionCapable;
   const serviceCapable = value.version === RESIDENT_SERVICE_ACTIVITY_VERSION || civicCapable;
   if (!exactKeys(value, [
@@ -158,7 +168,8 @@ export function canonicalizeResidentActivity(
     ...(serviceCapable ? ["rationTask"] : []),
     ...(civicCapable ? ["materialTask"] : []),
     ...(inspectionCapable ? ["inspectionTask"] : []),
-  ]) || (inspectionCapable ? value.ownerId !== RESIDENT_INSPECTION_ACTIVITY_OWNER_ID
+  ]) || (environmentCapable ? value.ownerId !== RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID
+    : inspectionCapable ? value.ownerId !== RESIDENT_INSPECTION_ACTIVITY_OWNER_ID
     : civicCapable ? value.ownerId !== RESIDENT_CIVIC_ACTIVITY_OWNER_ID
     : serviceCapable ? value.ownerId !== RESIDENT_SERVICE_ACTIVITY_OWNER_ID
     : value.version !== RESIDENT_ACTIVITY_VERSION || value.ownerId !== RESIDENT_ACTIVITY_OWNER_ID)
@@ -182,7 +193,7 @@ export function canonicalizeResidentActivity(
     if (prior !== undefined && !lawfulApproachDelta(prior, pose)) return null;
     poses.push(pose);
   }
-  const restTask = canonicalRestTask(value.restTask, value.tick);
+  const restTask = canonicalRestTask(value.restTask, value.tick, environmentCapable);
   if (restTask === undefined) return null;
   const rationTask = serviceCapable ? canonicalRationTask(value.rationTask, value.tick) : null;
   const materialTask = civicCapable ? canonicalMaterialTask(value.materialTask, value.tick) : null;
@@ -202,8 +213,8 @@ export function canonicalizeResidentActivity(
     )))
   )) return null;
   const activity: ResidentActivity = Object.freeze({
-    version: inspectionCapable ? RESIDENT_INSPECTION_ACTIVITY_VERSION : civicCapable ? RESIDENT_CIVIC_ACTIVITY_VERSION : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_VERSION : RESIDENT_ACTIVITY_VERSION,
-    ownerId: inspectionCapable ? RESIDENT_INSPECTION_ACTIVITY_OWNER_ID : civicCapable ? RESIDENT_CIVIC_ACTIVITY_OWNER_ID : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_OWNER_ID : RESIDENT_ACTIVITY_OWNER_ID,
+    version: environmentCapable ? RESIDENT_ENVIRONMENT_ACTIVITY_VERSION : inspectionCapable ? RESIDENT_INSPECTION_ACTIVITY_VERSION : civicCapable ? RESIDENT_CIVIC_ACTIVITY_VERSION : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_VERSION : RESIDENT_ACTIVITY_VERSION,
+    ownerId: environmentCapable ? RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID : inspectionCapable ? RESIDENT_INSPECTION_ACTIVITY_OWNER_ID : civicCapable ? RESIDENT_CIVIC_ACTIVITY_OWNER_ID : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_OWNER_ID : RESIDENT_ACTIVITY_OWNER_ID,
     actorId: value.actorId,
     tick: value.tick,
     poses: Object.freeze(poses),
@@ -313,7 +324,7 @@ function lawfulApproachDelta(prior: ResidentBodyPose, current: ResidentBodyPose)
   }
 }
 
-function canonicalRestTask(value: unknown, tick: number): ResidentRestTask | null | undefined {
+function canonicalRestTask(value: unknown, tick: number, environmentCapable: boolean): ResidentRestTask | null | undefined {
   if (value === null) return null;
   if (!plainRecord(value) || !exactKeys(value, [
     "cause", "kind", "lastProgressAtTick", "legacySettlementOrdinal", "nextReassessmentAtTick", "origin",
@@ -330,7 +341,8 @@ function canonicalRestTask(value: unknown, tick: number): ResidentRestTask | nul
     || !["selected", "continued-admitted-rest"].includes(value.origin as string)
     || !["approaching", "waiting", "arrived"].includes(value.phase as string)
     || !(value.waitReason === null
-      || value.waitReason === "no-traversable-route" || value.waitReason === "outside-local-corridor")
+      || value.waitReason === "no-traversable-route" || value.waitReason === "outside-local-corridor"
+      || (environmentCapable && value.waitReason === "observed-water"))
     || (value.phase === "waiting") !== (value.waitReason !== null)
     || (value.origin === "continued-admitted-rest") !== (value.cause === "continued-admission")
     || (value.origin === "continued-admitted-rest"

@@ -10,15 +10,17 @@ import {
   type ObservationInterrupt,
 } from "../sim/actorPerception";
 import { globalTileToRegion } from "../sim/regions";
-import { queryResidentAttentionState } from "../sim/residentAttention";
+import { queryResidentAttentionState, residentAttentionFocus } from "../sim/residentAttention";
 import { FIXED_POINT, type WorldView } from "../sim/types";
-import { canonicalizeResidentActivity, RESIDENT_ACTIVITY_MAX_PHASE } from "../sim/residentActivity";
+import { canonicalizeResidentActivity, RESIDENT_ACTIVITY_MAX_PHASE, residentActivitySupportsEnvironment } from "../sim/residentActivity";
+import { residentSettlementRestTarget } from "../sim/residentActivityWorld";
+import { residentRestSurfaceObservationId } from "../sim/residentSurfaceKnowledge";
 import {
   evaluateAudibleContact,
   evaluateVisualContact,
   type AudibleContact,
 } from "./perception";
-import { buildWorldPerceptionCells } from "./outdoorIllumination";
+import { buildOutdoorIlluminationField, buildWorldPerceptionCells } from "./outdoorIllumination";
 import { prepareTerrainAudibleContactInput } from "./terrainAcoustics";
 import type { RegionalTerrainWindow } from "./regionalTravel";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
@@ -447,6 +449,13 @@ export function collectExistingHumanObservations(
   ) || left.resident.id - right.resident.id);
   const selected = positioned.slice(0, HUMAN_PERCEPTION_MAX_RESIDENTS);
   if (!uniqueResidents(selected)) return EMPTY_BATCHES;
+  const hasRestSurfaceTargets = selected.some(({ resident }) => {
+    const task = resident.activity?.restTask;
+    return residentActivitySupportsEnvironment(resident.activity)
+      && task?.origin === "selected" && task.phase !== "arrived";
+  });
+  const illumination = hasRestSurfaceTargets ? buildOutdoorIlluminationField(world, cells) : null;
+  if (hasRestSurfaceTargets && illumination === null) return EMPTY_BATCHES;
 
   const batches: HumanObservationBatch[] = [];
   const listeningReceipts: HumanSupplementalListeningReceipt[] | null = import.meta.env.DEV
@@ -673,6 +682,47 @@ export function collectExistingHumanObservations(
     }
     if (latestIdentifiedVisual !== null) {
       observations.push(latestIdentifiedVisual.observation);
+    }
+    const restTask = resident.activity?.restTask;
+    // One qualitative task sight uses remaining bounded capacity. Never
+    // displace lawful hearing or reject a full frame to append a ground fact;
+    // unavailable information conservatively retains an existing held task.
+    if (residentActivitySupportsEnvironment(resident.activity)
+      && restTask?.origin === "selected" && restTask.phase !== "arrived") {
+      const target = residentSettlementRestTarget(economy, resident);
+      if (target === null || target.region.x !== restTask.target.region.x
+        || target.region.y !== restTask.target.region.y || target.localX !== restTask.target.localX
+        || target.localY !== restTask.target.localY) return EMPTY_BATCHES;
+      const observer = residentPlacementInRegionalWindow(placement, window);
+      const point = projectedSamplePoint(frame, world, target);
+      if (observer !== null && point !== null
+        && observations.length < HUMAN_PERCEPTION_MAX_OBSERVATIONS_PER_RESIDENT) {
+        const targetIndex = Math.floor(point.y / WORLD_POSITION_UNITS_PER_TILE) * world.terrain.width
+          + Math.floor(point.x / WORLD_POSITION_UNITS_PER_TILE);
+        const tile = world.terrain.tiles[targetIndex];
+        const light = illumination?.physicalIllumination[targetIndex];
+        if (tile === undefined || light === undefined) return EMPTY_BATCHES;
+        const sight = evaluateVisualContact({
+          columns: world.terrain.width, rows: world.terrain.height, cells,
+          observerTileIndex: observer.tileIndex, targetTileIndex: targetIndex,
+          observerFacingRadians: lawfulResidentFacing(priorState, placement),
+          weatherVisibility: weatherVisibility(world), targetMovementSalience: 0,
+          targetLightVisibility: light / FIXED_POINT,
+        });
+        if (sight?.identityEligible) {
+          const confidence = scaleContact(sight.confidence);
+          const observation = createActorObservation({
+            id: residentRestSurfaceObservationId(priorState.actorId, target),
+            observerId: priorState.actorId, observedAtTick: targetTick, channel: "vision",
+            perceivedClass: tile.terrain === "deep-water" || tile.waterDepth > 0
+              ? "water-covered-ground" : "dry-ground",
+            subjectId: null, identification: "classified", area: { center: target, radiusUnits: 0 },
+            confidence, salience: Math.min(confidence, 300_000), interrupt: "information",
+          });
+          if (observation === null) return EMPTY_BATCHES;
+          observations.push(observation);
+        }
+      }
     }
 
     const canonical = canonicalizeActorObservations(observations);
@@ -964,7 +1014,7 @@ function lawfulResidentFacing(
   }
   const appraisal = queryResidentAttentionState(priorState);
   if (appraisal === "unaware" || appraisal === "none") return placement.facing;
-  const attention = queryActorAttention(priorState)[0];
+  const attention = residentAttentionFocus(priorState);
   if (attention !== undefined) {
     return facingTowardSavedPoint(placement, attention.area.center);
   }
