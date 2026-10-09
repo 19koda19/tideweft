@@ -14,6 +14,7 @@ import * as simulation from "../sim/public";
 import {
   RESIDENT_REST_APPROACH_STEP_UNITS,
   RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
+  residentActivitySupportsRations,
 } from "../sim/residentActivity";
 import { residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
 import {
@@ -538,8 +539,8 @@ describe("ordinary runtime conserved resident travel", () => {
       }
       return result;
     });
-    // Reproduce only the native prefix needed by this independent witness.
-    // The original test above owns full journey/handoff and rollback coverage.
+    // Follow the native prefix before controlling only route availability.
+    // The original test above separately owns uninterrupted macro rollback.
     for (let interval = 0; interval < 120 && !observed.offWindow; interval += 1) advance(runtime, 10);
     expect(observed.offWindow).toBe(true);
     await runtime.save();
@@ -704,9 +705,120 @@ describe("ordinary runtime conserved resident travel", () => {
       coldRecords.set(phase, record);
       partials.set(phase, envelope);
     }
+    const completed: { tick: number | null; fulfillmentSequences: Set<number> } = {
+      tick: null, fulfillmentSequences: new Set(),
+    };
+    const resumedTrace: { tick: number; distance: number; local: boolean }[] = [];
+    let lastDistance = heldDistance;
+    // Observe the genuine consumer without retaining mutable pre-call aliases,
+    // changing admission custody, or assigning motion/arrival/stock results.
+    const arrivalStep = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+      const world = args[0];
+      const before = contract(world, fixture.contractId);
+      const beforeStatus = before.status;
+      const beforeCargo = before.cargoQuantity;
+      const beforeHuman = actor(world, actorId);
+      const beforeDistance = beforeStatus === "in-transit" ? routeDistance(world, before, beforeHuman) : null;
+      const fineUnits = beforeDistance === null ? 0 : boundedFineWork(beforeHuman);
+      const receiver = world.settlements.find(({ id }) => id === fixture.destinationId)!;
+      const beforeFood = receiver.inventory.food;
+      const noFoodRecipe = receiver.recipes.every(({ inputs, outputs }) =>
+        [...inputs, ...outputs].every(({ resource }) => resource !== "food"));
+      const noFoodProject = receiver.project.resource !== "food";
+      const noArrivedRations = world.residents.filter((human) => human.location.kind === "settlement"
+        && human.location.settlementId === receiver.id).every((human) =>
+        residentActivitySupportsRations(human.activity) && human.activity?.rationTask?.phase !== "arrived");
+      const firstNewSequence = world.meta.nextEventSequence;
+      const result = originalStep(...args);
+      const after = contract(result, fixture.contractId);
+      const freshEvents = result.events.filter(({ sequence }) => sequence >= firstNewSequence);
+      for (const event of freshEvents) if (event.type === "contract-fulfilled"
+        && event.subjectId === fixture.contractId) completed.fulfillmentSequences.add(event.sequence);
+      if (beforeStatus === "in-transit") {
+        const human = actor(result, actorId);
+        expect(after).toMatchObject({ carrierKind: "resident", assignedResidentId: residentId,
+          porterRouteIds: [126], porterSettlementIds: [fixture.originId, fixture.destinationId] });
+        expect(human.identity.stableId).toBe(actorId);
+        const distance = after.status === "fulfilled" ? fixture.totalDistance : routeDistance(result, after, human);
+        expect(distance).toBeGreaterThanOrEqual(lastDistance);
+        expect(distance - lastDistance).toBeLessThanOrEqual(10 * RESIDENT_REST_APPROACH_STEP_UNITS);
+        expect(distance - beforeDistance! + fineUnits).toBeLessThanOrEqual(10 * RESIDENT_REST_APPROACH_STEP_UNITS);
+        resumedTrace.push({ tick: result.meta.completedTick, distance,
+          local: residentTravelBodyIsLocal(actualFrame, human.activity!.poses.at(-1)!.position) });
+        lastDistance = distance;
+        if (after.status === "fulfilled") {
+          expect(completed.tick).toBeNull();
+          completed.tick = result.meta.completedTick;
+          expect(completed.tick).toBeGreaterThan(traveling.arrivalTick!);
+          expect(beforeCargo).toBe(fixture.quantity);
+          expect(after.cargoQuantity).toBe(0);
+          const fulfillment = freshEvents.filter(({ type, subjectId }) =>
+            type === "contract-fulfilled" && subjectId === fixture.contractId);
+          expect(fulfillment).toHaveLength(1);
+          expect(fulfillment[0]!.data).toMatchObject({ quantity: fixture.quantity, resource: "food",
+            residentId, originSettlementId: fixture.originId, destinationSettlementId: fixture.destinationId,
+            projectContribution: 0, routeEvidence: "resident-route" });
+          // Destination-specific conservation, not a global-ledger shortcut.
+          // Check real consumers; do not disable them to manufacture equality.
+          expect(noFoodRecipe).toBe(true);
+          expect(noFoodProject).toBe(true);
+          if (result.meta.completedTick % 60 === 0) expect(noArrivedRations).toBe(true);
+          const otherTransfers = freshEvents.filter((event) => {
+            if (event.subjectId === fixture.contractId
+              || (event.type !== "contract-departed" && event.type !== "contract-fulfilled")) return false;
+            const other = result.contracts.find(({ id }) => id === event.subjectId);
+            return other?.resource === "food" && (event.type === "contract-departed"
+              ? other.originSettlementId === fixture.destinationId
+              : other.destinationSettlementId === fixture.destinationId);
+          });
+          expect(otherTransfers).toHaveLength(0);
+          expect(result.settlements.find(({ id }) => id === fixture.destinationId)!.inventory.food)
+            .toBe(beforeFood + beforeCargo);
+          expect(after.deliveryTraceCost).toBeGreaterThan(0);
+          expect(human.activeContractId).toBeNull();
+          expect(human.location).toEqual({ kind: "settlement", settlementId: fixture.destinationId });
+          expect(human.activity?.travelTask).toBeNull();
+          expect(human.activity?.poses.at(-1)?.position).toEqual(fixture.destinationPosition);
+        } else {
+          expect(after).toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity });
+          expect(human.activity?.travelTask).toMatchObject({ mode: "physical", contractId: fixture.contractId,
+            selectedAtTick: heldTask.selectedAtTick });
+        }
+      }
+      assertWorldInvariants(result);
+      return result;
+    });
     advance(retry, 1);
     await retry.save();
     const reference = decode(retryRepository.snapshot());
+    const referenceWorld = deserializeWorld(reference.world);
+    expect(reference.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    const remainingTask = actor(referenceWorld, actorId).activity?.travelTask;
+    if (remainingTask?.mode !== "physical") throw new Error("Resumed journey lost its physical cursor");
+    const remainingEndpoints = nativeRoute.path.length - remainingTask.waypointIndex;
+    // A step stops at each waypoint, discarding unused allowance. Distance /
+    // interval budget alone would undercount this legitimate physical work.
+    const intervalLimit = Math.ceil(remainingEndpoints
+      * Math.ceil(1_000 / RESIDENT_REST_APPROACH_STEP_UNITS) / 10) + 2;
+    for (let interval = 0; interval < intervalLimit && completed.tick === null; interval += 1) advance(retry, 10);
+    if (completed.tick === null) throw new Error(`Resumed native journey did not hand off within ${intervalLimit} bounded intervals`);
+    expect(resumedTrace.some(({ local, distance }) => local && distance > heldDistance)).toBe(true);
+    expect(resumedTrace.at(-1)?.distance).toBe(fixture.totalDistance);
+    expect(completed.fulfillmentSequences.size).toBe(1);
+    advance(retry, 10);
+    await retry.save();
+    const terminal = decode(retryRepository.snapshot());
+    const terminalWorld = deserializeWorld(terminal.world);
+    expect(terminalWorld.meta.completedTick).toBe(completed.tick + 1);
+    expect(terminal.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expect(contract(terminalWorld, fixture.contractId)).toMatchObject({ status: "fulfilled", cargoQuantity: 0,
+      completedTick: completed.tick, assignedResidentId: residentId });
+    expect(completed.fulfillmentSequences.size).toBe(1);
+    expect(JSON.parse(terminal.regionalTravel).origin).toEqual(movedOrigin);
+    // Completion above owns exact release/location. This subsequent ordinary
+    // interval may legitimately select other work or change needs/stock.
+    assertWorldInvariants(terminalWorld);
+    arrivalStep.mockRestore();
     close(retry);
 
     const phase4Repository = new MemoryRepository(coldRecords.get(4)!);
@@ -724,5 +836,12 @@ describe("ordinary runtime conserved resident travel", () => {
     advance(phase9, 1);
     await phase9.save();
     expect(authoritativeRoots(decode(phase9Repository.snapshot()))).toEqual(authoritativeRoots(reference));
+    const phase9Tick = deserializeWorld(partials.get(9)!.world).meta.completedTick;
+    const remainingSteps = 10 * (terminalWorld.meta.completedTick - phase9Tick)
+      + terminal.perceptionCarry.playerStepsSinceWorldTick - partials.get(9)!.perceptionCarry.playerStepsSinceWorldTick;
+    expect(remainingSteps).toBeGreaterThan(1);
+    advance(phase9, remainingSteps - 1); // The reference step above is already consumed.
+    await phase9.save();
+    expect(authoritativeRoots(decode(phase9Repository.snapshot()))).toEqual(authoritativeRoots(terminal));
   }, 180_000);
 });

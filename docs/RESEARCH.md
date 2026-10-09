@@ -4975,6 +4975,56 @@ retirement policy, platform/dependency/configuration, game behavior or completed
 directive changes. The repair does not certify cat flood avoidance, general
 NPC equipment, completed travel/environment scope or a new public release.
 
+### Native interrupted courier handoff — 2026-10-09
+
+Test-only follow-up on local `ce7909caf934bc9d4da1e8ad35bf181d308516d9`
+extends the existing native density8 food133 witness through final handoff
+after interruption. Automatic selection, origin approach and pickup retain the
+same generated14-unit cargo and route126. Only route availability is controlled:
+inactive trace stops the same off-window body/cursor beyond ETA, ordinary player
+movement reenters its real interaction window, and restoring the saved native
+trace permits due reassessment and bounded actual movement. This is not a
+player repair action, direct sight, invented observation or assigned arrival.
+
+The delegating primary-only observer captures primitive pre-call state and
+new event sequences without consuming admissions or changing world work.
+Remaining waypoint count gives a finite bound accounting for the unused step
+allowance discarded at corners. Monotone fine/macro progress retains the same
+1050-unit interval maximum. Physical final arrival transfers exactly14 from
+the same contract to destination7 stock once, clears the commitment/task and
+retains the actual destination body. Completion remains later than the old ETA.
+Destination-specific recipe/project, hourly ration and competing-transfer
+guards justify that stock delta without disabling those consumers or using a
+global consumption total as a local substitute.
+
+Exactly one further ordinary interval continues coherently. Phase4 cold work
+joins phase9 after five accepted steps; phase9 reaches the identical terminal
+at the same accepted-step count, comparing every saved root except the existing
+session recap and envelope integrity exclusions. Subsequent legitimate task,
+need or stock changes are not suppressed. This proves bounded continuation,
+not indefinite task liveness, normal visual play or a recurring service.
+
+Typecheck PASS; complete travel file2PASS93.00s and maintained smoke6files/
+105PASS4.19s. All731 public non-Markdown inputs and parent HEAD match before/
+after, digest `4e1b7bbed0c44d607213197d23897c6c9912c76e48dc56bb6231f58eaa1b64a6`.
+Ignored `travel-reentry-handoff.json` report SHA256
+`d28741af8c79717e3ecadd352006462b66847c5909243fb38d255298da9f74d7`;
+smoke report `8972b2ebad1c595d094ff1a3b5c14d78250cdda93be1f1a5066a0a7db5241259`;
+identical input manifests `39d2eebf191c2965734ec180ffae632b7c78cb3ae4ff3ecc82e82cf268691336`.
+Commands retain current Node22.20.0/npm10.9.3:
+
+```sh
+npm run typecheck
+npx vitest run src/game/runtime.residentTravel.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/travel-reentry-handoff.json
+npm run test:smoke -- --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/travel-reentry-handoff-smoke.json
+```
+
+Production, schemas/readers, dependencies and configuration are unchanged.
+Native reverse/multihop, current/load/support and informed alternatives,
+carried-cargo legal failure/recovery, longer subsequent-task liveness and
+normal Chart/Relief acceptance remain unfinished. No cumulative, production
+performance, package, publication or whole-directive closure is inferred.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
