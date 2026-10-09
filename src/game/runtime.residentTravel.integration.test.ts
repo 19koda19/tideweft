@@ -1178,4 +1178,250 @@ describe("ordinary runtime conserved resident travel", () => {
     }
     step.mockRestore();
   }, 180_000);
+
+  it("retains native multi-leg pickup and storm-held cargo after ordinary window exit with equal cold work", async () => {
+    // The native opportunity is storm-held, not a completed coarse journey.
+    // Every initial need, weather, stock, deadline and physical source stays
+    // native. Only ordinary renderer movement and accepted RAF steps are used.
+    const repository = new MemoryRepository();
+    const runtime = await open(repository);
+    runtime.dispatchUI({ type: "new-world", seed: "runtime baseline estuary",
+      posture: "gale", sessionShape: "wander" });
+    await runtime.save();
+    const initial = decode(repository.snapshot());
+    const initialWorld = deserializeWorld(initial.world);
+    expect(initialWorld.meta).toMatchObject({ seedText: "runtime baseline estuary", pressureMode: "wild", completedTick: 420 });
+    expect(initial.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    const offered = contract(initialWorld, 127);
+    expect(offered).toMatchObject({ status: "offered", originSettlementId: 5, destinationSettlementId: 1,
+      resource: "parts", quantity: 8, cargoQuantity: 0, playerExclusiveUntilTick: 720, dueTick: 1_140,
+      carrierKind: null, assignedResidentId: null, acceptedTick: null, departedTick: null });
+    const initialPlan = findAutonomousRoutePlan(initialWorld, offered.originSettlementId, offered.destinationSettlementId);
+    if (initialPlan === undefined) throw new Error("Native estuary127 has no initial lawful itinerary");
+    expect(initialPlan.routeIds).toEqual([121, 117, 112, 106]);
+    expect(initialPlan.settlementIds).toEqual([5, 4, 3, 2, 1]);
+    const positions = (world: WorldState, routeIds: readonly number[]): WorldPosition[] => routeIds.flatMap((id) => {
+      const route = world.routes.find((candidate) => candidate.id === id);
+      if (route === undefined) throw new Error("Native feasibility itinerary lost an actual route");
+      return route.path.map((tileIndex) => {
+        const tile = world.terrain.tiles[tileIndex];
+        if (tile === undefined) throw new Error("Native feasibility itinerary lost an actual tile");
+        return createWorldPosition({ x: 0, y: 0 }, tile.x * 1_000 + 500, tile.y * 1_000 + 500);
+      });
+    });
+    const nativePositions = positions(initialWorld, initialPlan.routeIds);
+    expect(nativePositions.length).toBeGreaterThan(0);
+    const currentFrame = () => {
+      const view = runtime.getRenderView();
+      const origin = view.terrain.worldTileOrigin;
+      if (origin === undefined) throw new Error("Native feasibility player has no real regional frame");
+      expect(view.terrain).toMatchObject({ columns: REGIONAL_TRAVEL_COLUMNS, rows: REGIONAL_TRAVEL_ROWS });
+      const frame = residentTravelInteractionFrame({ origin,
+        terrain: { width: view.terrain.columns, height: view.terrain.rows } });
+      if (frame === null) throw new Error("Native feasibility player has no actual interaction window");
+      return frame;
+    };
+    const playerSummary = () => {
+      const view = runtime.getRenderView();
+      const origin = view.terrain.worldTileOrigin!;
+      return { tick: view.tick, origin: { ...origin }, x: origin.x + view.player.position.x / view.terrain.tileSize,
+        y: origin.y + view.player.position.y / view.terrain.tileSize,
+        stamina: view.player.stamina, mode: view.player.mode };
+    };
+    const excludes = (routePositions = nativePositions) => {
+      const frame = currentFrame();
+      return routePositions.every((position) => !residentTravelBodyIsLocal(frame, position));
+    };
+    const initialFrame = currentFrame();
+    expect(nativePositions.every((position) => residentTravelBodyIsLocal(initialFrame, position))).toBe(true);
+    const startingPlayer = playerSummary();
+    const summary = (world: WorldState) => {
+      const commitment = contract(world, offered.id);
+      const human = world.residents.find(({ id }) => id === commitment.assignedResidentId);
+      const pose = human?.activity?.poses.at(-1);
+      const task = human?.activity?.pickupTask ?? human?.activity?.travelTask;
+      return { tick: world.meta.completedTick, status: commitment.status, quantity: commitment.quantity,
+        cargo: commitment.cargoQuantity, acceptedTick: commitment.acceptedTick, departedTick: commitment.departedTick,
+        arrivalTick: commitment.arrivalTick, delayTicks: human?.condition.routeDelayTicks ?? null,
+        residentId: human?.id ?? null, actorId: human?.identity.stableId ?? null,
+        body: pose === undefined ? null : { ...worldPositionToGlobalFixed(pose.position), heading: pose.heading },
+        task: task == null ? null : task.kind === "contract-travel" && task.mode === "legacy-coarse"
+          ? { kind: task.kind, mode: task.mode } : { kind: task.kind, phase: task.phase, waitReason: task.waitReason },
+        sourceStock: world.settlements.find(({ id }) => id === offered.originSettlementId)!.inventory.parts,
+        routeIds: [...commitment.porterRouteIds], weather: world.weather.kind, intensity: world.weather.intensity };
+    };
+    const observations: ReturnType<typeof summary>[] = [];
+    const macroEvidence: { tick: number; units: number }[] = [];
+    const pickupEvidence: { tick: number; beforeStock: number; afterStock: number;
+      departedLots: { contractId: number; quantity: number }[] }[] = [];
+    let primary = true;
+    const originalStep = simulation.stepWorld;
+    const step = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+      const world = args[0];
+      const before = contract(world, offered.id);
+      const beforeStatus = before.status;
+      const source = world.settlements.find(({ id }) => id === offered.originSettlementId)!;
+      const beforeStock = source.inventory.parts;
+      const beforeLots = beforeStatus === "accepted" ? world.contracts.filter((candidate) =>
+        candidate.originSettlementId === offered.originSettlementId && candidate.resource === "parts")
+        .map(({ id, status, cargoQuantity }) => ({ id, status, cargoQuantity })) : [];
+      const duePartsRecipes = beforeStatus === "accepted" ? source.recipes.filter((recipe) =>
+        recipe.nextRunTick <= world.meta.completedTick + 1
+        && [...recipe.inputs, ...recipe.outputs].some(({ resource }) => resource === "parts")).length : 0;
+      const beforeHuman = world.residents.find(({ id }) => id === before.assignedResidentId);
+      const beforeDistance = primary && before.status === "in-transit" && beforeHuman?.activity?.travelTask?.mode === "physical"
+        ? routeDistance(world, before, beforeHuman) : null;
+      const result = originalStep(...args);
+      if (primary) {
+        // At most300 advances to exclusivity plus four diagnostic intervals.
+        if (observations.length >= 304) throw new Error("Native feasibility exceeded its bounded observation count");
+        observations.push(summary(result));
+        const after = contract(result, offered.id);
+        const afterHuman = result.residents.find(({ id }) => id === after.assignedResidentId);
+        if (beforeStatus === "accepted" && after.status === "in-transit") {
+          // Characterize this actual non-hourly transfer. Do not disable or
+          // ignore another stock-changing producer to obtain the equation.
+          expect(result.meta.completedTick % 60).not.toBe(0);
+          expect(duePartsRecipes).toBe(0);
+          expect(result.contracts.filter((candidate) => candidate.destinationSettlementId === offered.originSettlementId
+            && candidate.resource === "parts" && candidate.completedTick === result.meta.completedTick
+            && candidate.status === "fulfilled")).toHaveLength(0);
+          for (const lot of result.contracts.filter((candidate) => candidate.originSettlementId === offered.originSettlementId
+            && candidate.resource === "parts" && candidate.departedTick === result.meta.completedTick)) {
+            expect(beforeLots.find(({ id }) => id === lot.id)).toMatchObject({ status: "accepted", cargoQuantity: 0 });
+            expect(lot).toMatchObject({ status: "in-transit", cargoQuantity: lot.quantity });
+            expect(result.events.filter(({ tick, type, subjectId }) => tick === result.meta.completedTick
+              && type === "contract-departed" && subjectId === lot.id)).toHaveLength(1);
+          }
+          pickupEvidence.push({ tick: result.meta.completedTick, beforeStock,
+            afterStock: result.settlements.find(({ id }) => id === offered.originSettlementId)!.inventory.parts,
+            departedLots: result.contracts.filter((candidate) => candidate.originSettlementId === offered.originSettlementId
+              && candidate.resource === "parts" && candidate.departedTick === result.meta.completedTick)
+              .map(({ id, quantity }) => ({ contractId: id, quantity })) });
+        }
+        if (beforeDistance !== null && after.status === "in-transit" && afterHuman !== undefined) {
+          const macroUnits = routeDistance(result, after, afterHuman) - beforeDistance;
+          expect(macroUnits).toBeGreaterThanOrEqual(0);
+          expect(macroUnits).toBeLessThanOrEqual(residentTravelStepUnits(afterHuman.activity!, after)! * 10);
+          if (macroUnits > 0) macroEvidence.push({ tick: result.meta.completedTick, units: macroUnits });
+        }
+      }
+      return result;
+    });
+    let acceptedSteps = 0;
+    const take = (count: number) => { advance(runtime, count); acceptedSteps += count; };
+    const prefixLimit = (offered.playerExclusiveUntilTick - initialWorld.meta.completedTick) * 10 - 1;
+    expect(prefixLimit).toBe(2_999);
+    let resting = false;
+    runtime.dispatchRenderer({ type: "movement", vector: { x: -1, y: 0 } });
+    while (acceptedSteps < prefixLimit && !excludes()) {
+      const stamina = runtime.getRenderView().player.stamina;
+      if (!resting && stamina <= 0.12) {
+        resting = true;
+        runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+      } else if (resting && stamina >= 0.9) {
+        resting = false;
+        runtime.dispatchRenderer({ type: "movement", vector: { x: -1, y: 0 } });
+      }
+      take(Math.min(10, prefixLimit - acceptedSteps));
+    }
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+    const movementSteps = acceptedSteps;
+    const exitPlayer = playerSummary();
+    const diagnostic = () => JSON.stringify({ acceptedSteps, movementSteps, startingPlayer, exitPlayer,
+      currentPlayer: playerSummary(), observations: observations.slice(-8), macroEvidence, pickupEvidence });
+    expect(excludes(), diagnostic()).toBe(true);
+    expect(exitPlayer.x).toBeLessThan(startingPlayer.x);
+    expect(movementSteps).toBeGreaterThan(0);
+    take(prefixLimit - acceptedSteps);
+    await runtime.save();
+    const prefixRecord = repository.snapshot();
+    const prefix = decode(prefixRecord);
+    const prefixWorld = deserializeWorld(prefix.world);
+    expect(prefixWorld.meta.completedTick).toBe(719);
+    expect(prefix.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    expect(contract(prefixWorld, offered.id)).toMatchObject({ status: "offered", quantity: 8, cargoQuantity: 0,
+      playerExclusiveUntilTick: 720, dueTick: 1_140, assignedResidentId: null, acceptedTick: null, departedTick: null });
+    expect(excludes(), diagnostic()).toBe(true);
+    expect(JSON.parse(prefix.regionalTravel).origin).toEqual(runtime.getRenderView().terrain.worldTileOrigin);
+    take(1);
+    await runtime.save();
+    const accepted = decode(repository.snapshot());
+    const acceptedWorld = deserializeWorld(accepted.world);
+    const acceptedContract = contract(acceptedWorld, offered.id);
+    expect(acceptedWorld.meta.completedTick).toBe(720);
+    expect(accepted.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expect(acceptedContract, diagnostic()).toMatchObject({ status: "accepted", carrierKind: "resident",
+      acceptedTick: 720, departedTick: null, cargoQuantity: 0, quantity: 8,
+      playerExclusiveUntilTick: 720, dueTick: 1_140 });
+    expect(acceptedContract.assignedResidentId, diagnostic()).not.toBeNull();
+    const selected = acceptedWorld.residents.find(({ id }) => id === acceptedContract.assignedResidentId)!;
+    expect(selected.activeContractId).toBe(offered.id);
+    expect(selected.activity?.version).toBe(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION);
+    expect(selected.activity?.pickupTask).toMatchObject({ kind: "contract-pickup", contractId: offered.id,
+      settlementId: offered.originSettlementId, selectedAtTick: 720 });
+    expect(acceptedContract.porterRouteIds.length).toBeGreaterThanOrEqual(2);
+    expect(excludes(positions(acceptedWorld, acceptedContract.porterRouteIds)), diagnostic()).toBe(true);
+    const acceptance = summary(acceptedWorld);
+    assertWorldInvariants(acceptedWorld);
+
+    primary = false;
+    const coldRepository = new MemoryRepository(recordWith(prefixRecord, structuredClone(prefix)));
+    const cold = await open(coldRepository);
+    await cold.save();
+    expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(prefix));
+    advance(cold, 1);
+    await cold.save();
+    expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(accepted));
+    close(cold);
+    primary = true;
+    take(40); // Four real intervals preserve the native weather hold, not forced progress.
+    await runtime.save();
+    const terminal = decode(repository.snapshot());
+    const terminalWorld = deserializeWorld(terminal.world);
+    const traveling = contract(terminalWorld, offered.id);
+    expect(terminalWorld.meta.completedTick).toBe(724);
+    expect(terminal.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expect(traveling, diagnostic()).toMatchObject({ status: "in-transit", quantity: 8, cargoQuantity: 8,
+      carrierKind: "resident", assignedResidentId: selected.id, playerExclusiveUntilTick: 720, dueTick: 1_140 });
+    const held = actor(terminalWorld, selected.identity.stableId);
+    expect(held.activeContractId).toBe(offered.id);
+    expect(held.condition.sheltering).toBe(true);
+    expect(held.condition.routeDelayTicks).toBe(3);
+    expect(held.activity?.travelTask).toMatchObject({ mode: "physical", contractId: offered.id,
+      legIndex: 0, waypointIndex: 1, phase: "waiting", waitReason: "weather-hold" });
+    expect(held.activity?.poses.at(-1)).toEqual(selected.activity?.poses.at(-1));
+    expect(routeDistance(terminalWorld, traveling, held)).toBe(0);
+    expect(terminalWorld.weather).toMatchObject({ kind: "storm", intensity: 955_160 });
+    expect(pickupEvidence, diagnostic()).toHaveLength(1);
+    const pickup = pickupEvidence[0]!;
+    expect(pickup.tick).toBe(721);
+    expect(pickup.departedLots).toContainEqual({ contractId: offered.id, quantity: offered.quantity });
+    // Other native couriers may debit this same stock. Attribute the entire
+    // transfer rather than pretending this courier was the only participant.
+    expect(pickup.beforeStock - pickup.afterStock).toBe(pickup.departedLots.reduce((total, lot) => total + lot.quantity, 0));
+    expect(terminalWorld.events.filter(({ type, subjectId }) => type === "contract-departed" && subjectId === offered.id)).toHaveLength(1);
+    expect(terminalWorld.events.filter(({ type, subjectId }) => type === "contract-fulfilled" && subjectId === offered.id)).toHaveLength(0);
+    expect(macroEvidence, diagnostic()).toHaveLength(0);
+    const departure = observations.find(({ tick }) => tick === 721)!;
+    expect(departure).toMatchObject({ status: "in-transit", cargo: 8, delayTicks: 0,
+      body: acceptance.body, task: { kind: "contract-travel", phase: "approaching", waitReason: null } });
+    expect(terminalWorld.events.filter(({ type, subjectId }) => type === "resident-sheltered" && subjectId === selected.id))
+      .toMatchObject([{ tick: 722, data: { contractId: offered.id } }]);
+    for (const observation of observations.filter(({ tick }) => tick >= 722)) {
+      expect(observation).toMatchObject({ status: "in-transit", cargo: 8, departedTick: 721,
+        delayTicks: observation.tick - 721, arrivalTick: departure.arrivalTick! + observation.tick - 721,
+        body: acceptance.body, task: { kind: "contract-travel", phase: "waiting", waitReason: "weather-hold" } });
+    }
+    assertWorldInvariants(terminalWorld);
+    close(runtime);
+    primary = false;
+    const heldRepository = new MemoryRepository(prefixRecord);
+    const coldHeld = await open(heldRepository);
+    advance(coldHeld, 41); // Same phase9 prefix, acceptance, pickup and all four intervals.
+    await coldHeld.save();
+    expect(authoritativeRoots(decode(heldRepository.snapshot()))).toEqual(authoritativeRoots(terminal));
+    close(coldHeld);
+    step.mockRestore();
+  }, 600_000);
 });

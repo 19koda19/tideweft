@@ -5529,6 +5529,66 @@ clean. This certifies that exact checkpoint, not later executable changes,
 normal visual/platform play, production performance, publication or closure.
 The earlier `b497f055` full-suite failure remains historical evidence.
 
+### Original-exclusivity native pickup and weather hold — 2026-10-09
+
+A test-only witness at parent `adf1b800` uses a fresh runtime `runtime baseline
+estuary` / gale / wander world and its original parts8 offer127: exclusivity720,
+deadline1140, generated stock, terrain, weather and initial needs remain exact.
+Ordinary westward renderer input, stamina-aware release and actual RAF steps
+move the player from37.5/55.5 to−51.037/55.5 in1520 accepted steps. At tick572
+the real120×120 frame begins−119/−5 and excludes the complete native four-leg
+itinerary. This is physical-window exclusion, not fog-of-war or an injected
+origin. Controls are released before the719 phase9 save.
+
+The first bounded coarse-opportunity experiment **failed**: native acceptance
+occurred720, pickup721, but no macro work occurred through724. The actual storm
+intensity955160 caused a weather hold. That diagnostic remains failed evidence;
+neither weather nor the deadline was rewritten to obtain progress.
+
+The retained, scope-correct case characterizes this actual interruption. Native
+selection chooses resident89, already at the37500/55500 origin; it does not prove
+a new approach walk. One stock transfer moves eight conserved units into cargo.
+The source's134→110 change accounts for all24units picked up by contemporaneous
+native couriers, not an invented sole eight-unit debit. The test guards against
+due parts recipes, hourly civic work and incoming parts fulfillment on that
+transfer tick, checks each accepted-to-transit quantity and departure once,
+and retains whole-world conservation validation.
+
+The real weather hold begins722, not the departure tick721. Through724 the
+same body/heading, first-edge cursor, active commitment and cargo remain;
+there is one sheltered transition, three delay ticks and no fulfillment or
+macro progress. Detached current-schema load preserves all saved authoritative
+roots and event history for719 phase9→720 phase0 and the exact41 accepted-step
+continuation to724 phase0. Only session recap and outer integrity are excluded
+from equality, as in the existing native travel harness.
+
+The selected retained case passes in97.62s. Its observer is read-only and
+bounded to304 primary world advances; initial roots, tasks, body, winner,
+stock and knowledge are never assigned to produce success. The original three
+travel cases and all shared helpers remain byte-identical. This is headless
+ordinary-control pickup/hold evidence, not four-leg completion, weather
+resumption, physical shelter arrival, normal visual play, production performance,
+public release or whole-directive closure. Production, schemas, readers,
+dependencies and configuration are unchanged.
+
+All four complete native travel cases pass in266.84s, including the unchanged
+food, interruption/reentry and reverse-medicine journeys. Maintained smoke
+passes6files/105tests in4.16s; typecheck and45documentation-reuse self-tests
+pass. Commands:
+
+```sh
+npx vitest run src/game/runtime.residentTravel.integration.test.ts --maxWorkers=1
+npm run test:smoke
+npm run typecheck
+npm run test:documentation-reuse
+```
+
+All731 public non-Markdown inputs match before/after at `adf1b800`, digest
+`f41dffa9b156e947358735c59089950c8b46a676e90a6a9cc35d571fc230410f`.
+The earlier complete `58c1a157` certificate does not certify this added test.
+No complete suite, artifact build, platform smoke or release run is claimed
+for this ordinary test-only slice. Historical directives remain unchanged.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
