@@ -5348,6 +5348,68 @@ No normal visual play, new cumulative certificate, package, public release or
 whole-directive closure is claimed. Broader current/alternative/failure and
 native multi-leg runtime work remain unfinished; no dependency change occurred.
 
+### Native multi-leg coarse logistics foundation — 2026-10-09
+
+Test-only local follow-up on `4a86b5c5f896e3ff82d7fea9665980d6ea701a26`
+extends the existing lower-engine origin-pickup fixture. The generated estuary
+offer127 carries eight parts over its actual5→4→3→2→1 itinerary and routes
+121/117/112/106. Original acceptance, winner, dry origin approach, arrival,
+stock and all five earlier cases are unchanged. Its declared clear weather,
+needs and exclusivity controls remain explicit, not uncontrolled normal play.
+
+Ten accepted fine samples precede each source-bound closing admission. This
+fixture explicitly supplies no local interaction window and neutral duty rows
+for all current humans; fine travel therefore remains stationary while the
+existing macro owner spends the remaining cargo-qualified890-unit allowance.
+Actual waypoint-owner calls establish all three intermediate joins and the
+directed body/heading, rather than reconstructing a path from rounded progress.
+Geometry and paid distance bound completion; ETA does not grant arrival.
+The same original deadline remains1140. An initial test assumption incorrectly
+imported an earlier runtime fixture's deadline and failed before route work;
+only that new assertion was corrected. The original failed result remains failed.
+This native case does **not** establish an overdue-delivery scenario.
+
+The journey preserves one cargo quantity, completes one actual destination
+handoff, retains the destination body and executes one subsequent interval.
+Real route reinforcement, cap-aware reciprocal trust and already-present
+delivery knowledge are checked. Absent knowledge records are not fabricated.
+A same-closing-input local-admission control denies macro advancement without
+altering stocks, recipes or projects. Actual transfer/project receipts and the
+full conservation ledger account for legitimate concurrent production/service.
+Phase4 clones and decoded lower-world saves converge at phase9; one detached
+phase9 suffix reaches identical complete serialized world and event roots.
+This is **foundation-only coarse admission**, not a native-runtime multi-leg
+crossing, physical F/acquisition, hearing, outer58 save/relaunch, normal visual
+play, wall-clock performance or general carried-failure proof.
+
+Corrected selected case passes1test/5deliberately unselected in6.175s. The full
+affected13-file domain passes492tests,0failed/0pending,9.81s; maintained smoke
+passes6files/105tests in5.25s. Typecheck passes. Commands:
+
+```sh
+npx vitest run src/sim/residentPickupUse.test.ts \
+  --testNamePattern='continues one native four-leg pickup through three exact joins and handoff with equal cloned and saved work' \
+  --maxWorkers=1
+npx vitest run \
+  src/sim/residentPickupUse.test.ts src/sim/residentPickupActivity.test.ts \
+  src/sim/residentTravelRoute.test.ts src/sim/residentTravelActivity.test.ts \
+  src/sim/residentTravelAdvance.test.ts src/sim/residentActivity.test.ts \
+  src/sim/residentActivity.world.integration.test.ts src/sim/residentActivityCapabilities.test.ts \
+  src/sim/residentActivityEventLocus.test.ts src/sim/cargoEnvironment.test.ts \
+  src/sim/systemComposition.integration.test.ts \
+  src/game/residentActivityPersistence.test.ts src/game/residentActivitySaveBoundary.test.ts \
+  --maxWorkers=2
+npm run test:smoke
+npm run typecheck
+```
+
+All731 public non-Markdown inputs and parent HEAD match before/after, digest
+`320475f5fb40f59471745f9fd1a255c0dbb1726b84f664bbc7c0ffd1d00d16c1`.
+No production algorithm, schema, supported reader, dependency or configuration
+changed. Timing describes correctness runs only. No new cumulative, platform,
+release or whole-directive closure is claimed; native-runtime multi-leg,
+broader environment/alternatives and legal carried-failure consumers remain open.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

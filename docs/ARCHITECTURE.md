@@ -2808,9 +2808,14 @@ reverse medicine offers, automatic selection, actual origin pickup, local
 displacement, real window exit, bounded macro continuation beyond the old ETA,
 once-only final handoff and exact phase4/9 cold continuation. The reverse
 medicine witness checks actual directed body/heading and decreasing stored
-route progress, not just a reversed fixture. Synthetic multileg, clipping,
-cold rejection and receipt tests remain foundation evidence, not additional
-native journeys or normal visual play. This does not close the
+route progress, not just a reversed fixture. A separate native four-leg parts
+journey verifies actual intermediate joins, the cargo-qualified macro quota,
+once-only handoff and downstream consumers with equal lower-world cold work.
+Its explicit no-local-window and neutral-duty admissions are **coarse foundation
+evidence**, not native-runtime multi-leg residency, crossing, hearing, outer-save
+relaunch or visual proof. [Research](./RESEARCH.md#native-multi-leg-coarse-logistics-foundation--2026-10-09)
+owns that test-only evidence. Synthetic clipping, cold rejection and receipt
+tests remain foundation evidence. This does not close the
 whole traveler/environment directive or prove broader crossings, addressable
 porter cargo, failure/recovery breadth, visual acceptance or performance.
 
