@@ -6,6 +6,7 @@ import {
   type TerrainTileView,
   type WorldView,
 } from "../sim/types";
+import { promiseCargoPropertyForResource } from "../sim/cargoEnvironment";
 import {
   WAYKNOT_PERMILLE,
   applyWayknotPermille,
@@ -1547,7 +1548,7 @@ export function cargoWeightMilli(
 
 export function loadContractCargo(player: PlayerState, contract: ContractState): boolean {
   if (player.activeContractId !== null || contract.status !== "offered") return false;
-  const property = cargoProperty(contract.resource);
+  const property = promiseCargoPropertyForResource(contract.resource);
   const promisedLoadMilli = promiseCargoLoadMilli(contract.quantity, property);
   const capacityMilli = player.cargoCapacity * PACK_LOAD_MILLI_PER_UNIT;
   if (cargoWeightMilli(player) + promisedLoadMilli > capacityMilli) return false;
@@ -2031,20 +2032,6 @@ function sweepNeighbors(
       || left.waterDepth - right.waterDepth
       || leftIndex - rightIndex;
   });
-}
-
-function cargoProperty(resource: ContractState["resource"]): PlayerCargo["property"] {
-  switch (resource) {
-    case "medicine":
-      return "fragile";
-    case "food":
-      return "perishable";
-    case "freshWater":
-    case "parts":
-      return "heavy";
-    case "reed":
-      return "ordinary";
-  }
 }
 
 function appendLoopErasedTile(trace: number[], tileIndex: number): void {

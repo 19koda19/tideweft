@@ -22,7 +22,7 @@ import { residentRestSurfaceKnowledge, residentRestSurfaceObservationId } from "
 import { residentTravelSegment } from "../sim/residentTravelRoute";
 import { tideAtTick } from "../sim/terrain";
 import { stableStringify } from "../sim/util";
-import { prepareResidentTravelAdvance, revokeResidentTravelAdvance } from "../sim/residentTravelAdvance";
+import { prepareResidentTravelAdvance, residentTravelStepUnits, revokeResidentTravelAdvance } from "../sim/residentTravelAdvance";
 import { findAutonomousRoutePlan } from "../sim/network";
 import type { SimCommand } from "../sim/types";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
@@ -353,7 +353,13 @@ describe("ordinary runtime native traveler water response", () => {
     advance(runtime, 4);
     const afterDryPhysics = await save();
     const delta = worldPositionDelta(bank, afterDryPhysics.human.activity!.poses.at(-1)!.position);
-    expect(Math.hypot(delta.x, delta.y)).toBe(observed ? 0 : 4 * RESIDENT_REST_APPROACH_STEP_UNITS);
+    const carried = dryBoundary.world.contracts.find(({ id }) => id === fixture.contractId)!;
+    expect(carried).toMatchObject({ resource: "parts", cargoQuantity: 8 });
+    const travelStepUnits = residentTravelStepUnits(dryBoundary.human.activity!, carried);
+    expect(travelStepUnits).toBe(89);
+    // Actual eight-unit heavy cargo now costs16 future work units per step;
+    // uninformed physical retry still moves, while observed wet knowledge holds.
+    expect(Math.hypot(delta.x, delta.y)).toBe(observed ? 0 : 4 * travelStepUnits!);
     advance(runtime, 5);
     const freshPhase9 = await save();
     expect(freshPhase9.envelope.perceptionCarry.playerStepsSinceWorldTick).toBe(9);

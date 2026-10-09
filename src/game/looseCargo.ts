@@ -1,5 +1,7 @@
 import {
   evaluateCargoEnvironment,
+  promiseCargoPropertyForResource,
+  promiseCargoUnitLoadMilli,
   type CargoEnvironmentCauseCode,
   type CargoEnvironmentProperty,
   type CargoEnvironmentSample,
@@ -1395,8 +1397,7 @@ export function promiseCargoLoadMilli(
   property: CargoEnvironmentProperty,
 ): number {
   if (!validQuantity(quantity)) return 0;
-  const unitLoadMilli = property === "heavy" ? 2_000 : property === "fragile" ? 1_250 : 1_000;
-  return quantity * unitLoadMilli;
+  return quantity * promiseCargoUnitLoadMilli(property);
 }
 
 export function looseCargoCarrierLoadMilli(carrier: LooseCargoCarrierState): number {
@@ -3430,16 +3431,6 @@ function pristineMaterialState(): CargoEnvironmentState {
   return { condition: FIXED_POINT, contamination: 0, decay: 0 };
 }
 
-function promiseProperty(resource: ResourceKind): CargoEnvironmentProperty {
-  switch (resource) {
-    case "medicine": return "fragile";
-    case "food": return "perishable";
-    case "freshWater":
-    case "parts": return "heavy";
-    case "reed": return "ordinary";
-  }
-}
-
 function canonicalPayload(value: unknown): LooseCargoPayload | null {
   if (!isRecord(value) || typeof value.kind !== "string") return null;
   if (value.kind === "stack") {
@@ -3463,7 +3454,7 @@ function canonicalPayload(value: unknown): LooseCargoPayload | null {
       !validIdentity(value.contractId)
       || !RESOURCE_KIND_SET.has(value.resource as string)
       || !validQuantity(value.quantity)
-      || value.property !== promiseProperty(value.resource as ResourceKind)
+      || value.property !== promiseCargoPropertyForResource(value.resource as ResourceKind)
     ) return null;
     return {
       kind: "promise",

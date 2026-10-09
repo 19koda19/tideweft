@@ -5025,6 +5025,108 @@ carried-cargo legal failure/recovery, longer subsequent-task liveness and
 normal Chart/Relief acceptance remain unfinished. No cumulative, production
 performance, package, publication or whole-directive closure is inferred.
 
+### Exact interrupted-courier cumulative checkpoint — 2026-10-09
+
+The maintained complete `npm run test:ci` passes on clean
+`bfc39970e2b2e4d5fc80e1fc865db8ef1cc32e51`:411files/5104tests,
+0failed/0pending,2213.83s. All731 public non-Markdown inputs and HEAD match
+before/after, input SHA256
+`4e1b7bbed0c44d607213197d23897c6c9912c76e48dc56bb6231f58eaa1b64a6`.
+Node22.20.0/npm10.9.3; the existing boundary/finished-directive checks remain
+unchanged. Command:
+
+```sh
+caffeinate -i npm run test:ci -- --reporter=default --reporter=json --outputFile=artifacts/validation/bfc3997-cumulative.json > artifacts/validation/bfc3997-cumulative.log 2>&1
+```
+
+Ignored JSON report SHA256
+`6f228afa68b7a561ae21039a3bce9fa93718f15b0f529bb3507ee54e354fe897`;
+log `1bf69701af3aa4b303b644731d2908b2d7dd26c7e6f920a7949f0bf316293df3`;
+both input manifests
+`05ba389a5b8fb14728f8003bbdc3b2f180159af82fe638550bff24ff28c21f2f`.
+The original earlier b51bef3 nine-failure report remains historical FAIL.
+This is an exact cumulative correctness certificate, not a new production
+performance, visual, package, release or complete traveler/directive result.
+Subsequent cargo-work edits need their own applicable validation; this pass
+cannot certify those changed executable/test bytes.
+
+### Conserved cargo-aware resident travel work — 2026-10-09
+
+Local construction on bfc3997 makes actual resident Promise cargo affect future
+dry-route travel, not merely identity or speech. `cargoEnvironment.ts` now owns
+the existing resource/property/unit-load mapping reused by player parcels and
+resident work. Loose cargo retains its original quantity validation; aggregate
+transit accepts its own positive-safe-integer quantity domain. Exact BigInt
+arithmetic precedes bounded penalty saturation, including1,000,001 and
+Number.MAX_SAFE_INTEGER foundation inputs; no quantity is truncated or duplicated.
+[Architecture](./ARCHITECTURE.md#accountable-ordered-resident-travel) owns the
+105-minus-rounded-load rule and32-unit ceiling. Food14 permits91units per
+step; parts14 permits77. This is no NPC capacity or equipment claim.
+
+Fine and macro execution consume one ten-step allowance. The one-shot closing
+receipt binds the actual contract slot/root and captured cargo/assignment
+inputs; changed inputs reject and revoke it. Current accepted105-unit prefixes
+retain their paid history and future work saturates at zero rather than
+rewriting a save or manufacturing obstruction. Frozen v7 partial intervals
+retain105 through genuine closure; existing runtime compatibility tests retain
+real phase-zero adoption. No schema, reader, format-support, dependency or
+configuration change occurs: current outer58/carry14, world4/rules6 remain.
+
+Source-conserving arranged adapter cases prove actual104/91/77 displacement,
+retained v8 phase9 prefixes below/equal/above910, zero extra macro work, same
+body/task, moving-v7 closure, and serialized/cloned phase4/9 equal-work
+continuation. They are foundation evidence, not autonomous acquisition or
+outer-save adoption. The real native food133 journey still performs automatic
+acceptance, exact pickup, local/window-exit/macro continuation and once-only
+handoff under its910-unit quota. Its interrupted counterpart retains cargo
+past ETA, reenters through ordinary player motion and resumes to handoff plus
+one following interval with equal cold terminal roots. No task, destination,
+success, cargo or stock result is injected. Availability remains a controlled
+environment input, not player repair. Native tidal parts127 still distinguishes
+informed waiting from uninformed physical retry and preserves cold/rollback
+proof. Its actual eight-unit load now permits89units: four dry steps356, not420.
+
+The initial affected-domain run is retained as FAIL:28files/713tests,
+712PASS/1FAIL,163.38s. The sole failure is that old unloaded420 assertion;
+the new behavior produced exactly356. Only that test owner's import and exact
+cargo-qualified expectation changed, preserving knowledge, movement, hearing,
+custody and cold checks. Its complete13-case file then passes71.11s;
+the unchanged27 complete passing files supply700 tests. Thus the verified
+affected-domain union is28files/713tests, not a relabeled first invocation.
+Maintained smoke6files/105tests, final typecheck and documentation-reuse45 pass.
+Exact commands:
+
+```sh
+npx vitest run src/sim/cargoEnvironment.test.ts src/sim/residentActivity.test.ts src/sim/residentActivity.world.integration.test.ts src/sim/residentActivityCapabilities.test.ts src/sim/residentActivityEventLocus.test.ts src/sim/residentSurfaceKnowledge.test.ts src/sim/residentPickupUse.test.ts src/sim/residentPickupActivity.test.ts src/sim/residentTravelRoute.test.ts src/sim/residentTravelActivity.test.ts src/sim/residentTravelAdvance.test.ts src/sim/systemComposition.integration.test.ts src/game/looseCargo.test.ts src/game/player.test.ts src/game/residentActivityExecution.test.ts src/game/residentTravelEnvironmentExecution.test.ts src/game/residentActivityPersistence.test.ts src/game/residentActivitySaveBoundary.test.ts src/game/saveCompatibilityPolicy.test.ts src/game/humanPerception.activity.test.ts src/game/humanPerception.presentation.test.ts src/game/projection.residentPickup.test.ts src/game/runtime.residentActivityCircadian.test.ts src/game/runtime.residentActivityPublication.test.ts src/game/runtime.residentRest.integration.test.ts src/game/runtime.residentPickup.integration.test.ts src/game/runtime.residentTravel.integration.test.ts src/game/runtime.residentTravelEnvironmentCompatibility.integration.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/cargo-work-domain-first.json
+npx vitest run src/game/runtime.residentPickup.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/cargo-work-pickup-final.json
+npm run test:smoke -- --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/cargo-work-smoke-final.json
+npm run typecheck
+npm run test:documentation-reuse
+```
+
+Both diagnostic/final intervals freeze all731 public non-Markdown inputs and
+parent HEAD. Final input SHA256
+`f7276eaf21a6ead61856b2271b9f7740b05d0b891cb6b7e9f980276349f92075`;
+only `runtime.residentPickup.integration.test.ts` differs between them.
+Ignored first report SHA256
+`bb7f5559fcbf441f759dc21fdd558bc667913c1a6f4d7c017edce3a838a1d336`;
+final pickup `f354557b637bc8f684dfc156b0e2a64f74c426451953b25a547e3fb221bae5c2`;
+smoke `d744153a20633d49e2655e92ce0c192bf1bc2258708257c09edfb710be031ea2`.
+Final before/after manifest SHA256
+`32ede6e96d9debc07c49a1f80d249800d1beb77f315358dc0ebbd68709b57669`.
+Node22.20.0/npm10.9.3. These are headless production-authority correctness
+witnesses, not browser/package performance or normal Chart/Relief visual proof.
+
+Applicable inheritance is INTEGRATED through existing deterministic timing,
+physical conservation, accepted body/cursor history, full/coarse transport,
+current-save/rollback and knowledge boundaries; no new acoustic event or HUD is
+created. General water/current/footing/support, informed alternatives, native
+reverse/multihop and legal carried-cargo failure remain unfinished with the
+current world-response owner; addressable stock/lot conversion and physical
+equipment remain their future owners. No whole-directive, cumulative-on-new-
+bytes, production performance, package or public release is claimed. Accepted
+Relief limitations and full-Foliage extended profiling/soak deferrals remain.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

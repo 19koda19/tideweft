@@ -1,9 +1,9 @@
-import { FIXED_POINT } from "./types";
+import { FIXED_POINT, type ResourceKind } from "./types";
 
 /**
  * Cargo categories already used by the player layer. This module deliberately
- * owns a structural copy of that vocabulary so the simulation does not need to
- * import UI or runtime state while it is still an unintegrated foundation.
+ * owns the shared material vocabulary so the simulation does not import UI,
+ * player inventory or runtime state to interpret existing conserved cargo.
  */
 export const CARGO_ENVIRONMENT_PROPERTIES = [
   "ordinary",
@@ -14,6 +14,22 @@ export const CARGO_ENVIRONMENT_PROPERTIES = [
 ] as const;
 
 export type CargoEnvironmentProperty = (typeof CARGO_ENVIRONMENT_PROPERTIES)[number];
+
+/** One existing resource/property mapping; this creates no parcel or capacity. */
+export function promiseCargoPropertyForResource(resource: ResourceKind): CargoEnvironmentProperty {
+  switch (resource) {
+    case "medicine": return "fragile";
+    case "food": return "perishable";
+    case "freshWater":
+    case "parts": return "heavy";
+    case "reed": return "ordinary";
+  }
+}
+
+/** Shared unit weight only: each custody owner retains its quantity domain. */
+export function promiseCargoUnitLoadMilli(property: CargoEnvironmentProperty): number {
+  return property === "heavy" ? 2_000 : property === "fragile" ? 1_250 : 1_000;
+}
 
 /** All unsigned material channels are fixed-point integers in the 0..1 range. */
 export interface CargoMaterialTraits {

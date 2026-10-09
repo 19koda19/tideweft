@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createActorObservation, createActorPerceptionState, stepActorPerception, type ActorObservation } from "../sim/actorPerception";
-import { createWorld, createWorldView, stepWorld } from "../sim/public";
+import { assertWorldInvariants, createWorld, createWorldView, deserializeWorld, serializeWorld, stepWorld } from "../sim/public";
 import {
   replaceResidentActivity,
   RESIDENT_TRAVEL_ACTIVITY_OWNER_ID,
@@ -12,10 +12,10 @@ import {
 } from "../sim/residentActivity";
 import { canonicalResidentActivityForWorld, residentRestTargetHasDrySupport } from "../sim/residentActivityWorld";
 import { residentRestSurfaceObservationId } from "../sim/residentSurfaceKnowledge";
-import { advanceResidentMacroTravel, prepareResidentTravelAdvance } from "../sim/residentTravelAdvance";
+import { advanceResidentMacroTravel, consumeResidentTravelAdvance, prepareResidentTravelAdvance, revokeResidentTravelAdvance } from "../sim/residentTravelAdvance";
 import { residentTravelLocation, residentTravelSegment, residentTravelSegmentPose } from "../sim/residentTravelRoute";
 import { MAX_TIDE_LEVEL, tideAtTick } from "../sim/terrain";
-import { FIXED_POINT } from "../sim/types";
+import { FIXED_POINT, type ResourceKind, type WorldState } from "../sim/types";
 import { stableStringify } from "../sim/util";
 import { collectExistingHumanObservations, humanObservationCollectionRejected } from "./humanPerception";
 import { createRegionalCartography, projectRegionalCartographyWindow } from "./regionalCartography";
@@ -30,10 +30,13 @@ const WINDOW = { origin: { x: -10, y: -10 }, terrain: { width: 120, height: 120 
 /**
  * Synthetic adapter foundations: the initial transit/body and sensory inputs
  * are arranged, not native acceptance, sight or autonomous gameplay evidence.
- * Generated route geometry/identities and conserved one-unit cargo are kept;
+ * Generated route geometry/identities and conserved origin-stock cargo are kept;
  * later motion, re-anchoring and observation admission use the actual owners.
  */
-function fixture(version: typeof RESIDENT_TRAVEL_ACTIVITY_VERSION | typeof RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION = RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION) {
+function fixture(
+  version: typeof RESIDENT_TRAVEL_ACTIVITY_VERSION | typeof RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION = RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
+  { resource = "food", quantity = 1 }: Readonly<{ resource?: ResourceKind; quantity?: number }> = {},
+) {
   const world = structuredClone(BASE);
   const tick = world.meta.completedTick;
   world.weather = { kind: "clear", intensity: 0, windX: 0, windY: 0, nextChangeTick: tick + 1_000 };
@@ -47,7 +50,13 @@ function fixture(version: typeof RESIDENT_TRAVEL_ACTIVITY_VERSION | typeof RESID
     contract.dueTick = tick + 2_000;
   }
   expect(adoptResidentActivities(world)).toBe(true);
-  const selected = [...world.residents].sort((left, right) => left.identity.stableId.localeCompare(right.identity.stableId))[0]!;
+  const selected = [...world.residents].sort((left, right) => left.identity.stableId.localeCompare(right.identity.stableId))
+    .find((resident) => {
+      if (resident.location.kind !== "settlement") return false;
+      const settlementId = resident.location.settlementId;
+      return world.settlements.find(({ id }) => id === settlementId)!.inventory[resource] >= quantity;
+    });
+  if (selected === undefined) throw new Error("Synthetic transit requires enough existing origin stock");
   if (selected.location.kind !== "settlement") throw new Error("Expected generated settlement resident");
   const originId = selected.location.settlementId;
   const route = world.routes.find((candidate) => candidate.fromSettlementId === originId || candidate.toSettlementId === originId)!;
@@ -56,14 +65,16 @@ function fixture(version: typeof RESIDENT_TRAVEL_ACTIVITY_VERSION | typeof RESID
   const contract = { ...world.contracts[0]!, originSettlementId: originId, destinationSettlementId: destinationId,
     requesterResidentId: world.settlements.find(({ id }) => id === destinationId)!.residentIds[0]!,
     status: "in-transit" as const, carrierKind: "resident" as const, assignedResidentId: selected.id,
-    resource: "food" as const, quantity: 1, cargoQuantity: 1, createdTick: tick - 3,
+    resource, quantity, cargoQuantity: quantity, createdTick: tick - 3,
     playerExclusiveUntilTick: tick - 3, acceptedTick: tick - 2, departedTick: tick - 1,
     arrivalTick: tick + 100, dueTick: tick + 600, completedTick: null, routeId: route.id,
     porterRouteIds: [route.id], porterSettlementIds: [originId, destinationId] };
   world.contracts[0] = contract;
   const stock = world.settlements.find(({ id }) => id === originId)!.inventory;
-  expect(stock.food).toBeGreaterThan(0);
-  stock.food -= 1;
+  expect(stock[resource]).toBeGreaterThanOrEqual(quantity);
+  // The same finite origin stock becomes this aggregate contract's cargo.
+  // Resource/quantity are chosen before staging; no later cargo reassignment.
+  stock[resource] -= quantity;
   const task: ResidentPhysicalTravelTask = { kind: "contract-travel", contractId: contract.id, mode: "physical",
     legIndex: 0, waypointIndex: 1, selectedAtTick: contract.departedTick, lastProgressAtTick: tick,
     nextReassessmentAtTick: tick, phase: "approaching", waitReason: null };
@@ -79,6 +90,7 @@ function fixture(version: typeof RESIDENT_TRAVEL_ACTIVITY_VERSION | typeof RESID
   get().location = residentTravelLocation(segment, task, pose.position)!;
   get().activity = { ...get().activity!, poses: [pose], travelTask: task };
   expect(world.residents.every((resident) => canonicalResidentActivityForWorld(world, resident) !== null)).toBe(true);
+  assertWorldInvariants(world);
   const target = segment.end;
   const setPhysicalSupport = (dry: boolean) => Object.assign(world.terrain.tiles[
     Math.floor(target.localY / 1_000) * world.terrain.width + Math.floor(target.localX / 1_000)]!,
@@ -115,6 +127,43 @@ function fixture(version: typeof RESIDENT_TRAVEL_ACTIVITY_VERSION | typeof RESID
     expect(get().activity?.travelTask).toMatchObject({ phase: "waiting", waitReason: "observed-water" });
   };
   return { world, get, actorId, target, route, contract, segment, setPhysicalSupport, see, nextTick, hold };
+}
+
+function finishInterval(world: WorldState, completedPhase: number): void {
+  for (let phase = completedPhase + 1; phase <= 10; phase += 1) {
+    expect(advanceResidentRestActivities(world, phase, WINDOW)).not.toBeNull();
+  }
+  const admission = prepareResidentTravelAdvance(world, WINDOW);
+  expect(admission).not.toBeNull();
+  try {
+    stepWorld(world, [], undefined, undefined, admission!);
+  } finally {
+    revokeResidentTravelAdvance(admission!);
+  }
+  assertWorldInvariants(world);
+}
+
+/** Explicit pre-change v8 history, not movement produced by today's allowance. */
+function stageRetainedPrefix(current: ReturnType<typeof fixture>, distances: readonly number[]): void {
+  let offset = 0;
+  const poses = [current.get().activity!.poses[0]!];
+  for (const distance of distances) {
+    offset += distance;
+    poses.push(residentTravelSegmentPose(current.segment, offset));
+  }
+  const selectedTask = current.get().activity!.travelTask!;
+  if (selectedTask.mode !== "physical") throw new Error("Retained prefix requires physical travel");
+  current.world.residents = current.world.residents.map((resident) => {
+    const activity = resident.activity!;
+    const selected = resident.identity.stableId === current.actorId;
+    const location = selected ? residentTravelLocation(current.segment, selectedTask, poses.at(-1)!.position) : resident.location;
+    if (location === null) throw new Error("Retained prefix left its real ordered edge");
+    return replaceResidentActivity({ ...resident, location }, {
+      ...activity,
+      poses: selected ? poses : Array.from({ length: poses.length }, () => activity.poses[0]!),
+    });
+  });
+  assertWorldInvariants(current.world);
 }
 
 describe("informed next-segment water hold execution foundations", () => {
@@ -165,7 +214,8 @@ describe("informed next-segment water hold execution foundations", () => {
     expect(current.get().activity?.travelTask).toMatchObject({ phase: "approaching", waitReason: null });
     expect(current.get().activity?.poses).toEqual([originalPose]);
     expect(advanceResidentRestActivities(current.world, 1, WINDOW)?.movedActorIds).toContain(current.actorId);
-    expect(current.get().activity!.poses.at(-1)!.position).toEqual(residentTravelSegmentPose(current.segment, 105).position);
+    // One conserved food unit now costs one future travel-work unit: 104, not 105.
+    expect(current.get().activity!.poses.at(-1)!.position).toEqual(residentTravelSegmentPose(current.segment, 104).position);
     expect(current.contract).toMatchObject({ status: "in-transit", cargoQuantity: 1, assignedResidentId: current.get().id });
   });
 
@@ -207,7 +257,7 @@ describe("informed next-segment water hold execution foundations", () => {
     expect(step).not.toBeNull();
     expect(step?.movedActorIds.includes(current.actorId)).toBe(drySupport);
     expect(current.get().activity!.poses.at(-1)!.position).toEqual(drySupport
-      ? residentTravelSegmentPose(current.segment, 105).position : pose.position);
+      ? residentTravelSegmentPose(current.segment, 104).position : pose.position);
     expect(current.contract).toMatchObject({ status: "in-transit", cargoQuantity: 1, assignedResidentId: current.get().id });
   });
 
@@ -266,5 +316,109 @@ describe("informed next-segment water hold execution foundations", () => {
     expect(current.get().activity?.travelTask).toMatchObject({ phase: "approaching", waitReason: null });
     expect(advanceResidentRestActivities(current.world, 1, WINDOW)?.movedActorIds).toContain(current.actorId);
     expect(current.get().activity?.version).toBe(RESIDENT_TRAVEL_ACTIVITY_VERSION);
+  });
+});
+
+describe("conserved load-aware fine travel execution foundations", () => {
+  it.each([
+    ["food", 1, 104], ["food", 14, 91], ["parts", 14, 77],
+  ] as const)("moves actual %s quantity %s cargo by %s units without changing custody", (resource, quantity, stepUnits) => {
+    const current = fixture(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION, { resource, quantity });
+    const { residents: _residents, ...originalRoots } = current.world;
+    const rootsBefore = stableStringify(originalRoots);
+    const step = advanceResidentRestActivities(current.world, 1, WINDOW);
+    expect(step).not.toBeNull();
+    expect(step?.movedActorIds).toContain(current.actorId);
+    expect(step?.maximumSurfaceCells).toBeLessThanOrEqual(2);
+    expect(current.get().activity!.poses.at(-1))
+      .toEqual(residentTravelSegmentPose(current.segment, stepUnits));
+    expect(current.get().activity?.travelTask).toMatchObject({ phase: "approaching", waitReason: null });
+    expect(current.contract).toMatchObject({ resource, quantity, cargoQuantity: quantity, status: "in-transit" });
+    const { residents: _nextResidents, ...nextRoots } = current.world;
+    expect(stableStringify(nextRoots)).toBe(rootsBefore);
+    assertWorldInvariants(current.world);
+  });
+
+  it.each([
+    ["below", 0, 840, 910], ["equal", 70, 910, 910], ["above", 105, 945, 945],
+  ] as const)("preserves accepted 105-unit v8 work %s the new 910-unit quota", (_relation, ninthDistance, acceptedUnits, finalUnits) => {
+    const current = fixture(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION, { resource: "food", quantity: 14 });
+    // Arrange a supported phase9 historical prefix with the former 105-unit
+    // ceiling. Today's consumer must retain that already-paid work, not claim
+    // it would newly generate the same prefix under the 91-unit allowance.
+    stageRetainedPrefix(current, [...Array.from({ length: 8 }, () => 105), ninthDistance]);
+    const accepted = structuredClone(current.get().activity!.poses);
+    const taskBefore = structuredClone(current.get().activity!.travelTask);
+    expect(accepted).toHaveLength(10);
+    expect(accepted.at(-1)!.position).toEqual(residentTravelSegmentPose(current.segment, acceptedUnits).position);
+    const cold = deserializeWorld(serializeWorld(current.world));
+    expect(serializeWorld(cold)).toBe(serializeWorld(current.world));
+    const step = advanceResidentRestActivities(current.world, 10, WINDOW);
+    expect(step).not.toBeNull();
+    expect(step?.movedActorIds.includes(current.actorId)).toBe(finalUnits > acceptedUnits);
+    expect(step?.waitingActorIds).not.toContain(current.actorId);
+    expect(current.get().activity!.poses.slice(0, accepted.length)).toEqual(accepted);
+    expect(current.get().activity!.poses.at(-1)!.position).toEqual(residentTravelSegmentPose(current.segment, finalUnits).position);
+    expect(current.get().activity?.travelTask).toEqual(taskBefore);
+    if (finalUnits === acceptedUnits) expect(current.get().activity!.poses.at(-1)).toEqual(accepted.at(-1));
+    // Fine work exhausted or exceeded the new allowance: macro must not grant
+    // more distance, and zero work is not a no-traversable-route outcome.
+    const admission = prepareResidentTravelAdvance(current.world, WINDOW);
+    expect(admission).not.toBeNull();
+    const prepared = consumeResidentTravelAdvance(current.world, admission!);
+    expect(prepared.remainingUnitsByActor.get(current.actorId)).toBe(0);
+    const completedPose = structuredClone(current.get().activity!.poses.at(-1));
+    finishInterval(current.world, 10);
+    finishInterval(cold, 9);
+    expect(serializeWorld(cold)).toBe(serializeWorld(current.world));
+    expect(current.get().activity?.poses).toEqual([completedPose]);
+    expect(current.get().activity?.travelTask).toEqual(taskBefore);
+    expect(current.contract).toMatchObject({ resource: "food", quantity: 14, cargoQuantity: 14, status: "in-transit" });
+  });
+
+  it("retains moving frozen-v7 partial work and 105-unit allowance through genuine closure", () => {
+    const current = fixture(RESIDENT_TRAVEL_ACTIVITY_VERSION, { resource: "parts", quantity: 14 });
+    for (let phase = 1; phase <= 4; phase += 1) {
+      expect(advanceResidentRestActivities(current.world, phase, WINDOW)?.movedActorIds).toContain(current.actorId);
+    }
+    expect(current.get().activity!.poses.at(-1)!.position).toEqual(residentTravelSegmentPose(current.segment, 420).position);
+    const phase4Text = serializeWorld(current.world);
+    const cold = deserializeWorld(phase4Text);
+    expect(serializeWorld(cold)).toBe(phase4Text);
+    for (const world of [current.world, cold]) {
+      for (let phase = 5; phase <= 9; phase += 1) expect(advanceResidentRestActivities(world, phase, WINDOW)).not.toBeNull();
+      const retained = world.residents.find(({ identity }) => identity.stableId === current.actorId)!;
+      expect(retained.activity?.version).toBe(RESIDENT_TRAVEL_ACTIVITY_VERSION);
+      expect(retained.activity!.poses.at(-1)!.position).toEqual(residentTravelSegmentPose(current.segment, 945).position);
+      finishInterval(world, 9);
+      expect(world.residents.every(({ activity }) => activity?.version === RESIDENT_TRAVEL_ACTIVITY_VERSION)).toBe(true);
+    }
+    expect(serializeWorld(cold)).toBe(serializeWorld(current.world));
+    expect(current.world.meta.completedTick).toBe(BASE.meta.completedTick + 1);
+    expect(current.get().activity?.poses).toHaveLength(1);
+    expect(current.contract).toMatchObject({ resource: "parts", quantity: 14, cargoQuantity: 14, status: "in-transit" });
+    // Authentic runtime v7→v8 adoption needs its actual settlement roots and is
+    // outside this adapter fixture; no metadata/store authority is invented.
+  });
+
+  it("continues born-v8 phase4 and phase9 serialized/clone cuts with equal authoritative work", () => {
+    const current = fixture(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION, { resource: "food", quantity: 14 });
+    for (let phase = 1; phase <= 4; phase += 1) expect(advanceResidentRestActivities(current.world, phase, WINDOW)).not.toBeNull();
+    expect(current.get().activity!.poses.at(-1)!.position).toEqual(residentTravelSegmentPose(current.segment, 364).position);
+    const phase4 = serializeWorld(current.world);
+    const phase4Cuts = [deserializeWorld(phase4), structuredClone(current.world)];
+    for (const world of [current.world, ...phase4Cuts]) {
+      for (let phase = 5; phase <= 9; phase += 1) expect(advanceResidentRestActivities(world, phase, WINDOW)).not.toBeNull();
+    }
+    const phase9 = serializeWorld(current.world);
+    expect(current.get().activity!.poses.at(-1)!.position).toEqual(residentTravelSegmentPose(current.segment, 819).position);
+    for (const world of phase4Cuts) expect(serializeWorld(world)).toBe(phase9);
+    const phase9Cuts = [deserializeWorld(phase9), structuredClone(current.world)];
+    for (const world of [current.world, ...phase4Cuts, ...phase9Cuts]) finishInterval(world, 9);
+    const terminal = serializeWorld(current.world);
+    for (const world of [...phase4Cuts, ...phase9Cuts]) expect(serializeWorld(world)).toBe(terminal);
+    expect(current.get().activity?.poses).toEqual([residentTravelSegmentPose(current.segment, 910)]);
+    expect(current.get().activity?.travelTask).toMatchObject({ phase: "approaching", waitReason: null });
+    expect(current.contract).toMatchObject({ resource: "food", quantity: 14, cargoQuantity: 14, status: "in-transit" });
   });
 });

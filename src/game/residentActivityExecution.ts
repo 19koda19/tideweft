@@ -53,6 +53,7 @@ import {
   residentTravelLocation, residentTravelSegment, residentTravelSegmentOffset,
   residentTravelSegmentPose, residentTravelWindowInterval,
 } from "../sim/residentTravelRoute";
+import { residentTravelIntervalWorkUsed, residentTravelStepUnits } from "../sim/residentTravelAdvance";
 import type { LivingActorInteractionWindow } from "./livingActorSimulation";
 import { residentRationPriorityEligible } from "../sim/residentRationUse";
 import { residentMaterialPriorityEligible } from "../sim/residentMaterialUse";
@@ -462,10 +463,15 @@ export function advanceResidentRestActivities(
         const offset = segment === null ? null : residentTravelSegmentOffset(segment, pose.position);
         const span = segment === null ? null : residentTravelWindowInterval(travelFrame, segment);
         if (contract === null || segment === null || offset === null || span === null) return null;
+        const allowance = residentTravelStepUnits(activity, contract);
+        const used = residentTravelIntervalWorkUsed(activity.poses);
+        if (allowance === null || used === null) return null;
+        const maximumStepUnits = Math.min(allowance,
+          Math.max(0, allowance * RESIDENT_ACTIVITY_MAX_PHASE - used));
         const targetOffset = Math.min(WORLD_POSITION_UNITS_PER_TILE, span.last);
         if (!routeIsActive(segment.route)) {
           travelTask = waitForTravel(travelTask, tick, "no-active-route");
-        } else if (targetOffset > offset) {
+        } else if (targetOffset > offset && maximumStepUnits > 0) {
           const target = residentTravelSegmentPose(segment, targetOffset).position;
           const surface = travelApproachSurface(world, resident, pose.position, target);
           if (surface === null) travelTask = waitForTravel(travelTask, tick, "no-traversable-route");
@@ -475,7 +481,7 @@ export function advanceResidentRestActivities(
               requestId: `contract-travel:${resident.identity.stableId}:${contract.id}`,
               tick, actor: createLivingActorAddress({ actorId: resident.identity.stableId, species: "human", persistence: "promoted",
                 position: pose.position, heading: pose.heading }),
-              targetArea: { center: target, radiusUnits: 0 }, maximumStepUnits: RESIDENT_REST_APPROACH_STEP_UNITS, surface,
+              targetArea: { center: target, radiusUnits: 0 }, maximumStepUnits, surface,
             });
             if (resolution.kind === "moved") {
               const nextOffset = residentTravelSegmentOffset(segment, resolution.actor.position);

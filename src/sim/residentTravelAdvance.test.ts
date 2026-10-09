@@ -11,6 +11,8 @@ import {
 import {
   RESIDENT_TRAVEL_ACTIVITY_OWNER_ID,
   RESIDENT_TRAVEL_ACTIVITY_VERSION,
+  RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID,
+  RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
   type ResidentPhysicalTravelTask,
 } from "./residentActivity";
 import { canonicalResidentActivityForWorld } from "./residentActivityWorld";
@@ -19,6 +21,8 @@ import {
   consumeResidentTravelAdvance,
   prepareResidentTravelAdvance,
   revokeResidentTravelAdvance,
+  residentTravelIntervalWorkUsed,
+  residentTravelStepUnits,
 } from "./residentTravelAdvance";
 import { residentTravelLocation, residentTravelSegment } from "./residentTravelRoute";
 import { createWorld } from "./public";
@@ -30,7 +34,7 @@ const MODEL_WORLD = createWorld("resident macro distance custody foundation", "s
 // These fixtures explicitly arrange protocol-valid bodies and commitments.
 // They exercise the route/custody kernels, not native acceptance, autonomous
 // play, local sensing, dry-foot admission, source stock or destination handoff.
-function preparedFixture(stepUnits = 0) {
+function preparedFixture(stepUnits = 0, current = false) {
   const world = structuredClone(MODEL_WORLD);
   const route = world.routes.find((candidate) => {
     const [first, second, third] = candidate.path.slice(0, 3).map((index) => world.terrain.tiles[index]);
@@ -66,7 +70,8 @@ function preparedFixture(stepUnits = 0) {
     const settlement = world.settlements.find(({ id }) => id === candidate.homeSettlementId)!;
     const position = candidate === resident ? start : center(world, settlement.tileIndex);
     candidate.activity = {
-      version: RESIDENT_TRAVEL_ACTIVITY_VERSION, ownerId: RESIDENT_TRAVEL_ACTIVITY_OWNER_ID,
+      version: current ? RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION : RESIDENT_TRAVEL_ACTIVITY_VERSION,
+      ownerId: current ? RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID : RESIDENT_TRAVEL_ACTIVITY_OWNER_ID,
       actorId: candidate.identity.stableId, tick,
       poses: Array.from({ length: 11 }, (_, phase) => ({
         position: translateWorldPosition(position,
@@ -261,6 +266,73 @@ describe("one-shot resident closing travel budget", () => {
     } else if (change === "activity") resident.activity = structuredClone(resident.activity!);
     expect(() => consumeResidentTravelAdvance(world, prepared)).toThrow(RangeError);
     // Even a failed attempted consumption revokes the original capability.
+    expect(() => consumeResidentTravelAdvance(world, prepared)).toThrow(RangeError);
+  });
+});
+
+describe("conserved cargo-aware future travel work", () => {
+  it.each([
+    ["food", 1, 104], ["food", 14, 91], ["reed", 14, 91],
+    ["medicine", 14, 87], ["parts", 14, 77], ["freshWater", 14, 77],
+    ["parts", 16, 73], ["parts", 1_000_001, 73], ["parts", Number.MAX_SAFE_INTEGER, 73],
+  ] as const)("derives %s quantity%s work without creating capacity or clamping cargo", (resource, cargoQuantity, expected) => {
+    const input = { resource, cargoQuantity };
+    const before = structuredClone(input);
+    expect(residentTravelStepUnits({ version: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION }, input)).toBe(expected);
+    expect(input).toEqual(before);
+    expect(residentTravelStepUnits({ version: RESIDENT_TRAVEL_ACTIVITY_VERSION }, input)).toBe(105);
+  });
+
+  it.each([0, -1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])("rejects invalid current cargo quantity%s", (cargoQuantity) => {
+    expect(residentTravelStepUnits({ version: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION },
+      { resource: "food", cargoQuantity })).toBeNull();
+  });
+
+  it("rejects unsupported activity and resource rather than granting unladen work", () => {
+    expect(residentTravelStepUnits({ version: 9 } as never, { resource: "food", cargoQuantity: 1 })).toBeNull();
+    expect(residentTravelStepUnits({ version: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION },
+      { resource: "unknown" as never, cargoQuantity: 1 })).toBeNull();
+  });
+
+  it.each([50, 91, 105])("keeps accepted current%s-unit prefixes and grants only the unpaid new quota", (stepUnits) => {
+    const { world, resident, contract } = preparedFixture(stepUnits, true);
+    Object.assign(contract, { resource: "food", quantity: 14, cargoQuantity: 14 });
+    expect(canonicalResidentActivityForWorld(world, resident)).not.toBeNull();
+    const before = stableStringify(world);
+    const prepared = prepareResidentTravelAdvance(world, null);
+    expect(prepared).not.toBeNull();
+    const admission = consumeResidentTravelAdvance(world, prepared!);
+    expect(residentTravelIntervalWorkUsed(resident.activity!.poses)).toBe(stepUnits * 10);
+    expect(admission.remainingUnitsByActor.get(resident.identity.stableId)).toBe(Math.max(0, 910 - stepUnits * 10));
+    expect(stableStringify(world)).toBe(before);
+  });
+
+  it.each(["food", "parts"] as const)("spends the same%s allowance after fine work in macro continuation", (resource) => {
+    const { world, resident, contract, task, start, dx, dy, tick } = preparedFixture(50, true);
+    Object.assign(contract, { resource, quantity: 4, cargoQuantity: 4 });
+    const stepUnits = residentTravelStepUnits(resident.activity!, contract)!;
+    expect(stepUnits).toBe(resource === "food" ? 101 : 97);
+    const before = stableStringify(world);
+    const admission = consumeResidentTravelAdvance(world, prepareResidentTravelAdvance(world, null)!);
+    const result = advanceResidentMacroTravel(world, contract, task, resident.activity!.poses.at(-1)!,
+      admission.frame, admission.remainingUnitsByActor.get(resident.identity.stableId)!, tick + 1);
+    expect(result?.advancedUnits).toBe(stepUnits * 10 - 500);
+    expect(result?.pose.position).toEqual(translateWorldPosition(start, dx * stepUnits * 10, dy * stepUnits * 10));
+    expect(stableStringify(world)).toBe(before);
+  });
+
+  it.each(["contracts-root", "contract-slot", "quantity", "resource", "status", "carrier", "actor"] as const)("revokes a%s-changed cargo-bound receipt", (change) => {
+    const { world, contract } = preparedFixture(50, true);
+    Object.assign(contract, { resource: "food", quantity: 14, cargoQuantity: 14 });
+    const prepared = prepareResidentTravelAdvance(world, null)!;
+    if (change === "contracts-root") world.contracts = [...world.contracts];
+    else if (change === "contract-slot") world.contracts[0] = structuredClone(contract);
+    else if (change === "quantity") Object.assign(contract, { quantity: 15, cargoQuantity: 15 });
+    else if (change === "resource") contract.resource = "parts";
+    else if (change === "status") contract.status = "cancelled";
+    else if (change === "carrier") contract.carrierKind = "player";
+    else contract.assignedResidentId = null;
+    expect(() => consumeResidentTravelAdvance(world, prepared)).toThrow(RangeError);
     expect(() => consumeResidentTravelAdvance(world, prepared)).toThrow(RangeError);
   });
 });

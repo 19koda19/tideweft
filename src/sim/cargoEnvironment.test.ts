@@ -4,12 +4,44 @@ import {
   CARGO_ENVIRONMENT_CAUSE_ORDER,
   CARGO_ENVIRONMENT_PROPERTIES,
   evaluateCargoEnvironment,
+  promiseCargoPropertyForResource,
+  promiseCargoUnitLoadMilli,
   resolveCargoMaterialTraits,
   type CargoEnvironmentEvaluationInput,
   type CargoEnvironmentProperty,
   type CargoEnvironmentSample,
 } from "./cargoEnvironment";
-import { FIXED_POINT } from "./types";
+import { FIXED_POINT, RESOURCE_KINDS, type ResourceKind } from "./types";
+
+describe("shared Promise cargo property and unit load", () => {
+  const properties: Readonly<Record<ResourceKind, CargoEnvironmentProperty>> = {
+    medicine: "fragile",
+    food: "perishable",
+    freshWater: "heavy",
+    parts: "heavy",
+    reed: "ordinary",
+  };
+  const unitLoads: Readonly<Record<CargoEnvironmentProperty, number>> = {
+    ordinary: 1_000,
+    heavy: 2_000,
+    fragile: 1_250,
+    perishable: 1_000,
+    confidential: 1_000,
+  };
+
+  it.each(RESOURCE_KINDS)("retains the existing %s cargo property", (resource) => {
+    expect(promiseCargoPropertyForResource(resource)).toBe(properties[resource]);
+    expect(promiseCargoUnitLoadMilli(promiseCargoPropertyForResource(resource)))
+      .toBe(unitLoads[properties[resource]]);
+  });
+
+  it.each(CARGO_ENVIRONMENT_PROPERTIES)("retains the existing %s unit load", (property) => {
+    const load = promiseCargoUnitLoadMilli(property);
+    expect(load).toBe(unitLoads[property]);
+    expect(Number.isSafeInteger(load)).toBe(true);
+    expect(load).toBeGreaterThan(0);
+  });
+});
 
 const CALM: CargoEnvironmentSample = {
   rain: 0,

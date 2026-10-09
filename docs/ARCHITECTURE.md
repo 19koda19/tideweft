@@ -2725,20 +2725,37 @@ an estimate and cannot authorize current physical handoff. The existing
 its need, project, trust, route and history consequences; no second parcel,
 inventory, stock receipt or profession is introduced.
 
-Accepted local steps use shared locomotion with the existing 105-unit bound,
+Supported v7 local steps use shared locomotion with the existing 105-unit bound,
 bounded one/two-cell dry support and the actual physical interaction window.
 That window is not a visibility cone or merely the set of loaded regions.
 Each step stops at its waypoint before entering the next edge. Inactive routes,
 unsupported local ground, applicable weather holds and strong disturbance can
 stop work without moving the body. Reassessment retains existing routine and
 commitment priority; route eligibility is checked again on each entered leg.
-General crossing/current/load/support appraisal and known alternative-route
-response remain unfinished, not implied by this dry-route consumer.
+General crossing/current/support appraisal and known alternative-route response
+remain unfinished, not implied by this dry-route consumer. The current dry-route
+load consumer below does not establish water capability or equipment.
+
+Current v8 future travel work derives from the same conserved Promise cargo,
+using `cargoEnvironment.ts`'s shared resource/property and unit-load mapping:
+food/reed 1000, medicine 1250, freshWater/parts 2000 milli-load per unit. Each
+accepted step permits `105 - min(ceil(cargoQuantity * unitLoadMilli / 1000), 32)`
+distance units. This monotone absolute-load abstraction has no rated NPC pack
+capacity; the32-unit ceiling derives from the existing player steady-walk burden
+bound, not its inventory or apparent-kit biography. Aggregate transit retains
+its positive-safe-integer quantity domain, with exact arithmetic before the
+penalty saturates. The loose-parcel quantity limit is not imported. No second
+parcel, inventory, item ID, equipment state or cargo quantity is created.
 
 `residentTravelAdvance.ts` owns the narrow macro-transport exception to generic
 coarse actor immobility. One source-bound, one-shot closing admission captures
 the real window and subtracts committed fine distance from the same ten-step
-1050-unit budget. Remaining work advances only ordered portions outside that
+allowance: current v8 uses its cargo-qualified step budget; frozen v7 retains
+1050units. For current physical travel, the receipt also binds the actual
+contract root/slot, identity, resource, quantity, cargo quantity, state and
+assigned carrier used to derive that allowance. Changed inputs revoke the
+one-shot receipt instead of reusing stale work. Remaining work advances only
+ordered portions outside that
 window, stopping at its first included integer point; a local-boundary exit
 costs its actual unit of distance. No full-rate offscreen brain, terrain scan,
 encounter, perception, acoustic event or new hazard knowledge is invented.
@@ -2753,6 +2770,13 @@ are rejected; a structurally plausible final body is insufficient. This also
 protects event-time source/listener positions. Macro and fine work share exact
 distance rather than using render time. Successful handoff retains the actual
 destination body instead of resetting a settlement ordinal.
+
+The supported-history ceilings remain105/1050. A previously accepted v8 partial
+prefix is not rewritten or rejected for exceeding today's smaller cargo quota;
+future fine/macro work subtracts that prefix and saturates at zero. Exhausted
+work retains the body/task, not a fabricated terrain obstruction. Frozen v7
+partial intervals retain105 until genuine phase-zero v8 adoption. This behavior
+changes future work, not schema, readers, old progress, custody or saved quantity.
 
 Outer50–56 and frozen body1–6 remain deliberately supported. Decoding does not
 upgrade a partial interval or infer precise history from rounded old progress.

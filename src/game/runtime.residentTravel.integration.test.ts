@@ -17,6 +17,7 @@ import {
   residentActivitySupportsRations,
 } from "../sim/residentActivity";
 import { residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
+import { residentTravelStepUnits } from "../sim/residentTravelAdvance";
 import {
   residentTravelBodyIsLocal,
   residentTravelInteractionFrame,
@@ -213,6 +214,11 @@ async function nativeFixture() {
   if (commitment === undefined) throw new Error("Actual runtime wild seed has no native 6→7 food offer; do not fabricate one");
   expect(commitment).toMatchObject({ id: 133, quantity: 14, cargoQuantity: 0,
     carrierKind: null, assignedResidentId: null, acceptedTick: null, departedTick: null });
+  // Predict only the future quantity already promised by this real offer;
+  // the runtime must still perform its own pickup and derive actual work.
+  const travelStepUnits = residentTravelStepUnits({ version: RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION },
+    { resource: commitment.resource, cargoQuantity: commitment.quantity });
+  expect(travelStepUnits).toBe(91);
   const origin = world.settlements.find(({ id }) => id === commitment.originSettlementId)!;
   const destination = world.settlements.find(({ id }) => id === commitment.destinationSettlementId)!;
   const route = world.routes.find(({ id }) => id === commitment.routeId)!;
@@ -255,7 +261,7 @@ async function nativeFixture() {
   const repository = new MemoryRepository(prepared);
   const runtime = await open(repository);
   return { runtime, repository, contractId: commitment.id, originId: origin.id, destinationId: destination.id,
-    quantity: commitment.quantity, sourceStock, sources, destinationPosition, frame,
+    quantity: commitment.quantity, travelStepUnits: travelStepUnits!, sourceStock, sources, destinationPosition, frame,
     totalDistance: (route.path.length - 1) * 1_000, initialTick: world.meta.completedTick };
 }
 
@@ -316,11 +322,13 @@ describe("ordinary runtime conserved resident travel", () => {
         const macroUnits = beforeDistance === null ? 0 : distance - beforeDistance;
         expect(macroUnits).toBeGreaterThanOrEqual(0);
         expect(macroUnits + fineUnits).toBeLessThanOrEqual(10 * RESIDENT_REST_APPROACH_STEP_UNITS);
+        expect(macroUnits + fineUnits).toBeLessThanOrEqual(10 * fixture.travelStepUnits);
         if (after.status === "in-transit") expect(human.activity?.travelTask?.mode).toBe("physical");
         const previous = primaryTrace.at(-1);
         if (previous !== undefined) {
           expect(distance).toBeGreaterThanOrEqual(previous.distance);
           expect(distance - previous.distance).toBeLessThanOrEqual(10 * RESIDENT_REST_APPROACH_STEP_UNITS);
+          expect(distance - previous.distance).toBeLessThanOrEqual(10 * fixture.travelStepUnits);
         }
         primaryTrace.push({ tick: result.meta.completedTick, distance,
           local: residentTravelBodyIsLocal(fixture.frame, pose.position), macroUnits });
@@ -743,6 +751,7 @@ describe("ordinary runtime conserved resident travel", () => {
         expect(distance).toBeGreaterThanOrEqual(lastDistance);
         expect(distance - lastDistance).toBeLessThanOrEqual(10 * RESIDENT_REST_APPROACH_STEP_UNITS);
         expect(distance - beforeDistance! + fineUnits).toBeLessThanOrEqual(10 * RESIDENT_REST_APPROACH_STEP_UNITS);
+        expect(distance - beforeDistance! + fineUnits).toBeLessThanOrEqual(10 * fixture.travelStepUnits);
         resumedTrace.push({ tick: result.meta.completedTick, distance,
           local: residentTravelBodyIsLocal(actualFrame, human.activity!.poses.at(-1)!.position) });
         lastDistance = distance;
@@ -799,7 +808,7 @@ describe("ordinary runtime conserved resident travel", () => {
     // A step stops at each waypoint, discarding unused allowance. Distance /
     // interval budget alone would undercount this legitimate physical work.
     const intervalLimit = Math.ceil(remainingEndpoints
-      * Math.ceil(1_000 / RESIDENT_REST_APPROACH_STEP_UNITS) / 10) + 2;
+      * Math.ceil(1_000 / fixture.travelStepUnits) / 10) + 2;
     for (let interval = 0; interval < intervalLimit && completed.tick === null; interval += 1) advance(retry, 10);
     if (completed.tick === null) throw new Error(`Resumed native journey did not hand off within ${intervalLimit} bounded intervals`);
     expect(resumedTrace.some(({ local, distance }) => local && distance > heldDistance)).toBe(true);
