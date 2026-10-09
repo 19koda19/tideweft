@@ -4,6 +4,7 @@ import { createWorld } from "./public";
 import {
   RESIDENT_CIVIC_ACTIVITY_OWNER_ID, RESIDENT_CIVIC_ACTIVITY_VERSION,
   RESIDENT_SERVICE_ACTIVITY_OWNER_ID, RESIDENT_SERVICE_ACTIVITY_VERSION,
+  RESIDENT_ENVIRONMENT_ACTIVITY_VERSION,
   canonicalizeResidentActivity, residentActivitySupportsRations,
 } from "./residentActivity";
 import { canonicalResidentActivityForWorld, residentRestTargetHasDrySupport, residentSettlementRationTarget } from "./residentActivityWorld";
@@ -51,7 +52,7 @@ describe("explicit civic material activity protocol", () => {
     expect(residentActivitySupportsRations(activity)).toBe(true);
   });
 
-  it("requires v3's explicit field and never imports it through v2 or a future numeric version", () => {
+  it("requires v3's explicit field and rejects mismatched or unknown protocols", () => {
     const { raw, binding } = fixture();
     const v2 = { ...raw, version: RESIDENT_SERVICE_ACTIVITY_VERSION, ownerId: RESIDENT_SERVICE_ACTIVITY_OWNER_ID };
     expect(canonicalizeResidentActivity(v2, binding)).toBeNull();
@@ -61,8 +62,14 @@ describe("explicit civic material activity protocol", () => {
     expect(canonicalizeResidentActivity({ ...raw, materialTask: undefined }, binding)).toBeNull();
     const { materialTask: _task, ...missing } = raw;
     expect(canonicalizeResidentActivity(missing, binding)).toBeNull();
-    expect(canonicalizeResidentActivity({ ...raw, version: 5 }, binding)).toBeNull();
-    expect(residentActivitySupportsRations({ version: 5 } as unknown as typeof raw)).toBe(false);
+    // A recognized successor retains ration capability, but changing only a
+    // v3 record's number does not supply its owner/required inspection field.
+    expect(canonicalizeResidentActivity({ ...raw, version: RESIDENT_ENVIRONMENT_ACTIVITY_VERSION }, binding)).toBeNull();
+    expect(residentActivitySupportsRations({ version: RESIDENT_ENVIRONMENT_ACTIVITY_VERSION })).toBe(true);
+    for (const version of [99, Number.MAX_SAFE_INTEGER]) {
+      expect(canonicalizeResidentActivity({ ...raw, version, ownerId: `sim:resident-activity:v${version}` }, binding)).toBeNull();
+      expect(residentActivitySupportsRations({ version } as unknown as typeof raw)).toBe(false);
+    }
   });
 
   it.each([

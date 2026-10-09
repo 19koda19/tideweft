@@ -174,7 +174,10 @@ describe(`${ALPHA37_ESTUARY_BREADTH_HABITAT_SHARED_INVARIANTS_OWNER_INTENT} appe
     expect(rederived).not.toBe(habitat);
     expect(stableStringify(rederived)).toBe(bytes);
     expect(canonicalCoreEcologyBreadthHabitatForWorld(habitat, SEED, region)).toBe(habitat);
-  });
+    // This real 130-derivation fixture exceeds the ordinary 15s watchdog when
+    // another cumulative worker is active. Preserve full eviction/byte checks;
+    // this is correctness coverage, not a production latency budget.
+  }, process.env.CI === "true" ? 90_000 : 60_000);
 
   it("replays canonical terrain independent of evaluation order and binds authority to its world", () => {
     clearCoreEcologyBreadthHabitatCache();

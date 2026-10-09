@@ -4453,6 +4453,50 @@ general current/load/crossing alternative, cat evacuation, full WORLD0 closure,
 new cumulative certificate or public release is claimed. Correctness remains
 uncapped; extended profiling/soaks remain deferred to full Living Foliage.
 
+### Observed-rest cumulative and narrow test correction — 2026-10-08
+
+The uncapped cumulative on clean `94e53b06358c6097f56ee5d7955a2dac64d8a3f6`
+finished **FAIL**:400 files,398 passing;4849 tests,4847 passing and2 failing,
+0 pending,2296.17s. The executable tree stayed unchanged until termination;
+Node22.20.0/npm10.9.3 and the718 recorded non-Markdown inputs identify its
+scope. The retained JSON SHA256 is
+`a51d310a525c006cd0979585794f826cdeb5b515aa80687540017ca4310d11bd`.
+
+```sh
+caffeinate -i npm run test:ci -- --reporter=default --reporter=json --outputFile=artifacts/validation/94e53b0-cumulative.json > artifacts/validation/94e53b0-cumulative.log 2>&1
+npx vitest run src/game/coreEcologyBreadthHabitat.test.ts src/sim/residentMaterialActivity.test.ts -t 'retains exact world binding through real bounded-cache eviction|requires v3.s explicit field' --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/94e53b0-two-failures-recheck.json
+```
+
+The actual cache-eviction error is the15000ms watchdog, with17282ms recorded
+duration. Its unchanged isolated reproduction passes in8936ms; the original
+fixture/source/configuration are also byte-unchanged from19965f1. The test
+still performs130 real derivations and requires actual eviction, new identity,
+exact canonical bytes and original world binding. Only this correctness case
+now has a60000ms local watchdog, preserving the existing90000ms CI allowance.
+No runtime cache, derivation, hash or production performance budget changes.
+
+The material-protocol assertion independently reproduces its failure: it still
+calls deliberately recognized v5 an unknown ration protocol. The corrected
+fixture requires v5's existing ration capability while retaining rejection of
+a v3 record relabeled v5 without the successor owner/required fields. Unknown
+99 and MAX_SAFE_INTEGER protocols must reject through both complete decoding
+and version-only capability classification. Frozen-reader, malformed-task,
+exact-arrival, exclusivity and project-binding assertions remain intact.
+
+```sh
+npx vitest run src/game/coreEcologyBreadthHabitat.test.ts src/sim/residentMaterialActivity.test.ts src/sim/residentActivityCapabilities.test.ts src/sim/residentActivity.test.ts src/sim/residentInspectionActivity.test.ts src/sim/residentSurfaceKnowledge.test.ts src/game/residentActivitySaveBoundary.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/cache-watchdog-and-protocol-final.json
+```
+
+Final affected selection7files/175PASS in14.93s, including the real eviction
+case in10187ms; report SHA256
+`e42ec803b64b9436e4d6d7a3b2ff0727d69d709cc86a33506ce09e1a2fc24ff6`.
+TypecheckPASS; maintained smoke6files/105PASS in4.17s.
+Only the two test owners and this evidence record change. Production, schemas,
+supported readers, dependencies and directive contracts remain unchanged.
+The original full run stays FAIL; focused evidence is not a new whole-suite
+certificate. These are correctness durations, not production performance,
+normal-play, build, release or deferred-soak proof.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
