@@ -1,5 +1,5 @@
 import { mixUint32 } from "../sim/rng";
-import { FIXED_POINT } from "../sim/types";
+import { FIXED_POINT, type TerrainKind } from "../sim/types";
 import { hashCanonical } from "../sim/util";
 import {
   FALL_RISK_CAUSE_ORDER,
@@ -78,6 +78,17 @@ export const ACOUSTIC_MATERIAL_CLASSES = Object.freeze([
   "unknown",
 ] as const);
 export type AcousticMaterialClass = (typeof ACOUSTIC_MATERIAL_CLASSES)[number];
+
+/** Shared bounded contact classification; terrain remains the physical owner. */
+export function acousticMaterialForTerrainContact(
+  tile: Readonly<{ terrain: TerrainKind; waterDepth: number }>,
+): AcousticMaterialClass {
+  return tile.waterDepth > 60_000 || tile.terrain === "deep-water"
+    ? "water"
+    : tile.terrain === "marsh" ? "foliage"
+      : tile.terrain === "ridge" ? "stone"
+        : tile.terrain === "tidal-flat" ? "sand" : "soil";
+}
 
 export const ACOUSTIC_SEMANTIC_FAMILIES = Object.freeze([
   "scrape",

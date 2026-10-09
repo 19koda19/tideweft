@@ -20,6 +20,7 @@ import type { PlayerState } from "./player";
 import { restorePlayerRegionalTravel } from "./regionalPlayerTravel";
 import * as residentActivityExecution from "./residentActivityExecution";
 import * as humanPerception from "./humanPerception";
+import * as residentContactAcoustics from "./residentContactAcoustics";
 import { residentRestSurfaceObservationId, residentRestSurfaceKnowledge } from "../sim/residentSurfaceKnowledge";
 import * as simulation from "../sim/public";
 import * as situatedExpressionChannelBank from "./situatedExpressionChannelBank";
@@ -167,7 +168,7 @@ function authoritativeRoots(envelope: Envelope): unknown {
  * This is not a claim that a fresh daytime seed spontaneously needs urgent rest.
  */
 async function restFixture(
-  selection: "dry" | "wet-source" | "wet-target" | "keeper" | "nearby" = "dry",
+  selection: "dry" | "wet-source" | "wet-target" | "keeper" | "nearby" | "nearby-contact" = "dry",
   seed = "resident activity executable rest approach",
 ) {
   const repository = new MemoryRepository();
@@ -201,9 +202,10 @@ async function restFixture(
       : selection !== "wet-source" && approachDistance !== WORLD_POSITION_UNITS_PER_TILE) return [];
     const playerDelta = worldPositionDelta(playerPosition, source);
     const distance = playerDelta.x * playerDelta.x + playerDelta.y * playerDelta.y;
-    if (selection === "nearby" && distance > (4 * WORLD_POSITION_UNITS_PER_TILE) ** 2) return [];
+    if ((selection === "nearby" || selection === "nearby-contact") && distance > (4 * WORLD_POSITION_UNITS_PER_TILE) ** 2) return [];
     return [{ human, source, target, distance }];
-  }).sort((left, right) => (selection === "nearby" ? left.distance - right.distance : right.distance - left.distance)
+  }).sort((left, right) => (selection === "nearby-contact" ? left.human.identity.stableId.localeCompare(right.human.identity.stableId)
+    : selection === "nearby" ? left.distance - right.distance : right.distance - left.distance)
     || left.human.id - right.human.id);
   const selected = candidates[0];
   if (selected === undefined) {
@@ -214,6 +216,10 @@ async function restFixture(
   for (const human of world.residents) {
     human.needs = { food: 100_000, rest: 100_000, belonging: 100_000 };
     human.condition.exhaustion = 100_000;
+    // The contact witness isolates one real approach using pressure, not
+    // assigned tasks/bodies or guaranteed acoustic admission. Other fixtures
+    // keep their original pressure and competing service behavior unchanged.
+    if (selection === "nearby-contact" && human.id !== selected.human.id) human.needs.belonging = 900_000;
   }
   selected.human.needs.rest = 900_000;
   selected.human.condition.exhaustion = 300_000;
@@ -229,7 +235,7 @@ async function restFixture(
     tick: world.meta.completedTick, exhaustion: selected.human.condition.exhaustion };
 }
 
-async function firstNativeFixture(selection: "wet-source" | "keeper" | "nearby") {
+async function firstNativeFixture(selection: "wet-source" | "keeper" | "nearby" | "nearby-contact") {
   for (const seed of ["resident activity executable rest approach", "a", "settlement keeper home night continuity"]) {
     try {
       return await restFixture(selection, seed);
@@ -376,6 +382,170 @@ describe("ordinary runtime resident rest execution", () => {
     await cold.save();
     expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(uninterrupted));
   }, 60_000);
+
+  it("hears real sparse rest-approach contact anonymously without captions, replay or failed-closing side effects", async () => {
+    // Native nearby geometry and body adoption; explicit rest/belonging,
+    // weather/offer pressure isolates one real approach. No sound, body,
+    // listening result, task or destination is assigned by this test.
+    const fixture = await firstNativeFixture("nearby-contact");
+    const derivations: { phase: number; facts: readonly residentContactAcoustics.ResidentContactAcousticFact[] }[] = [];
+    const hearingFrames: {
+      tick: number;
+      samples: readonly humanPerception.PhysicalSoundSample[];
+      phases: readonly humanPerception.HumanSoundSamplePhase[];
+      batches: readonly Pick<humanPerception.HumanObservationBatch, "residentId" | "observerId" | "observations">[];
+    }[] = [];
+    const derive = residentContactAcoustics.deriveResidentContactAcoustics;
+    vi.spyOn(residentContactAcoustics, "deriveResidentContactAcoustics").mockImplementation((...args) => {
+      const facts = derive(...args);
+      if (facts !== null) derivations.push({ phase: args[2], facts });
+      return facts;
+    });
+    const collect = humanPerception.collectExistingHumanObservations;
+    vi.spyOn(humanPerception, "collectExistingHumanObservations").mockImplementation((...args) => {
+      const batches = collect(...args);
+      const input = args[0];
+      hearingFrames.push(structuredClone({
+        tick: input.targetTick,
+        samples: input.physicalSoundSamples ?? [],
+        phases: input.soundSamplePhases ?? [],
+        batches: batches.map(({ residentId, observerId, observations }) => ({ residentId, observerId, observations })),
+      }));
+      return batches;
+    });
+
+    const repository = new MemoryRepository(fixture.record);
+    const runtime = await open(repository);
+    soundscapePlay.mockClear();
+    advanceOrdinaryFixedSteps(runtime, 4);
+    await runtime.save();
+    const phase4Record = repository.snapshot();
+    const phase4 = decode(phase4Record);
+    expect(phase4.perceptionCarry.playerStepsSinceWorldTick).toBe(4);
+    advanceOrdinaryFixedSteps(runtime, 5);
+    await runtime.save();
+    const phase9Record = repository.snapshot();
+    const phase9 = decode(phase9Record);
+    expect(phase9.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    const source = resident(phase9, fixture.actorId);
+    expect(source.activity?.restTask).toMatchObject({ cause: "urgent-rest", phase: "approaching", target: fixture.target });
+    const fact = [...derivations].reverse().find(({ phase }) => phase === 9)?.facts
+      .find(({ event }) => event.sourceId === fixture.actorId);
+    if (fact === undefined) throw new Error("native nearby rest approach produced no bounded dry contact by phase9");
+    expect(fact.phase).toBeGreaterThan(0);
+    expect(fact.phase).toBeLessThanOrEqual(9);
+    expect(fact.event).toMatchObject({ sourceCategory: "human", textualEligibility: "audio-only", accessibilityRelevance: "routine" });
+    expect(fact.event.sourcePosition).toEqual(source.activity!.poses[fact.phase]!.position);
+    const cell = ({ localX, localY }: WorldPosition) => [
+      Math.floor(localX / WORLD_POSITION_UNITS_PER_TILE), Math.floor(localY / WORLD_POSITION_UNITS_PER_TILE),
+    ];
+    expect(cell(source.activity!.poses[fact.phase]!.position))
+      .not.toEqual(cell(source.activity!.poses[fact.phase - 1]!.position));
+    for (let phase = 1; phase < fact.phase; phase += 1) {
+      expect(cell(source.activity!.poses[phase]!.position)).toEqual(cell(source.activity!.poses[phase - 1]!.position));
+    }
+    const ownAudio = () => soundscapePlay.mock.calls.filter(([, , seed]) => seed === fact.event.presentationVariantSeed);
+    expect(ownAudio()).toHaveLength(1);
+    expect(["step", "stumble", "impact"]).toContain(ownAudio()[0]![0]);
+    expect(ownAudio()[0]![1]).toBeGreaterThan(0);
+    expect(ownAudio()[0]![1]).toBeLessThanOrEqual(1);
+    expect(Number.isFinite(ownAudio()[0]![3])).toBe(true);
+    expect((runtime.getRenderView().acousticText ?? []).some(({ id }) => id === fact.event.eventId)).toBe(false);
+    expect(runtime.getUIView().expressionCaption?.id).not.toBe(fact.event.eventId);
+
+    hearingFrames.length = 0;
+    advanceOrdinaryFixedSteps(runtime, 1);
+    await runtime.save();
+    const closedRecord = repository.snapshot();
+    const closed = decode(closedRecord);
+    expect(deserializeWorld(closed.world).meta.completedTick).toBe(fixture.tick + 1);
+    expect(closed.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expect(ownAudio()).toHaveLength(1); // retained prefix is hearing, not another playback queue
+    const closing = hearingFrames.find(({ samples }) => samples.some(({ id }) => id === fact.sample.id));
+    if (closing === undefined) throw new Error("native rest contact did not enter the real closing hearing frame");
+    expect(closing.tick).toBe(fixture.tick + 1);
+    expect(closing.samples.filter(({ id }) => id === fact.sample.id)).toEqual([fact.sample]);
+    expect(closing.phases.filter(({ sampleId }) => sampleId === fact.sample.id))
+      .toEqual([{ sampleId: fact.sample.id, phase: fact.phase }]);
+    const receipts = closing.batches.flatMap(({ residentId, observerId, observations }) => observations
+      .filter(({ id }) => id === `hp-h-${closing.tick}-${residentId}-${fact.sample.id}`)
+      .map((observation) => ({ observerId, observation })));
+    expect(receipts.length).toBeGreaterThan(0);
+    for (const { observerId, observation } of receipts) {
+      expect(observerId).not.toBe(fixture.actorId);
+      expect(observation).toMatchObject({ channel: "hearing", perceivedClass: fact.sample.soundClass,
+        subjectId: null, identification: "anonymous", observedAtTick: fixture.tick + 1 });
+      expect(observation.area.radiusUnits).toBeGreaterThanOrEqual(250);
+    }
+    close(runtime);
+
+    for (const [prefixRecord, prefix] of [[phase4Record, phase4], [phase9Record, phase9]] as const) {
+      const coldRepository = new MemoryRepository(prefixRecord);
+      soundscapePlay.mockClear();
+      const cold = await open(coldRepository);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(prefix));
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      hearingFrames.length = 0;
+      advanceOrdinaryFixedSteps(cold, 10 - prefix.perceptionCarry.playerStepsSinceWorldTick);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(closed));
+      expect(ownAudio()).toHaveLength(fact.phase > prefix.perceptionCarry.playerStepsSinceWorldTick ? 1 : 0);
+      expect(hearingFrames.find(({ samples }) => samples.some(({ id }) => id === fact.sample.id)))
+        .toEqual(closing);
+      close(cold);
+    }
+
+    // Hearing has genuinely run before this late rejection. Both its source
+    // body prefix and every perception/save root must return to exact phase9.
+    const failedRepository = new MemoryRepository(phase9Record);
+    const failed = await open(failedRepository);
+    const closure = vi.spyOn(situatedExpressionChannelBank, "closeSituatedExpressionChannelBankInterval")
+      .mockReturnValueOnce(null);
+    hearingFrames.length = 0;
+    soundscapePlay.mockClear();
+    advanceOrdinaryFixedStepsForExpectedFailure(failed, 1);
+    expect(hearingFrames.find(({ samples }) => samples.some(({ id }) => id === fact.sample.id)))
+      .toEqual(closing);
+    expect(closure).toHaveBeenCalledTimes(1);
+    expect(failed.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+    expect(soundscapePlay.mock.calls).toEqual([["warning", 1]]);
+    await failed.save();
+    const rolledBackRecord = failedRepository.snapshot();
+    expect(authoritativeRoots(decode(rolledBackRecord))).toEqual(authoritativeRoots(phase9));
+    closure.mockRestore();
+    close(failed);
+    const retryRepository = new MemoryRepository(rolledBackRecord);
+    soundscapePlay.mockClear();
+    const retry = await open(retryRepository);
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advanceOrdinaryFixedSteps(retry, 1);
+    await retry.save();
+    expect(authoritativeRoots(decode(retryRepository.snapshot()))).toEqual(authoritativeRoots(closed));
+    expect(ownAudio()).toHaveLength(0);
+    close(retry);
+
+    const consumedRepository = new MemoryRepository(closedRecord);
+    soundscapePlay.mockClear();
+    const consumed = await open(consumedRepository);
+    await consumed.save();
+    expect(authoritativeRoots(decode(consumedRepository.snapshot()))).toEqual(authoritativeRoots(closed));
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    // Once this actual one-tile approach arrives, further routine admission
+    // must not manufacture another body tile entry for the stationary actor.
+    advanceOrdinaryFixedSteps(consumed, 10);
+    await consumed.save();
+    expect(resident(decode(consumedRepository.snapshot()), fixture.actorId).activity?.restTask?.phase).toBe("arrived");
+    derivations.length = 0;
+    hearingFrames.length = 0;
+    soundscapePlay.mockClear();
+    advanceOrdinaryFixedSteps(consumed, 10);
+    await consumed.save();
+    expect(derivations.every(({ facts }) => facts.every(({ event }) => event.sourceId !== fixture.actorId))).toBe(true);
+    expect(hearingFrames.every(({ samples }) => samples.every(({ id }) => id !== fact.sample.id))).toBe(true);
+    expect(ownAudio()).toHaveLength(0);
+    expect(resident(decode(consumedRepository.snapshot()), fixture.actorId).activity?.restTask?.phase).toBe("arrived");
+  }, 180_000);
 
   it("uses a real ration after ordinary approach, preserves a phase9 cold pulse, and rolls back a late failed use", async () => {
     const fixture = await restFixture();

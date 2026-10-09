@@ -5883,6 +5883,66 @@ behavior, performance or directive closure. Production, schemas, supported
 readers, dependencies and policy remain unchanged. The reusable sight/response
 contract was already canonical; this acceptance addition does not redefine it.
 
+### Resident dry contact joins shared hearing — 2026-10-09
+
+At parent `67e0cf507cbea1423e2b9819726a7b32a1c71a5f`, the local/unpublished
+resident producer now derives one sparse contact from each current-v8 body's
+first actual dry tile entry in the accepted fine-step prefix. The shared
+terrain classification is extracted without changing existing dog semantics.
+Fresh player audio uses surface propagation and the complete transaction;
+closing human/dog hearing uses the actual occurrence phase before the world
+step collapses that prefix. Routine contact has no caption or interruption.
+No animation, apparent equipment, uncommitted intent or invented work is a
+producer. Writer58/carry14, supported readers and dependencies are unchanged.
+
+Two characterization counterexamples required corrections before acceptance:
+later lower-ID contact must not displace an already accepted earlier cause,
+and spatial rebasing must not replace an off-frame first entry with a later
+one. Admission now orders occurrence phase then stable source, caps eight
+before spatial filtering, and leaves filtered holes empty. This conservative
+representation can omit later local sound; it does not promise every footfall.
+The existing dog/aggregate and expressive priorities retain their own bounds.
+
+The additive runtime case selects genuine native one-tile dry geometry but
+uses controlled rest pressure. Initial broader fixture attempts exposed real
+competition for the earliest-eight budget, not a legacy-format failure.
+The final isolated mechanism witness suppresses unrelated material approaches
+through the existing need priority rather than assigning bodies, tasks,
+sound events or listener outcomes. It proves real approach, positive once-only
+audio, anonymous surface hearing, routine-text absence, phase4/9 outer58 cold
+continuation, consumed nonreplay, stationary silence and late-closing rollback.
+All prior fixture branches and assertions remain intact. This is controlled
+native-geometry runtime evidence, not untouched crowd behavior or visual play.
+
+Frozen validation passes13 files/258 tests in11.74s for the affected acoustic,
+activity and persistence owners; the runtime domain passes7 files/105 tests
+in631.51s, and the full runtime owner passes98 tests in496.47s. The existing
+late-closure rollback case separately passes. Maintained smoke passes6 files/
+105 tests in5.88s; typecheck and45 documentation-reuse self-tests pass.
+
+```sh
+npx vitest run src/game/residentContactAcoustics.test.ts src/game/worldAcoustics.test.ts src/game/physicalAcousticPerception.test.ts src/game/dogPhysicalAcousticPerception.test.ts src/game/animalContactAcousticCarry.test.ts src/game/humanPerception.activity.test.ts src/game/humanPerception.restSurface.test.ts src/game/humanPerception.travelSurface.test.ts src/game/residentActivitySaveBoundary.test.ts src/game/residentActivityPersistence.test.ts src/game/residentActivityExecution.test.ts src/sim/residentActivity.test.ts src/sim/residentActivity.world.integration.test.ts --maxWorkers=2
+npx vitest run src/game/runtime.residentRest.integration.test.ts src/game/runtime.residentTravel.integration.test.ts src/game/runtime.residentTravelEnvironmentCompatibility.integration.test.ts src/game/runtime.workingPeople.integration.test.ts src/game/runtime.residentSoundPhases.test.ts src/game/runtime.residentActivityPublication.test.ts src/game/runtime.perception.integration.test.ts --maxWorkers=2
+npx vitest run src/game/runtime.test.ts --maxWorkers=1
+npx vitest run src/game/runtime.test.ts -t 'rolls back introduction facts, save, and vocal audio when later interval closure fails' --maxWorkers=1
+npm run test:smoke
+npm run typecheck
+npm run test:documentation-reuse
+npm run build:web
+npm run smoke:web
+```
+
+All736 public non-Markdown inputs match before/after, digest
+`f83a224c712fccee1254a8241866c2a668606f8a7bda085a185f896c91857993`,
+on Node22.20.0. Production web compilation passes638 modules; local static
+subpath smoke passes5 artifact files/4,875,083 served bytes. The existing
+large-chunk warning remains. These are not interactive browser, packaged
+desktop, hardware-audio, mobile, performance, long-session, release or full
+cumulative certificates. Older protocols and coarse transport intentionally
+produce no new contact until their established real phase-zero adoption.
+Ordinary crowd liveness, broader physical contacts and water/current behavior
+remain unfinished. No directive or publication boundary advances here.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

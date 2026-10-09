@@ -516,6 +516,13 @@ Weight of Violence, Hard Country, cargo, foliage interaction, Long Crossing,
 future tools, future vehicles, and new physical actors inherit this contract;
 none may create a private floating-sound-text system.
 
+Current-v8 human dry locomotion also joins the candidate
+[resident contact carry](./ARCHITECTURE.md#resident-dry-contact-acoustic-carry):
+the accepted body prefix supplies event-time cause and pending hearing, not a
+dog record or playback queue. Frozen older protocols, coarse motion, work/tool
+contacts and future mutable surfaces are excluded from this narrow producer.
+Its bounded candidate/evidence status does not promote broader contacts to live.
+
 ### Biodiversity and ecology
 
 New biological actors extend shared profiles and owners. Species-specific data

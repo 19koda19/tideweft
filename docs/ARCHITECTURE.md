@@ -738,6 +738,49 @@ movement releases one cue after interval closure, while rejected steps restore
 physical state and release no step/paddle cue. This adds no footstep captions,
 new watercraft action, or independent sound framework.
 
+##### Resident dry-contact acoustic carry
+
+The local/unpublished resident-contact candidate reuses the current-v8 human
+body prefix rather than the dog-only carry or a new save root. Its existing
+world/save owners authenticate stable identity, tick, task, and all accepted
+phase0–10 poses. `residentContactAcoustics.ts` derives one sparse ordinary
+contact per source/interval from the first actual dry-ground tile entry. Its
+before/after points must both fit the bounded current interaction window for
+admission; leaving that frame never substitutes a later contact. No
+movement, same-cell motion, coarse transport, an unavailable physical source,
+or a frozen older body protocol produces this new contact. Current terrain/tide
+stay fixed during the fine interval; aid-specific contact and future mutable
+surfaces require separately retained causal evidence rather than guessing.
+
+The unchanged shared terrain classification supplies bare material semantics.
+Opaque seed/actor/tick/phase/pose/material identity determines one immutable
+world event and physical-hearing sample. Routine contact is non-interrupting,
+audio-only, and six tiles in ordinary range before environmental attenuation;
+it cannot invent a warning, work impact, physical equipment, or caption.
+The compatibility cohort is bounded at64 sources and the derived fact list at
+eight, in occurrence-phase then stable source order. Admission precedes frame
+filtering, so later lower-ID contacts cannot evict an earlier accepted cause and
+rebasing cannot generate a second fresh contact from the same prefix.
+Off-frame early causes can therefore occupy slots without being replaced by
+later local ones. This is conservative bounded representation, not proof that
+every audible footfall is admitted. Existing dog/aggregate and expressive
+fallback priorities keep their shared capacities; human contact uses only what
+remains.
+
+Fresh player audio evaluates ordinary surface propagation at the newly
+accepted phase and releases after the complete transaction commits. Closing
+human hearing re-derives the pending prefix **before** world advancement
+collapses it, with each source's actual occurrence phase and each human
+listener's retained pose. Eligible in-window dogs consume the same bounded
+samples. Source exclusion, masking and anonymous uncertainty remain shared
+perception law. Loading phase4/9 preserves the unconsumed history but does not
+play it; consumed phase zero has no adjacent pair to replay. A late failure
+must restore bodies/hearing and release no contact audio. Writer58/carry14 and
+the supported reader set stay unchanged. Controlled native-geometry rest
+pressure establishes a real runtime cause and receipt, not unmodified crowd
+behavior, rendered play, performance, broad human-contact or directive-closure
+proof; Research owns the actual acceptance evidence.
+
 Current fixed-step hearing records accepted physical displacement, not terminal
 velocity: sweep entry moves the body before resetting velocity for the next
 step. Current47/carry14 saves at phase one and phase nine preserve that sensory

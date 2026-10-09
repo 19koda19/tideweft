@@ -581,6 +581,7 @@ import {
 } from "./humanPerception";
 import {
   ambientNoiseAt,
+  evaluatePhysicalAcousticListener,
   type PhysicalSoundSample,
 } from "./physicalAcousticPerception";
 import { collectDogPhysicalAcousticObservationBatches } from "./dogPhysicalAcousticPerception";
@@ -601,12 +602,12 @@ import {
 } from "./residentSpatial";
 import { LOCAL_PLAYER_LIVING_ACTOR_ID } from "./livingSpeciesRegistry";
 import {
+  acousticMaterialForTerrainContact,
   animalContactAcousticEvent,
   carriedGearBreakAcousticEvent,
   cargoImpactAcousticEvent,
   createWorldAcousticEvent,
   traversalIncidentAcousticEvent,
-  type AcousticMaterialClass,
   type WorldAcousticEvent,
 } from "./worldAcoustics";
 import {
@@ -1132,6 +1133,7 @@ import { collectSettlementKeeperStoreObservations, advanceSettlementKeeperStoreI
   prepareSettlementKeeperInspectionRevocation, settlementKeeperInspectionTasksValid } from "./settlementKeeperInspection";
 import { planResidentCircadian } from "./residentCircadian";
 import { adoptResidentActivities, advanceResidentRestActivities, prepareResidentRestActivities } from "./residentActivityExecution";
+import { deriveResidentContactAcoustics, type ResidentContactAcousticFact } from "./residentContactAcoustics";
 import { residentActivitySupportsTravel } from "../sim/residentActivity";
 import { prepareResidentTravelAdvance, revokeResidentTravelAdvance } from "../sim/residentTravelAdvance";
 import { resolveLivingActorSimulationPolicy } from "./livingActorSimulation";
@@ -1649,6 +1651,9 @@ export interface TideweftRuntimePerformanceTelemetry {
 
 /** Existing audio synthesis consumes the same semantics as hearing and text. */
 function worldAcousticSoundCue(event: WorldAcousticEvent): SoundCue {
+  if (event.sourceCategory === "human" && event.action === "foot-contact"
+    && event.triggerEventId.startsWith("resident-contact:")
+    && (event.surfaceMaterial === "soil" || event.surfaceMaterial === "sand")) return "step";
   if (
     event.domain === "animal-contact"
     && event.semanticFamily === "rustle"
@@ -3852,20 +3857,6 @@ function runtimeDogActors(
     throw new Error("Dog actor authorities contain a duplicate stable identity");
   }
   return Object.freeze(actors);
-}
-
-function runtimeAnimalContactSurfaceMaterial(
-  tile: WorldView["terrain"]["tiles"][number],
-): AcousticMaterialClass {
-  return tile.waterDepth > 60_000 || tile.terrain === "deep-water"
-    ? "water"
-    : tile.terrain === "marsh"
-      ? "foliage"
-      : tile.terrain === "ridge"
-        ? "stone"
-        : tile.terrain === "tidal-flat"
-          ? "sand"
-          : "soil";
 }
 
 function runtimeDogContactMaximumStepUnits(
@@ -11857,6 +11848,35 @@ export async function createTideweftRuntime(
     bio0Ecology = prepared.bio0Ecology;
   }
 
+  /** Fresh accepted contact only; saved pose history is never a playback queue. */
+  function residentContactAudioForFreshPhase(facts: readonly ResidentContactAcousticFact[], phase: number): readonly CommittedAudioCue[] {
+    const fresh = facts.filter((fact) => fact.phase === phase);
+    if (fresh.length === 0 || playerIsSleeping()) return Object.freeze([]);
+    const cues: CommittedAudioCue[] = [];
+    const position = playerWorldPositionInRegionalWindow(regionalTravel.window, player);
+    const masking = ambientNoiseAt(worldView, playerTileIndex(player));
+    if (position === null || masking === null) throw new Error("Resident contact lost its player listener authority");
+    for (const { event, sample } of fresh) {
+      const reception = evaluatePhysicalAcousticListener({
+        observationId: `resident-contact-player:${hashCanonical(event.eventId)}`,
+        observerId: LOCAL_PLAYER_LIVING_ACTOR_ID, observerPosition: position,
+        observedAtTick: world.meta.completedTick, sample,
+        effectiveRangeUnits: sample.soundRangeUnits, ambientNoise: masking,
+        wind: { x: worldView.weather.windX / FIXED_POINT, y: worldView.weather.windY / FIXED_POINT },
+      }, { world: worldView, listenerSupport: "surface", sourceSupport: "surface" });
+      if (reception === null) throw new Error("Resident contact failed physical reception");
+      if (reception.kind === "not-heard") continue;
+      // Ordinary contact is audio-only. No optional label/channel reservation
+      // may decide this committed sound or independent actor hearing.
+      cues.push(Object.freeze({
+        cue: worldAcousticSoundCue(event), variantSeed: event.presentationVariantSeed,
+        volume: event.intensity / FIXED_POINT * (0.35 + reception.contact.certainty * 0.65),
+        pan: audibleContactPan(reception.contact),
+      }));
+    }
+    return Object.freeze(cues);
+  }
+
   function settlementStoreKeeperAtPlayer(
     currentPerception: ReturnType<typeof projectPerception>,
   ): RuntimeBio0Porter | null {
@@ -14291,6 +14311,9 @@ export async function createTideweftRuntime(
       }
       player.wayknots = activityStep.wayknots;
       publishResidentActivities(phase);
+      const contacts = deriveResidentContactAcoustics(world, regionalTravel.window, phase);
+      if (contacts === null) throw new Error("Resident contact lost its accepted body prefix");
+      deferredWorldAcousticAudio.push(...residentContactAudioForFreshPhase(contacts, phase));
     }
     const endingTileWaterDepth = worldView.terrain.tiles[playerTileIndex(player)]?.waterDepth;
     if (startingTileWaterDepth === undefined || endingTileWaterDepth === undefined) {
@@ -14678,9 +14701,9 @@ export async function createTideweftRuntime(
         // interval's phase zero even when consumed at the later closure.
         retainedWorldSoundPhases.set(sample.id, 0);
       }
-      // Only the exact reauthenticated dog-body contacts supply ground support.
-      // Aggregate activity remains unmodeled; sound words do not establish pose.
-      const surfaceAnimalContactSampleIds = new Set(
+      // Reauthenticated body contacts supply ground support. Aggregate activity
+      // remains unmodeled; sound words cannot establish a physical pose.
+      const surfaceWorldContactSampleIds = new Set(
         animalContactSoundSamples.map(({ id }) => id),
       );
       const priorPorter = runtimeBio0Porter(
@@ -14735,12 +14758,25 @@ export async function createTideweftRuntime(
           retainedWorldSoundPhases.set(sample.id, 0);
           return sample;
         });
+      const residentContacts = deriveResidentContactAcoustics(world, regionalTravel.window, PLAYER_STEPS_PER_WORLD_TICK);
+      if (residentContacts === null) throw new Error("Resident hearing lost its accepted body prefix");
+      // Keep existing dog/aggregate admission priority. Ordinary human contact
+      // uses only remaining shared capacity, at its actual fine-step phase.
+      const residentContactSoundSamples = residentContacts
+        .slice(0, Math.max(0, remainingWorldSoundCapacity - aggregateAcousticSoundSamples.length))
+        .map(({ sample, phase }) => {
+          if (retainedWorldSoundPhases.has(sample.id)) throw new Error("Resident contact repeated its acoustic identity");
+          retainedWorldSoundPhases.set(sample.id, phase);
+          surfaceWorldContactSampleIds.add(sample.id);
+          return sample;
+        });
       // Individual contact and aggregate sounds are ordinary world sounds.
       // Keep their shared listener input bounded; persisted aggregate events
       // are re-derived for this one listener interval without another save root.
       const worldPhysicalSoundSamples = Object.freeze([
         ...animalContactSoundSamples,
         ...aggregateAcousticSoundSamples,
+        ...residentContactSoundSamples,
       ].slice(0, HUMAN_PERCEPTION_MAX_PHYSICAL_SOUND_SAMPLES));
       const activityAuthoritiesBySourceForStep =
         projectCoreEcologyActivityAuthorityBundle(regionalEcologyProjectionForStep);
@@ -15185,7 +15221,7 @@ export async function createTideweftRuntime(
       const selectedSurfaceSoundSampleIds = [
         ...selectedSurfaceFallbackSampleIds,
         ...humanPhysicalSoundSamples
-          .filter(({ id }) => surfaceAnimalContactSampleIds.has(id))
+          .filter(({ id }) => surfaceWorldContactSampleIds.has(id))
           .map(({ id }) => id),
       ];
       for (const prepared of preparedCoreAlarms) {
@@ -15212,7 +15248,7 @@ export async function createTideweftRuntime(
           dogs: runtimeDogActors(bio0Ecology, dogActorRoster),
           physicalSoundSamples: worldPhysicalSoundSamples,
           surfaceSoundSampleIds: worldPhysicalSoundSamples
-            .filter(({ id }) => surfaceAnimalContactSampleIds.has(id))
+            .filter(({ id }) => surfaceWorldContactSampleIds.has(id))
             .map(({ id }) => id),
           world: worldView,
           window: regionalTravel.window,
@@ -15524,7 +15560,7 @@ export async function createTideweftRuntime(
           } catch {
             continue;
           }
-          const surfaceMaterial = runtimeAnimalContactSurfaceMaterial(tile);
+          const surfaceMaterial = acousticMaterialForTerrainContact(tile);
           const movementDistance = Math.hypot(deltaFromPrior.x, deltaFromPrior.y);
           const movement = animalContactMovementForDistance(movementDistance);
           if (movement === null) {
@@ -22309,7 +22345,7 @@ function playerPerceptionCarryMatchesPosition(
         occurredAtTick: event.occurredAtTick,
         bodySize: animalContactAcousticBodySizeForDogSize(source.identity.body.size),
         movement,
-        surfaceMaterial: runtimeAnimalContactSurfaceMaterial(tile),
+        surfaceMaterial: acousticMaterialForTerrainContact(tile),
       });
       return expected !== null
         && stableStringify(expected) === stableStringify(event);
