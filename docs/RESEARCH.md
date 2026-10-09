@@ -6007,6 +6007,66 @@ task liveness, normal controls/visual proof, production performance, a new
 platform build, cumulative certification or release. Remaining obligations
 retain their existing owners; no directive or publication boundary advances.
 
+### Unladen service source-egress extension — 2026-10-09
+
+At parent `f00b2d5094ce273f818f1551bfc5270699a936cf`, current-v8
+ration/material/inspection approaches still rejected the occupied native
+foot-shallow source already permitted for selected rest. The additive runtime
+ration case failed after actual food-pressure selection (waiting at phase4),
+before any authored tide, body, task or arrival. Its new adapter selection
+tests independently reproduced six failures/12 passes: actual ration, civic
+and informed inspection approaches,35k boundary and phase4/9 ration motion.
+Inspection prerequisites passed: a declared foundation store/keeper binding
+obtained real shared sight and lower-world admission before selecting the task
+at421 while its native source was still wet. No evidence/result was assigned.
+
+The correction extends the same explicit current-v8, no-active-commitment
+whitelist to those three existing services. It opens only the occupied
+non-deep source within35k; all other wet cells and the destination stay blocked.
+Pickup and loaded travel remain excluded, including pickup's currently dry
+source-aid query. No schema, supported reader, new capability, cargo copy,
+stock authority, timing, decision frequency, audio or dependency changes.
+
+The new18 adapter cases and existing15 rest cases pass. Civic/inspection
+shallow-source cases prove approach, no premature debit/credit/closure and
+wet-target blocking; controlled disposition or constructed keeper/store
+binding is FOUNDATION, not untouched native autonomy or consummated
+shallow-origin work. Frozen service first-version/v7 contrasts remain dry-only.
+The native runtime ration case passes actual wet-source motion, dry arrival,
+unchanged hourly group debit/relief, phase4/9 outer58 cold egress, hourly cold
+use, observed attempted-use late rollback, cold retry and consumed silence.
+The phase4/9 comparison ends at421; the later arrived/use branch and separate
+hourly cold witness are distinct proofs, not a single uninterrupted cold run.
+
+Local validation on the frozen candidate:
+
+- New service plus existing shallow-rest tests:2 files/33 PASS7.37s.
+- Focused added native-ration runtime case:1 PASS55.87s,17 unselected.
+- Affected domain:14 files/295 PASS56.88s. Selection: service/rest shallow
+  egress, activity execution/save-boundary/persistence, ration/material
+  integration, keeper inspection, lower activity/ration-use/ration/material,
+  travel-environment execution and resident-contact acoustics.
+- Broader runtime:rest, pickup and keeper-inspection integration,3 files/52
+  PASS511.27s. It includes the existing native material/ration, legacy protocol,
+  real helped pickup, current-save and failed-transaction witnesses.
+- Maintained `npm run test:smoke`:6 files/105 PASS11.73s;
+  `npm run typecheck` and documentation-reuse45 PASS.
+
+The affected/domain runs use `npx vitest run <selection> --maxWorkers=2`
+with default/JSON reporters; focused runtime uses the exact added case name.
+Local JSON reports retain exact selections and results. All738 public
+non-Markdown validation inputs match before/after, digest
+`18c4ccf6a1f7c4216d66127a8d2d0cc2d70708c3cd7a5fb516f29eee9926788c`.
+Node22.20.0 uses the existing install. Parent cumulative and isolated runtime
+validation overlap in wall time; durations are correctness evidence, not a
+production performance comparison. No additional cumulative run is claimed.
+
+This is local/unpublished source and correctness evidence, not a normal
+rendered crowd, cat-water fix, meaningful current-force response, new platform
+artifact, measured performance gain, cumulative certificate or release. Main's
+separate frozen parent regression does not certify this executable delta.
+Remaining work retains its existing owners; no directive transition.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

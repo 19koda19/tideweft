@@ -552,8 +552,10 @@ export function advanceResidentRestActivities(
           task = arriveAtRest(task, tick);
         } else {
           const shallowSourceEgress = activity.version === RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION
-            && task.kind === "settlement-rest" && task.origin === "selected"
-            && resident.activeContractId === null;
+            && resident.activeContractId === null
+            && ((task.kind === "settlement-rest" && task.origin === "selected")
+              || task.kind === "settlement-ration" || task.kind === "settlement-material"
+              || task.kind === "settlement-inspection");
           const surface = restApproachSurface(world, resident, pose.position, task.target, shallowSourceEgress);
           if (surface === null) task = waitForRest(task, tick, "outside-local-corridor");
           else {
@@ -762,9 +764,9 @@ function restApproachSurface(
       const tile = world.terrain.tiles[y * world.terrain.width + x];
       if (tile === undefined || tile.x !== x || tile.y !== y) return null;
       const depth = waterDepthAt(tile, world.tide);
-      // Current unladen rest may leave its already occupied ordinary-foot
+      // Current unladen rest/services may leave their occupied ordinary-foot
       // shallows, never enter another wet cell. Target support stays dry.
-      // Old protocols and other tasks retain their exact dry-only behavior;
+      // Old protocols, pickup and travel retain their dry-only behavior;
       // this grants no wading, ADRIFT, boat, gear or injury capability.
       const occupiedShallows = shallowSourceEgress && x === ax && y === ay
         && depth <= ORDINARY_FOOT_MAX_WATER_DEPTH;

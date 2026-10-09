@@ -133,9 +133,11 @@ independent support qualify the first edge before conserved pickup/Voice capture
 This does not grant general crossing, equipment, mid-route rerouting or remote
 perception; missing/pruned history is unknown.
 
-Applicable human rest also respects [source-only shallow egress](./ARCHITECTURE.md#selected-rest-shallow-source-egress):
+Applicable unladen human rest/ration/material/inspection also respects
+[source-only shallow egress](./ARCHITECTURE.md#unladen-rest-and-service-shallow-source-egress):
 ordinary-foot capability may open the occupied source, not wet destinations,
-other tasks or a general vessel/ADRIFT/equipment capability.
+pickup/loaded travel or a general vessel/ADRIFT/equipment capability. Approach
+does not replace the existing arrival, finite-use or fresh-sight action owner.
 
 Applicable `hard-country` and `material-culture` consumers reuse
 [source-qualified resident reed-mat service](./ARCHITECTURE.md#source-qualified-resident-reed-mat-service):

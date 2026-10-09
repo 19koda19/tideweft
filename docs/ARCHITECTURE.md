@@ -2657,12 +2657,13 @@ measured performance. The [inheritance applicability](./SYSTEM_INHERITANCE.md#ex
 and [composition repair registry](./SYSTEM_COMPOSITION.md#high-leverage-composition-repair-registry)
 register these obligations without claiming that planned activity is live.
 
-#### Selected-rest shallow-source egress
+#### Unladen rest and service shallow-source egress
 
 The local current-v8 resident execution now permits a narrowly applicable
 ordinary-foot escape from the **already occupied** source cell. This applies
-only to selected settlement-rest with no active cargo commitment and an
-authenticated dry refuge. `footing.ts:ORDINARY_FOOT_MAX_WATER_DEPTH` centralizes
+to selected settlement-rest, ration, civic material service and keeper
+inspection with no active cargo commitment and an authenticated dry destination.
+`footing.ts:ORDINARY_FOOT_MAX_WATER_DEPTH` centralizes
 the existing35,000 foot band; the player alias, direct footing calculation and
 water-flow cutoff retain their exact prior values. It is not the55,000 ADRIFT
 standing rule, which requires a different posture and reserve.
@@ -2672,17 +2673,28 @@ cell remains blocked, including intermediate supports and the destination.
 Ordinary shared pathfinding,105-unit accepted steps and the16×16 corridor
 remain unchanged. Actual local support is checked each step; no water body,
 vessel, physical gear, rated pack, injury or new health state is invented.
-Ration/material/inspection/pickup and loaded travel keep their dry-only law;
-frozen body1–7 retain theirs until genuine phase-zero adoption. Existing
-wet/dry target knowledge and observed-water holds are not reinterpreted as
-depth or safety knowledge, and only exact dry arrival admits recovery.
+Contract pickup and loaded travel keep their dry-only law; frozen body1–7
+retain theirs until genuine phase-zero adoption. Pickup's current source-aid
+query assumes dry contact and is not permission to grant wet-source aid benefit.
+Existing wet/dry target knowledge and observed-water holds are not reinterpreted as
+depth or safety knowledge. Exact dry arrival remains necessary for the existing
+recovery, hourly stock/use or fresh-sight store transaction; movement alone
+grants none of those results. Civic material is existing stock at the service
+site, not a second carried lot.
 
 The existing v8 pose/task protocol and current58/carry14 save boundaries
 already admit a pending wet source and authenticate the dry arrived target.
 Future accepted work changes; no retained pose is rewritten and no schema,
 reader or compatibility policy changes. Controlled native geometry now proves
 movement before the source dries, then dry arrival/recovery, equal-work cold
-continuation and late-failure rollback. Research owns exact evidence and limits.
+continuation and late-failure rollback. The additional runtime ration witness
+selects from controlled food pressure on generated wet geometry, leaves before
+natural drying and reaches the dry service, then uses the unchanged hourly
+group debit/need relief. Phase4/9 cold egress, hourly cold use, consumed silence
+and late-use rollback are checked. Civic/inspection shallow-source adapters
+prove approach without premature credit or closure; their arranged disposition
+or keeper/store binding remains foundation-only, not native bootstrap autonomy
+or consummated shallow-origin work. Research owns exact evidence and limits.
 This remains partial capability, not ordinary untouched crowd/visual proof,
 general wading/crossing, meaningful current-force response or animal evacuation.
 Shared flow is zero within this foot band; the35k bound must not be cited as a

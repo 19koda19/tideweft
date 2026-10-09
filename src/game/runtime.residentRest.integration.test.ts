@@ -547,6 +547,155 @@ describe("ordinary runtime resident rest execution", () => {
     expect(resident(decode(consumedRepository.snapshot()), fixture.actorId).activity?.restTask?.phase).toBe("arrived");
   }, 180_000);
 
+  it("leaves native foot-shallow ground for dry ration service without premature use, preserving cold egress and the real hourly transaction", async () => {
+    const fixture = await firstNativeFixture("wet-source");
+    const initial = decode(fixture.record);
+    const initialWorld = deserializeWorld(initial.world);
+    const chosen = initialWorld.residents.find(({ identity }) => identity.stableId === fixture.actorId)!;
+    // Cause-only food pressure. Native terrain/tide, body, service, task and
+    // arrival are not assigned; the existing runtime selects and executes.
+    chosen.needs = { food: 900_000, rest: 100_000, belonging: 100_000 };
+    chosen.condition.exhaustion = 100_000;
+    for (const site of initialWorld.settlements) {
+      for (const recipe of site.recipes) recipe.nextRunTick = fixture.tick + 1_000;
+    }
+    if (chosen.location.kind !== "settlement") throw new Error("Native shallow ration source lost its settlement");
+    const settlementId = chosen.location.settlementId;
+    const sourceTile = initialWorld.terrain.tiles[Math.floor(fixture.source.localY / 1_000)
+      * initialWorld.terrain.width + Math.floor(fixture.source.localX / 1_000)]!;
+    expect(waterDepthAt(sourceTile, initialWorld.tide)).toBeGreaterThan(0);
+    expect(waterDepthAt(sourceTile, initialWorld.tide)).toBeLessThanOrEqual(PLAYER_FOOT_MAX_WATER_DEPTH);
+    expect(residentRestTargetHasDrySupport(initialWorld, fixture.target)).toBe(true);
+    assertWorldInvariants(initialWorld);
+    initial.world = serializeWorld(initialWorld);
+    const repository = new MemoryRepository(recordWith(fixture.record, initial));
+    const runtime = await open(repository);
+    const prefixes: Array<Readonly<{ record: SaveRecord; envelope: Envelope }>> = [];
+    for (const steps of [4, 5]) {
+      advanceOrdinaryFixedSteps(runtime, steps);
+      await runtime.save();
+      const record = repository.snapshot();
+      const envelope = decode(record);
+      const world = deserializeWorld(envelope.world);
+      const moving = resident(envelope, fixture.actorId);
+      expect(moving.activity?.version).toBe(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION);
+      expect(moving.activity?.rationTask).toMatchObject({ phase: "approaching", target: fixture.target, usedAtTick: null });
+      expect(moving.activity?.restTask).toBeNull();
+      expect(moving.activity!.poses.at(-1)!.position).not.toEqual(fixture.source);
+      expectBoundedMotion(fixture.source, moving.activity!.poses);
+      expect(world.meta.completedTick).toBe(fixture.tick);
+      expect(waterDepthAt(sourceTile, world.tide)).toBeGreaterThan(0);
+      expect(moving.needs.food).toBe(900_000);
+      expect(moving.circadian).toMatchObject({ restDestinationArrived: false, posture: { state: "awake" } });
+      expect(world.settlements.map(({ inventory }) => inventory)).toEqual(initialWorld.settlements.map(({ inventory }) => inventory));
+      expect(world.ledger).toEqual(initialWorld.ledger);
+      for (const { position } of moving.activity!.poses) {
+        const tile = world.terrain.tiles[Math.floor(position.localY / 1_000)
+          * world.terrain.width + Math.floor(position.localX / 1_000)]!;
+        if (waterDepthAt(tile, world.tide) > 0) expect(tile.index).toBe(sourceTile.index);
+      }
+      prefixes.push({ record, envelope });
+    }
+    advanceOrdinaryFixedSteps(runtime, 1);
+    await runtime.save();
+    const closed = decode(repository.snapshot());
+    expect(deserializeWorld(closed.world).meta.completedTick).toBe(fixture.tick + 1);
+    expect(resident(closed, fixture.actorId).needs.food).toBe(900_000);
+    advanceOrdinaryFixedSteps(runtime, 10);
+    await runtime.save();
+    const arrived = resident(decode(repository.snapshot()), fixture.actorId);
+    expect(arrived.activity?.rationTask).toMatchObject({ phase: "arrived", usedAtTick: null });
+    expect(arrived.activity?.poses[0]?.position).toEqual(fixture.target);
+    expect(arrived.needs.food).toBe(900_000);
+    expect(arrived.circadian).toMatchObject({ restDestinationArrived: false, posture: { state: "awake" } });
+    // Existing hourly service remains the only finite stock/benefit owner.
+    advanceOrdinaryFixedSteps(runtime, 579);
+    await runtime.save();
+    const beforeRecord = repository.snapshot();
+    const before = decode(beforeRecord);
+    const beforeWorld = deserializeWorld(before.world);
+    expect(beforeWorld.meta.completedTick).toBe(fixture.tick + 59);
+    expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    expect(resident(before, fixture.actorId).activity?.rationTask).toMatchObject({ phase: "arrived", usedAtTick: null });
+    expect(resident(before, fixture.actorId).needs.food).toBe(900_000);
+    advanceOrdinaryFixedSteps(runtime, 1);
+    await runtime.save();
+    const after = decode(repository.snapshot());
+    const afterWorld = deserializeWorld(after.world);
+    const used = resident(after, fixture.actorId);
+    expect(used.activity?.rationTask).toMatchObject({ phase: "used", usedAtTick: fixture.tick + 60, foodUsed: true, waterUsed: true });
+    const growth = Math.trunc(34_000 * pressureMultiplier(afterWorld.meta.pressureMode) / FIXED_POINT);
+    expect(used.needs.food).toBe(900_000 + growth - 76_000);
+    const stockBefore = beforeWorld.settlements.find(({ id }) => id === settlementId)!.inventory;
+    const stockAfter = afterWorld.settlements.find(({ id }) => id === settlementId)!.inventory;
+    expect(stockAfter.food).toBe(stockBefore.food - 1);
+    expect(stockAfter.freshWater).toBe(stockBefore.freshWater - 1);
+    expect(afterWorld.ledger.consumed.food).toBe(beforeWorld.ledger.consumed.food + 1);
+    expect(afterWorld.ledger.consumed.freshWater).toBe(beforeWorld.ledger.consumed.freshWater + 1);
+    assertWorldInvariants(afterWorld);
+    close(runtime);
+
+    for (const { record, envelope } of prefixes) {
+      const coldRepository = new MemoryRepository(record);
+      soundscapePlay.mockClear();
+      const cold = await open(coldRepository);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(envelope));
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      advanceOrdinaryFixedSteps(cold, 10 - envelope.perceptionCarry.playerStepsSinceWorldTick);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(closed));
+      close(cold);
+    }
+    const coldRepository = new MemoryRepository(beforeRecord);
+    const cold = await open(coldRepository);
+    advanceOrdinaryFixedSteps(cold, 1);
+    await cold.save();
+    expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(after));
+    const usedRecord = coldRepository.snapshot();
+    close(cold);
+
+    const failedRepository = new MemoryRepository(beforeRecord);
+    const failed = await open(failedRepository);
+    const actualStep = simulation.stepWorld;
+    let attemptedUse = false;
+    const stepSpy = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+      const result = actualStep(...args);
+      expect(result.residents.find(({ identity }) => identity.stableId === fixture.actorId)!.activity?.rationTask?.phase).toBe("used");
+      expect(result.ledger.consumed.food).toBe(beforeWorld.ledger.consumed.food + 1);
+      attemptedUse = true;
+      return result;
+    });
+    const closure = vi.spyOn(situatedExpressionChannelBank, "closeSituatedExpressionChannelBankInterval").mockReturnValueOnce(null);
+    soundscapePlay.mockClear();
+    advanceOrdinaryFixedStepsForExpectedFailure(failed, 1);
+    expect(attemptedUse).toBe(true);
+    expect(failed.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+    await failed.save();
+    const rolledBackRecord = failedRepository.snapshot();
+    expect(authoritativeRoots(decode(rolledBackRecord))).toEqual(authoritativeRoots(before));
+    expect(soundscapePlay.mock.calls).toEqual([["warning", 1]]);
+    stepSpy.mockRestore();
+    closure.mockRestore();
+    close(failed);
+
+    const retryRepository = new MemoryRepository(rolledBackRecord);
+    const retry = await open(retryRepository);
+    advanceOrdinaryFixedSteps(retry, 1);
+    await retry.save();
+    expect(authoritativeRoots(decode(retryRepository.snapshot()))).toEqual(authoritativeRoots(after));
+    close(retry);
+    const consumedRepository = new MemoryRepository(usedRecord);
+    soundscapePlay.mockClear();
+    const consumed = await open(consumedRepository);
+    await consumed.save();
+    expect(authoritativeRoots(decode(consumedRepository.snapshot()))).toEqual(authoritativeRoots(after));
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advanceOrdinaryFixedSteps(consumed, 10);
+    await consumed.save();
+    expect(deserializeWorld(decode(consumedRepository.snapshot()).world).ledger.consumed).toEqual(afterWorld.ledger.consumed);
+  }, 180_000);
+
   it("uses a real ration after ordinary approach, preserves a phase9 cold pulse, and rolls back a late failed use", async () => {
     const fixture = await restFixture();
     const initial = decode(fixture.record);
