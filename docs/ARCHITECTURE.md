@@ -2383,9 +2383,9 @@ implementation contract; construction/tests below determine its current proof.
 Local construction now includes the optional immutable resident-owned
 `src/sim/residentActivity.ts` root: segmented body/heading, at most eleven
 current-interval poses, and exclusive authenticated settlement-rest/ration/
-material/inspection tasks. Frozen v1 body/rest, v2 ration, v3 material and v4
-inspection protocols remain deliberately supported; v5 adds the selected-rest
-observed-water hold below. Inspection-capable protocols require an explicit
+material/inspection/pickup tasks. Frozen v1 body/rest, v2 ration, v3 material, v4
+inspection and v5 observed-rest protocols remain deliberately supported; v6
+adds the contract-bound origin approach below. Inspection-capable protocols require an explicit
 nullable inspection task. Each protocol retains its exact field/owner mapping.
 Shared version-only capability helpers classify the deliberately recognized
 ration/material/inspection protocols across service, body reanchoring, cohort mode and
@@ -2407,8 +2407,8 @@ courier law requires actual restorative arrival, not a weather-hold flag.
 Normal accepted runtime steps now adopt the entire existing roster only at a
 genuine phase-zero boundary, select through the actual routine/duty owner, and
 advance exactly one bounded approach step per accepted player step. Current
-outer55 preserves the complete bodies, service use and phase0–9 history. Supported
-outer51/52/53/54 bodies preserve their exact v1/v2/v3/v4 partial interval, upgrading as a
+outer56 preserves the complete bodies, service use and phase0–9 history. Supported
+outer51–55 bodies preserve their exact v1–v5 partial interval, upgrading as a
 whole cohort through the actual phase-zero routine boundary, not on load.
 Legacy absent records remain absent on load and through an already-partly-consumed interval;
 its actual closure captures the first new anchor rather than inventing old
@@ -2501,7 +2501,7 @@ performance or full-directive proof. Evidence/closure remain in the existing
 store owner; ephemeral sight is reconstructed only by actual world advancement,
 never invented on load or replayed as speech. Carry14 and supported formats
 remain intact; inspection's first outer capability remains54, supported by
-the current55 writer.
+the current56 writer.
 
 At the runtime's phase-zero routine boundary, a present whole-roster body cohort
 now uses that same atomic rest adapter rather than committing posture alone.
@@ -2607,7 +2607,7 @@ register these obligations without claiming that planned activity is live.
 
 ### Observed settlement-rest support
 
-The local, unpublished v5/outer55 consumer adds one qualitative surface sight
+The local, unpublished consumer introduced at v5/outer55 adds one qualitative surface sight
 for each pending **selected** rest task in the existing bounded human frame.
 `humanPerception.ts` authenticates the settlement target and uses the actual
 retained terminal body, lawful sensory facing, terrain LOS, weather and shared
@@ -2652,9 +2652,9 @@ Older physical-only obstruction retries retain their existing schedule; an
 uninformed actor does not acquire a fabricated informed hold. Continued legacy
 rest admission and ration/material/inspection tasks cannot use this new reason.
 
-Current55 capture/cold load explicitly authorize the v5 capability; older
-envelopes reject it even when all tasks are null. Deliberately supported50–54
-and frozen v1–v4 histories remain exact until genuine whole-roster phase-zero
+Outer55 and later capture/cold load explicitly authorize the v5 capability; older
+envelopes reject it even when all tasks are null. Deliberately supported earlier formats
+and frozen interval histories remain exact until genuine whole-roster phase-zero
 adoption. World4, rules6 and perception carry14 remain unchanged. A cold hold
 does not require its original evictable belief, create fresh sight, consume
 steps or replay ephemeral audio.
@@ -2667,6 +2667,45 @@ out-of-frame `marsh wait` witness retains its physical-only continuation.
 Equal cold work and source-removal contrasts are representative proof, not
 general crossing/current/load/support capability, known alternative routes,
 cat evacuation, manual visual play, performance or whole-directive completion.
+
+### Contract-bound origin pickup
+
+The local v6/outer56 consumer binds one exclusive `contract-pickup` task to the
+existing accepted resident Promise and the origin's aggregate service point.
+`residentAcceptedPickupBinding` authenticates assignment, active commitment,
+accepted state, zero transit cargo and target geometry without reading activity
+recursively. Stock, route availability and expiry processing are transaction
+inputs, not reasons to reject an otherwise valid saved pending task. No personal
+inventory, portable parcel, reservation or second quantity/receipt is created.
+
+The ordinary phase-zero routine selects the task; accepted fixed steps use the
+same bounded dry-foot approach and retained body poses. At world closure,
+`engine.ts:advanceContracts` rechecks exact arrived support, assignment, current
+stock/network and awake posture, including newly admitted strong disturbance.
+An active commitment retains its existing priority over ordinary need/duty/clock
+preference. Missing or unready v6 work cannot fall back to timetable pickup.
+One existing debit moves origin stock into `ContractState.cargoQuantity`, changes
+the Promise to in-transit and clears pickup work. Departure's retained acoustic
+source and coarse route anchor use that same arrival point. Optional captions
+cannot authorize or suppress the transfer.
+
+Scarcity or unavailable routes retain a bounded waiting task at the real body
+position. Due preparation retries through actual approach/arrival; closure and
+preparation ordering can require two civil ticks between already-at-site
+attempts, not an instantaneous stock-ready notification. Cancel/expiry processing
+revokes pending pickup without moving the body or minting cargo. Current saves
+retain phase0–9 work; cold load does not advance, transfer or replay consumed
+sound. Frozen body1–5 and outer50–55 remain deliberately supported, upgrading
+only at a genuine whole-roster phase-zero boundary. A stationary bound carry
+intention is not projected as movement; only actual displacement qualifies.
+
+Native controlled-pressure runtime evidence proves automatic acceptance, real
+origin approach, exactly-once stock transfer, phase4/9 equal-work cold continuation
+and late-failure rollback. This closes origin pickup only, not nearby addressable
+porter cargo, physical route execution, destination handoff, general water/load
+response, normal visual play, performance or public release. Existing coarse
+transport and its downstream consumers remain explicit partial integration
+until their own accountable traveler work is completed.
 
 ## First porter-dog living web
 
@@ -4222,6 +4261,14 @@ even with null tasks; supported50–54 retain their exact partial histories unti
 genuine whole-roster phase-zero adoption. The [observed support owner](#observed-settlement-rest-support)
 defines knowledge/retry and cold/rollback law; no new carry, generator, released
 baseline, retirement or migration-policy change is implied.
+
+`FIRST_RESIDENT_PICKUP_GAME_SAVE_VERSION` establishes outer56's explicit v6
+nullable pickup task. Older envelopes reject v6 even with every task null;
+supported50–55 retain their readers and exact partial histories. Pickup mode
+is whole-roster. The [origin pickup owner](#contract-bound-origin-pickup)
+defines binding, exact debit and interruption law; no carry14, inner-world4/
+rules6, generator, released baseline, retirement or compatibility-policy change
+accompanies this capability. Current capture and cold ingress use the same fence.
 
 The runtime currently writes one `autosave` slot on a 600-world-tick interval,
 page visibility loss, page exit, title return, and Quiet Hour. The periodic

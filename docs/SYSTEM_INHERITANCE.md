@@ -390,7 +390,10 @@ parallel work/inventory manager. Keeper inspection joins shared sight/admission,
 retained evidence, exclusive bounded approach and the same physical-store
 transaction; it cannot use player selection or invent a report. Its task/store
 provenance and same-transaction cancellation join current-save/rollback law.
-Physical traveler enactment remains pending;
+Contract-bound origin pickup joins the same body/approach and existing conserved
+stock-to-cargo transaction; current-save binding and optional Voice presentation
+cannot create a second quantity or substitute for arrival. Route execution and
+destination handoff remain pending;
 the [architecture boundary](./ARCHITECTURE.md#planned-bounded-existing-world-integration)
 owns exact scope and evidence limits, not this applicability row.
 

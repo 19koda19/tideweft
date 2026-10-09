@@ -12,6 +12,8 @@ import {
   stepWorld,
   type ResourceKind,
 } from "../sim/public";
+import { residentAcceptedPickupBinding, residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
+import { tideAtTick } from "../sim/terrain";
 import * as humanPerception from "./humanPerception";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { createPlayer } from "./player";
@@ -30,7 +32,7 @@ import type { SituatedExpressionChannelBank } from "./situatedExpressionChannelB
 import type { SituatedExpressionCausalAuthorityLedger } from "./situatedExpressionCausalAuthority";
 import { projectSituatedExpression } from "./situatedExpression";
 import { workingPeopleExpressionEventMatchesWorld } from "./workingPeopleExpression";
-import { REGION_WIDTH_UNITS, type WorldPosition } from "./worldPosition";
+import { REGION_WIDTH_UNITS, WORLD_POSITION_UNITS_PER_TILE, type WorldPosition } from "./worldPosition";
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
 vi.mock("../audio/soundscape", () => ({
@@ -177,21 +179,37 @@ function resealCurrentRecord(
  * The fixture deliberately saves after acceptance but before departure. The
  * integration contract is that only the runtime's newly committed departure
  * may produce speech; loading the older acceptance event is never a trigger.
+ * Select actual dry, adjacent native geometry so this Voice fixture can enact
+ * pickup in its ten accepted steps. A flooded historical slot must now wait;
+ * neither a body/task/arrival nor a dry terrain result is authored here.
  */
 function workingPeopleFixture(
   seed: string,
   options: Readonly<{ heavy: boolean; nearPlayer: boolean }>,
 ): WorkingPeopleFixture {
   const world = createWorld(seed, "standard");
-  const contract = world.contracts.find(({ status }) => status === "offered");
-  if (!contract) throw new Error("fixture needs an offered Promise");
-  const origin = world.settlements.find(({ id }) => id === contract.originSettlementId);
-  const resident = world.residents.find((candidate) =>
-    candidate.activeContractId === null
-    && candidate.location.kind === "settlement"
-    && candidate.location.settlementId === contract.originSettlementId
-  );
-  if (!origin || !resident) throw new Error("fixture needs an origin porter");
+  const ready = world.contracts.flatMap((contract) => {
+    if (contract.status !== "offered") return [];
+    const origin = world.settlements.find(({ id }) => id === contract.originSettlementId);
+    if (origin === undefined) return [];
+    return world.residents.flatMap((resident) => {
+      if (resident.activeContractId !== null || resident.location.kind !== "settlement"
+        || resident.location.settlementId !== origin.id) return [];
+      const source = resolveResidentWorldPlacement(world, resident)?.position;
+      const target = residentSettlementRestTarget(world, resident);
+      if (source === undefined || target === null
+        || Math.abs(source.localX - target.localX) + Math.abs(source.localY - target.localY)
+          !== WORLD_POSITION_UNITS_PER_TILE
+        || ![world.meta.completedTick + 1, world.meta.completedTick + 2].every((tick) => {
+          const physical = { ...world, tide: tideAtTick(tick) };
+          return residentRestTargetHasDrySupport(physical, source)
+            && residentRestTargetHasDrySupport(physical, target);
+        })) return [];
+      return [{ contract, origin, resident, source, target }];
+    });
+  })[0];
+  if (ready === undefined) throw new Error("fixture needs an offered Promise with a native dry one-tile pickup");
+  const { contract, origin, resident, source, target } = ready;
 
   const resource: ResourceKind = options.heavy ? "parts" : "reed";
   contract.resource = resource;
@@ -228,6 +246,16 @@ function workingPeopleFixture(
   }]);
   if (contract.status !== "accepted" || resident.activeContractId !== contract.id) {
     throw new Error("fixture resident did not accept the Promise");
+  }
+  const acceptedSource = resolveResidentWorldPlacement(world, resident)?.position;
+  const pickup = residentAcceptedPickupBinding(world, resident);
+  expect(acceptedSource).toEqual(source);
+  expect(pickup?.contract).toBe(contract);
+  expect(pickup?.target).toEqual(target);
+  for (const tick of [world.meta.completedTick, world.meta.completedTick + 1]) {
+    const physical = { ...world, tide: tideAtTick(tick) };
+    expect(residentRestTargetHasDrySupport(physical, source)).toBe(true);
+    expect(residentRestTargetHasDrySupport(physical, target)).toBe(true);
   }
 
   const view = createWorldView(world);
@@ -670,7 +698,10 @@ describe("runtime Working People heavy-porter expression", () => {
 
     advancePlayerSteps(runtime, 10);
 
-    const expressions = runtime.getRenderView().expressions ?? [];
+    // Actual resident motion can also alarm a chicken. Assert this exact
+    // porter's trajectory, not global silence in the shared acoustic world.
+    const expressions = (runtime.getRenderView().expressions ?? [])
+      .filter(({ sourceActorId }) => sourceActorId === fixture.actorId);
     expect(expressions).toHaveLength(1);
     expect(expressions[0]).toMatchObject({
       sourceActorId: fixture.actorId,
@@ -715,8 +746,10 @@ describe("runtime Working People heavy-porter expression", () => {
       sourceActorId: fixture.actorId,
       directVisualReceipt: true,
     });
-    const admission = committed.perceptionCarry.situatedExpressionAdmissions.records[0];
-    expect(committed.perceptionCarry.situatedExpressionAdmissions.records).toHaveLength(1);
+    const porterAdmissions = committed.perceptionCarry.situatedExpressionAdmissions.records
+      .filter(({ sourceActorId, kind }) => sourceActorId === fixture.actorId && kind === "porter-heavy-departure");
+    const admission = porterAdmissions[0];
+    expect(porterAdmissions).toHaveLength(1);
     expect(Object.keys(admission ?? {}).sort()).toEqual([
       "admittedAtPlayerStepPhase",
       "eventId",
@@ -755,7 +788,9 @@ describe("runtime Working People heavy-porter expression", () => {
       .toBe(admission.listenerFacingMilliRadians);
     expect(committed.perceptionCarry.situatedExpressionCausalAuthority)
       .toEqual({ version: 1, records: [] });
-    expect(committed.perceptionCarry.actorVocalizationSamples).toEqual([
+    expect(committed.perceptionCarry.actorVocalizationSamples.filter(({ sourceActorId, expressionEventId }) => (
+      sourceActorId === fixture.actorId && expressionEventId === admission.eventId
+    ))).toEqual([
       expect.objectContaining({
         expressionEventId: residentChannel?.state.active?.eventId,
         sourceActorId: fixture.actorId,
@@ -763,8 +798,9 @@ describe("runtime Working People heavy-porter expression", () => {
         soundInterrupt: "none",
       }),
     ]);
-    const sample = committed.perceptionCarry.actorVocalizationSamples[0];
+    const sample = committed.perceptionCarry.actorVocalizationSamples[admission.sampleOrdinal];
     if (!sample) throw new Error("heavy porter expression omitted its perception sample");
+    expect(sample).toMatchObject({ sourceActorId: fixture.actorId, expressionEventId: admission.eventId });
     runtime.destroy();
 
     const cueCountBeforeReload = strainedCueCount();
@@ -924,8 +960,13 @@ describe("runtime Working People heavy-porter expression", () => {
     expect(committedWorld.events.some((event) =>
       event.type === "contract-departed" && event.subjectId === fixture.contractId
     )).toBe(true);
-    expect(runtime.getRenderView().expressions ?? []).toEqual([]);
-    expect(runtime.getUIView().expressionCaption).toBeUndefined();
+    const expressions = runtime.getRenderView().expressions ?? [];
+    expect(expressions.filter(({ sourceActorId }) => sourceActorId === fixture.actorId)).toEqual([]);
+    // A lawful independent animal caption is not this porter's speech.
+    const caption = runtime.getUIView().expressionCaption;
+    expect(caption === undefined || expressions.some(({ id, sourceActorId }) => (
+      id === caption.id && sourceActorId !== fixture.actorId
+    ))).toBe(true);
     expect(strainedCueCount()).toBe(0);
     // A separate chicken can legitimately call without giving this light
     // porter an expression, caption, strain cue or vocal sample.

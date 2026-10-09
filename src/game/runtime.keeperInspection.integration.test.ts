@@ -5,7 +5,7 @@ import { assertWorldInvariants, createWorldView, deserializeWorld, serializeWorl
 import { residentRestTargetHasDrySupport } from "../sim/residentActivityWorld";
 import { queryResidentAttentionState } from "../sim/residentAttention";
 import { tideAtTick } from "../sim/terrain";
-import { RESIDENT_CIVIC_ACTIVITY_OWNER_ID, RESIDENT_CIVIC_ACTIVITY_VERSION, RESIDENT_INSPECTION_ACTIVITY_OWNER_ID, RESIDENT_INSPECTION_ACTIVITY_VERSION, RESIDENT_ENVIRONMENT_ACTIVITY_VERSION } from "../sim/residentActivity";
+import { RESIDENT_CIVIC_ACTIVITY_OWNER_ID, RESIDENT_CIVIC_ACTIVITY_VERSION, RESIDENT_INSPECTION_ACTIVITY_OWNER_ID, RESIDENT_INSPECTION_ACTIVITY_VERSION, RESIDENT_PICKUP_ACTIVITY_VERSION } from "../sim/residentActivity";
 import type { PlayerState } from "./player";
 import { deserializeBio0Ecology } from "./bio0Ecology";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
@@ -319,12 +319,14 @@ describe("ordinary autonomous keeper inspection", () => {
     for (const human of world.residents) {
       const activity = human.activity!;
       expect(activity.inspectionTask).toBeNull();
+      expect(activity.pickupTask).toBeNull();
+      const { pickupTask: _pickup, ...prePickup } = activity;
       // An explicit supported-format reconstruction of actual accepted history,
       // not an archived release or a successful inspection injected into v3.
       if (schema === FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION) {
-        const { inspectionTask: _inspection, ...body } = activity;
+        const { inspectionTask: _inspection, ...body } = prePickup;
         human.activity = { ...body, version: RESIDENT_CIVIC_ACTIVITY_VERSION, ownerId: RESIDENT_CIVIC_ACTIVITY_OWNER_ID };
-      } else human.activity = { ...activity, version: RESIDENT_INSPECTION_ACTIVITY_VERSION, ownerId: RESIDENT_INSPECTION_ACTIVITY_OWNER_ID };
+      } else human.activity = { ...prePickup, version: RESIDENT_INSPECTION_ACTIVITY_VERSION, ownerId: RESIDENT_INSPECTION_ACTIVITY_OWNER_ID };
     }
     legacy.world = serializeWorld(world);
     legacy.version = schema;
@@ -347,7 +349,7 @@ describe("ordinary autonomous keeper inspection", () => {
     await runtime.save();
     const boundary = decode(repository.snapshot());
     expect(boundary.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
-    expect(deserializeWorld(boundary.world).residents.every(({ activity }) => activity?.version === RESIDENT_ENVIRONMENT_ACTIVITY_VERSION
+    expect(deserializeWorld(boundary.world).residents.every(({ activity }) => activity?.version === RESIDENT_PICKUP_ACTIVITY_VERSION
       && activity.poses.length === 1 && activity.inspectionTask === null)).toBe(true);
     close(runtime);
     // Even nullable successor state cannot be smuggled into older outer53.

@@ -1467,7 +1467,7 @@ export function projectGameView(
               ? "resting" as const
               : restState
                 ? "resting" as const
-                : moving || resident.intention === "carry"
+                : moving || (!Object.hasOwn(resident, "activity") && resident.intention === "carry")
                   ? "traveling" as const
                   : "waiting" as const),
           appearance: {

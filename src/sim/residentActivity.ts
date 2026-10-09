@@ -21,9 +21,12 @@ export const RESIDENT_CIVIC_ACTIVITY_OWNER_ID = "sim:resident-activity:v3" as co
 /** v4 introduces an evidence-bound approach to the separate physical store. */
 export const RESIDENT_INSPECTION_ACTIVITY_VERSION = 4 as const;
 export const RESIDENT_INSPECTION_ACTIVITY_OWNER_ID = "sim:resident-activity:v4" as const;
-/** Only v5 can retain a rest hold caused by legitimately observed water. */
+/** v5 introduces a rest hold caused by legitimately observed water. */
 export const RESIDENT_ENVIRONMENT_ACTIVITY_VERSION = 5 as const;
 export const RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID = "sim:resident-activity:v5" as const;
+/** v6 binds physical origin approach to the existing accepted Promise. */
+export const RESIDENT_PICKUP_ACTIVITY_VERSION = 6 as const;
+export const RESIDENT_PICKUP_ACTIVITY_OWNER_ID = "sim:resident-activity:v6" as const;
 /** Ten accepted 100ms steps form one existing civil-minute interval. */
 export const RESIDENT_ACTIVITY_MAX_PHASE = 10 as const;
 /** Ordinary human approach uses the current steady-walk distance, not sprint. */
@@ -97,6 +100,18 @@ export interface ResidentInspectionTask {
   readonly waitReason: ResidentPhysicalWaitReason;
 }
 
+export interface ResidentPickupTask {
+  readonly kind: "contract-pickup";
+  readonly contractId: number;
+  readonly settlementId: number;
+  readonly target: WorldPosition;
+  readonly selectedAtTick: number;
+  readonly phase: "approaching" | "waiting" | "arrived";
+  readonly lastProgressAtTick: number;
+  readonly nextReassessmentAtTick: number;
+  readonly waitReason: ResidentPhysicalWaitReason | "no-stock" | "no-active-route";
+}
+
 /**
  * One optional resident-owned physical root, not a second actor population.
  * poses[0] is the interval anchor; poses[N] is the body after N accepted steps.
@@ -104,8 +119,8 @@ export interface ResidentInspectionTask {
  * Phase10 is consumed in memory; ordinary runtime captures persist phases0–9.
  */
 export interface ResidentActivity {
-  readonly version: typeof RESIDENT_ACTIVITY_VERSION | typeof RESIDENT_SERVICE_ACTIVITY_VERSION | typeof RESIDENT_CIVIC_ACTIVITY_VERSION | typeof RESIDENT_INSPECTION_ACTIVITY_VERSION | typeof RESIDENT_ENVIRONMENT_ACTIVITY_VERSION;
-  readonly ownerId: typeof RESIDENT_ACTIVITY_OWNER_ID | typeof RESIDENT_SERVICE_ACTIVITY_OWNER_ID | typeof RESIDENT_CIVIC_ACTIVITY_OWNER_ID | typeof RESIDENT_INSPECTION_ACTIVITY_OWNER_ID | typeof RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID;
+  readonly version: typeof RESIDENT_ACTIVITY_VERSION | typeof RESIDENT_SERVICE_ACTIVITY_VERSION | typeof RESIDENT_CIVIC_ACTIVITY_VERSION | typeof RESIDENT_INSPECTION_ACTIVITY_VERSION | typeof RESIDENT_ENVIRONMENT_ACTIVITY_VERSION | typeof RESIDENT_PICKUP_ACTIVITY_VERSION;
+  readonly ownerId: typeof RESIDENT_ACTIVITY_OWNER_ID | typeof RESIDENT_SERVICE_ACTIVITY_OWNER_ID | typeof RESIDENT_CIVIC_ACTIVITY_OWNER_ID | typeof RESIDENT_INSPECTION_ACTIVITY_OWNER_ID | typeof RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID | typeof RESIDENT_PICKUP_ACTIVITY_OWNER_ID;
   readonly actorId: string;
   readonly tick: number;
   readonly poses: readonly ResidentBodyPose[];
@@ -116,6 +131,8 @@ export interface ResidentActivity {
   readonly materialTask?: ResidentMaterialTask | null;
   /** Absent in frozen v1–v3; v4 requires explicit null/task, never a cached result. */
   readonly inspectionTask?: ResidentInspectionTask | null;
+  /** Absent in frozen v1–v5; v6 requires explicit null/task, never cargo itself. */
+  readonly pickupTask?: ResidentPickupTask | null;
 }
 
 /** Explicit recognized capabilities, never numeric acceptance of future versions. */
@@ -133,7 +150,11 @@ export function residentActivitySupportsInspection(activity: Pick<ResidentActivi
 }
 
 export function residentActivitySupportsEnvironment(activity: Pick<ResidentActivity, "version"> | undefined | null): boolean {
-  return activity?.version === RESIDENT_ENVIRONMENT_ACTIVITY_VERSION;
+  return activity?.version === RESIDENT_ENVIRONMENT_ACTIVITY_VERSION || residentActivitySupportsPickup(activity);
+}
+
+export function residentActivitySupportsPickup(activity: Pick<ResidentActivity, "version"> | undefined | null): boolean {
+  return activity?.version === RESIDENT_PICKUP_ACTIVITY_VERSION;
 }
 
 export interface ResidentActivityBinding {
@@ -159,7 +180,8 @@ export function canonicalizeResidentActivity(
   if (!plainRecord(value)) return null;
   const versionField = Object.getOwnPropertyDescriptor(value, "version");
   if (versionField?.enumerable !== true || !Object.hasOwn(versionField, "value")) return null;
-  const environmentCapable = value.version === RESIDENT_ENVIRONMENT_ACTIVITY_VERSION;
+  const pickupCapable = value.version === RESIDENT_PICKUP_ACTIVITY_VERSION;
+  const environmentCapable = value.version === RESIDENT_ENVIRONMENT_ACTIVITY_VERSION || pickupCapable;
   const inspectionCapable = value.version === RESIDENT_INSPECTION_ACTIVITY_VERSION || environmentCapable;
   const civicCapable = value.version === RESIDENT_CIVIC_ACTIVITY_VERSION || inspectionCapable;
   const serviceCapable = value.version === RESIDENT_SERVICE_ACTIVITY_VERSION || civicCapable;
@@ -168,7 +190,9 @@ export function canonicalizeResidentActivity(
     ...(serviceCapable ? ["rationTask"] : []),
     ...(civicCapable ? ["materialTask"] : []),
     ...(inspectionCapable ? ["inspectionTask"] : []),
-  ]) || (environmentCapable ? value.ownerId !== RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID
+    ...(pickupCapable ? ["pickupTask"] : []),
+  ]) || (pickupCapable ? value.ownerId !== RESIDENT_PICKUP_ACTIVITY_OWNER_ID
+    : environmentCapable ? value.ownerId !== RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID
     : inspectionCapable ? value.ownerId !== RESIDENT_INSPECTION_ACTIVITY_OWNER_ID
     : civicCapable ? value.ownerId !== RESIDENT_CIVIC_ACTIVITY_OWNER_ID
     : serviceCapable ? value.ownerId !== RESIDENT_SERVICE_ACTIVITY_OWNER_ID
@@ -198,14 +222,17 @@ export function canonicalizeResidentActivity(
   const rationTask = serviceCapable ? canonicalRationTask(value.rationTask, value.tick) : null;
   const materialTask = civicCapable ? canonicalMaterialTask(value.materialTask, value.tick) : null;
   const inspectionTask = inspectionCapable ? canonicalInspectionTask(value.inspectionTask, value.tick) : null;
+  const pickupTask = pickupCapable ? canonicalPickupTask(value.pickupTask, value.tick) : null;
   if (rationTask === undefined || materialTask === undefined || inspectionTask === undefined
-    || [restTask, rationTask, materialTask, inspectionTask].filter((task) => task !== null).length > 1) return null;
+    || pickupTask === undefined
+    || [restTask, rationTask, materialTask, inspectionTask, pickupTask].filter((task) => task !== null).length > 1) return null;
   const body = poses[poses.length - 1]!;
   if (rationTask !== null && (rationTask.phase === "arrived" || rationTask.phase === "used")
     && !samePosition(body.position, rationTask.target)) return null;
   if (materialTask !== null && (materialTask.phase === "arrived" || materialTask.phase === "used")
     && !samePosition(body.position, materialTask.target)) return null;
   if (inspectionTask?.phase === "arrived" && !samePosition(body.position, inspectionTask.target)) return null;
+  if (pickupTask?.phase === "arrived" && !samePosition(body.position, pickupTask.target)) return null;
   if (restTask !== null && (
     (restTask.phase === "arrived" && !samePosition(body.position, restTask.target))
     || (restTask.origin === "continued-admitted-rest" && poses.some((pose) => (
@@ -213,8 +240,8 @@ export function canonicalizeResidentActivity(
     )))
   )) return null;
   const activity: ResidentActivity = Object.freeze({
-    version: environmentCapable ? RESIDENT_ENVIRONMENT_ACTIVITY_VERSION : inspectionCapable ? RESIDENT_INSPECTION_ACTIVITY_VERSION : civicCapable ? RESIDENT_CIVIC_ACTIVITY_VERSION : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_VERSION : RESIDENT_ACTIVITY_VERSION,
-    ownerId: environmentCapable ? RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID : inspectionCapable ? RESIDENT_INSPECTION_ACTIVITY_OWNER_ID : civicCapable ? RESIDENT_CIVIC_ACTIVITY_OWNER_ID : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_OWNER_ID : RESIDENT_ACTIVITY_OWNER_ID,
+    version: pickupCapable ? RESIDENT_PICKUP_ACTIVITY_VERSION : environmentCapable ? RESIDENT_ENVIRONMENT_ACTIVITY_VERSION : inspectionCapable ? RESIDENT_INSPECTION_ACTIVITY_VERSION : civicCapable ? RESIDENT_CIVIC_ACTIVITY_VERSION : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_VERSION : RESIDENT_ACTIVITY_VERSION,
+    ownerId: pickupCapable ? RESIDENT_PICKUP_ACTIVITY_OWNER_ID : environmentCapable ? RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID : inspectionCapable ? RESIDENT_INSPECTION_ACTIVITY_OWNER_ID : civicCapable ? RESIDENT_CIVIC_ACTIVITY_OWNER_ID : serviceCapable ? RESIDENT_SERVICE_ACTIVITY_OWNER_ID : RESIDENT_ACTIVITY_OWNER_ID,
     actorId: value.actorId,
     tick: value.tick,
     poses: Object.freeze(poses),
@@ -222,6 +249,7 @@ export function canonicalizeResidentActivity(
     ...(serviceCapable ? { rationTask } : {}),
     ...(civicCapable ? { materialTask } : {}),
     ...(inspectionCapable ? { inspectionTask } : {}),
+    ...(pickupCapable ? { pickupTask } : {}),
   });
   CANONICAL_ACTIVITIES.add(activity);
   return activity;
@@ -289,11 +317,11 @@ export function replaceResidentActivity(
     tick: resident.perception.tick,
   });
   if (activity === null) throw new RangeError("Resident activity is malformed, foreign or mistimed");
-  const task = activity.restTask ?? activity.rationTask ?? activity.materialTask ?? activity.inspectionTask ?? null;
+  const task = activity.restTask ?? activity.rationTask ?? activity.materialTask ?? activity.inspectionTask ?? activity.pickupTask ?? null;
   if (task !== null && (
     resident.location.kind !== "settlement"
     || task.settlementId !== resident.location.settlementId
-    || resident.activeContractId !== null
+    || (task.kind === "contract-pickup" ? resident.activeContractId !== task.contractId : resident.activeContractId !== null)
   )) throw new RangeError("Resident task conflicts with membership or commitment");
   return { ...resident, activity };
 }
@@ -454,6 +482,32 @@ function canonicalInspectionTask(value: unknown, tick: number): ResidentInspecti
     selectedAtTick: value.selectedAtTick, phase: value.phase as ResidentInspectionTask["phase"],
     lastProgressAtTick: value.lastProgressAtTick, nextReassessmentAtTick: value.nextReassessmentAtTick,
     waitReason: value.waitReason as ResidentInspectionTask["waitReason"],
+  });
+}
+
+function canonicalPickupTask(value: unknown, tick: number): ResidentPickupTask | null | undefined {
+  if (value === null) return null;
+  if (!plainRecord(value) || !exactKeys(value, [
+    "contractId", "kind", "lastProgressAtTick", "nextReassessmentAtTick", "phase",
+    "selectedAtTick", "settlementId", "target", "waitReason",
+  ]) || value.kind !== "contract-pickup" || !positiveInteger(value.contractId)
+    || !positiveInteger(value.settlementId) || !isWorldPosition(value.target)
+    || !nonnegativeInteger(value.selectedAtTick) || value.selectedAtTick > tick
+    || !nonnegativeInteger(value.lastProgressAtTick)
+    || value.lastProgressAtTick < value.selectedAtTick || value.lastProgressAtTick > tick
+    || !nonnegativeInteger(value.nextReassessmentAtTick) || value.nextReassessmentAtTick < value.selectedAtTick
+    || !["approaching", "waiting", "arrived"].includes(value.phase as string)
+    || !(value.waitReason === null || value.waitReason === "no-traversable-route"
+      || value.waitReason === "outside-local-corridor" || value.waitReason === "no-stock"
+      || value.waitReason === "no-active-route")
+    || (value.phase === "waiting") !== (value.waitReason !== null)
+  ) return undefined;
+  return Object.freeze({
+    kind: "contract-pickup", contractId: value.contractId, settlementId: value.settlementId,
+    target: createWorldPosition(value.target.region, value.target.localX, value.target.localY),
+    selectedAtTick: value.selectedAtTick, phase: value.phase as ResidentPickupTask["phase"],
+    lastProgressAtTick: value.lastProgressAtTick, nextReassessmentAtTick: value.nextReassessmentAtTick,
+    waitReason: value.waitReason as ResidentPickupTask["waitReason"],
   });
 }
 

@@ -1,4 +1,4 @@
-import { canonicalizeResidentActivity, RESIDENT_ACTIVITY_MAX_PHASE, residentActivitySupportsEnvironment, residentActivitySupportsInspection, residentActivitySupportsMaterials, residentActivitySupportsRations } from "../sim/residentActivity";
+import { canonicalizeResidentActivity, RESIDENT_ACTIVITY_MAX_PHASE, residentActivitySupportsEnvironment, residentActivitySupportsInspection, residentActivitySupportsMaterials, residentActivitySupportsRations, residentActivitySupportsPickup } from "../sim/residentActivity";
 import { hasResidentActivityEventLocus } from "../sim/residentActivityEventLocus";
 import { canonicalResidentActivityForWorld, residentCivicActivityCohortIsUniform } from "../sim/residentActivityWorld";
 import { canonicalizeResidentCircadianState, residentAtSettlementRestDestination } from "../sim/livingCircadian";
@@ -33,6 +33,7 @@ export function residentActivitySaveExtensionsValid(
   supportsCivicService = false,
   supportsInspection = false,
   supportsEnvironment = false,
+  supportsPickup = false,
 ): boolean {
   if (!supportsBodies) return residentActivitySaveExtensionsAbsent(world);
   try {
@@ -58,6 +59,7 @@ export function residentActivitySaveExtensionsValid(
       if (!supportsCivicService && residentActivitySupportsMaterials(activity)) return false;
       if (!supportsInspection && residentActivitySupportsInspection(activity)) return false;
       if (!supportsEnvironment && residentActivitySupportsEnvironment(activity)) return false;
+      if (!supportsPickup && residentActivitySupportsPickup(activity)) return false;
     }
     const residentIds = new Set(world.residents.map(({ id }) => id));
     for (const event of world.events) {

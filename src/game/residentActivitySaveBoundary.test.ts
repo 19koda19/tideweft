@@ -5,6 +5,8 @@ import {
   canonicalizeResidentActivity,
   RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID,
   RESIDENT_ENVIRONMENT_ACTIVITY_VERSION,
+  RESIDENT_PICKUP_ACTIVITY_OWNER_ID,
+  RESIDENT_PICKUP_ACTIVITY_VERSION,
 } from "../sim/residentActivity";
 import {
   captureResidentActivityEventLocus,
@@ -85,9 +87,14 @@ function environmentFixture(phase: number, withObservedHold: boolean) {
   const selectedId = selected.identity.stableId;
   const selectedTask = selected.activity.restTask;
   world.residents = world.residents.map((resident) => {
-    // Explicit successor codec evidence. This changes no body pose and does
+    // Frozen v5 codec evidence. This changes no body pose and does
     // not claim the model's dry target was actually observed under water.
-    const activity = canonicalizeResidentActivity({ ...resident.activity,
+    const earlier: Record<string, unknown> = { ...resident.activity };
+    if (Object.hasOwn(earlier, "pickupTask")) {
+      if (earlier.pickupTask !== null) throw new Error("Frozen v5 fixture must not discard pickup work");
+      delete earlier.pickupTask;
+    }
+    const activity = canonicalizeResidentActivity({ ...earlier,
       version: RESIDENT_ENVIRONMENT_ACTIVITY_VERSION,
       ownerId: RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID,
       restTask: withObservedHold && resident.identity.stableId === selectedId
@@ -95,6 +102,25 @@ function environmentFixture(phase: number, withObservedHold: boolean) {
       rationTask: null, materialTask: null, inspectionTask: null,
     }, { actorId: resident.identity.stableId, tick: world.meta.completedTick, phase });
     if (activity === null) throw new Error("Successor codec fixture lost its native body history");
+    return { ...resident, activity };
+  });
+  return world;
+}
+
+function pickupFixture(phase: number) {
+  const world = adoptedFixture(phase);
+  world.residents = world.residents.map((resident) => {
+    // Explicit protocol fixture only: retain the real pose history and prior
+    // tasks, but do not claim any contract pickup was selected or completed.
+    const activity = canonicalizeResidentActivity({ ...resident.activity,
+      version: RESIDENT_PICKUP_ACTIVITY_VERSION,
+      ownerId: RESIDENT_PICKUP_ACTIVITY_OWNER_ID,
+      rationTask: resident.activity?.rationTask ?? null,
+      materialTask: resident.activity?.materialTask ?? null,
+      inspectionTask: resident.activity?.inspectionTask ?? null,
+      pickupTask: null,
+    }, { actorId: resident.identity.stableId, tick: world.meta.completedTick, phase });
+    if (activity === null) throw new Error("Pickup codec fixture lost its native body history");
     return { ...resident, activity };
   });
   return world;
@@ -145,6 +171,53 @@ describe("resident activity save capability and interval boundary", () => {
       expect(serializeWorld(world)).toBe(before);
       expect(serializeWorld(clone)).toBe(before);
     }
+  });
+
+  it.each([0, 4, 9])("requires every prior capability and explicit pickup support at retained phase %s, even with all pickup tasks null", (phase) => {
+    const world = pickupFixture(phase);
+    const residents = world.residents;
+    const before = serializeWorld(world);
+    const clone = structuredClone(world);
+    expect(residents.every((resident) => resident.activity?.version === RESIDENT_PICKUP_ACTIVITY_VERSION
+      && resident.activity.pickupTask === null && resident.activity.poses.length === phase + 1)).toBe(true);
+    expect(residentActivitySaveExtensionsValid(world, true, true, true, true, true)).toBe(false);
+    expect(residentActivitySaveExtensionsValid(world, true, true, true, true, true, false)).toBe(false);
+    expect(residentActivitySaveExtensionsValid(world, true, true, true, true, true, true)).toBe(true);
+    expect(residentActivitySaveExtensionsValid(clone, true, true, true, true, true, true)).toBe(true);
+    for (const [bodies, services, civic, inspection, environment, pickup] of [
+      [false, true, true, true, true, true],
+      [true, false, true, true, true, true],
+      [true, true, false, true, true, true],
+      [true, true, true, false, true, true],
+      [true, true, true, true, false, true],
+    ] as const) {
+      expect(residentActivitySaveExtensionsValid(world, bodies, services, civic, inspection, environment, pickup)).toBe(false);
+    }
+    expect(residentActivitiesMatchPerceptionInterval(clone.residents, world.meta.completedTick, phase)).toBe(true);
+    expect(world.residents).toBe(residents);
+    expect(clone).toEqual(world);
+    expect(serializeWorld(world)).toBe(before);
+    expect(serializeWorld(clone)).toBe(before);
+  });
+
+  it.each([0, 4, 9])("rejects a mixed frozen-v5/v6 roster at retained phase %s without repairing it", (phase) => {
+    const world = pickupFixture(phase);
+    const last = world.residents.at(-1)!;
+    const { pickupTask, ...earlier } = last.activity!;
+    expect(pickupTask).toBeNull();
+    const frozen = canonicalizeResidentActivity({ ...earlier,
+      version: RESIDENT_ENVIRONMENT_ACTIVITY_VERSION,
+      ownerId: RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID,
+    }, { actorId: last.identity.stableId, tick: world.meta.completedTick, phase });
+    expect(frozen).not.toBeNull();
+    last.activity = frozen!;
+    const before = structuredClone(world);
+    // Every body can be individually canonical and clock-aligned while this
+    // incomplete whole-roster capability transition still fails the outer gate.
+    expect(residentActivitiesMatchPerceptionInterval(world.residents, world.meta.completedTick, phase)).toBe(true);
+    expect(residentActivitySaveExtensionsValid(world, true, true, true, true, true, true)).toBe(false);
+    expect(residentActivitySaveExtensionsValid(structuredClone(world), true, true, true, true, true, true)).toBe(false);
+    expect(world).toEqual(before);
   });
 
   it("rejects a partial roster, including a missing final body, without repairing it", () => {

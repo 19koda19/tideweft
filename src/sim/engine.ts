@@ -52,9 +52,10 @@ import {
   type ResidentBodyPose,
   residentActivitySupportsMaterials,
   residentActivitySupportsInspection,
+  residentActivitySupportsPickup,
   residentActivitySupportsRations,
 } from "./residentActivity";
-import { canonicalResidentActivityForWorld, residentCivicActivityCohortIsUniform, residentRestTargetHasDrySupport, residentSettlementMaterialProject } from "./residentActivityWorld";
+import { canonicalResidentActivityForWorld, residentAcceptedPickupBinding, residentCivicActivityCohortIsUniform, residentRestTargetHasDrySupport, residentSettlementMaterialProject } from "./residentActivityWorld";
 import { captureResidentActivityEventLocus } from "./residentActivityEventLocus";
 import { calculateResidentRationPulse } from "./residentRations";
 import { consumeResidentRationUse, residentRationUseEligible, type PreparedResidentRationUse } from "./residentRationUse";
@@ -1916,6 +1917,36 @@ function advanceContracts(world: WorldState, tick: number): void {
       const firstRoute = routePlan === undefined
         ? undefined
         : world.routes.find((candidate) => candidate.id === routePlan.routeIds[0]);
+      const pickupCapable = residentActivitySupportsPickup(resident?.activity);
+      if (pickupCapable && resident !== undefined) {
+        const activity = canonicalResidentActivityForWorld(world, resident, tick);
+        const pickup = activity?.pickupTask;
+        const binding = residentAcceptedPickupBinding(world, resident);
+        // Missing/unready current work never falls back to timer-only pickup.
+        if (activity === null || pickup?.phase !== "arrived" || binding?.contract !== contract
+          || pickup.contractId !== contract.id || !residentRestTargetHasDrySupport(world, pickup.target)) continue;
+        const circadian = canonicalizeResidentCircadianState(resident.circadian, {
+          residentStableId: resident.identity.stableId, homeSettlementId: resident.homeSettlementId,
+          atTick: tick, arrivedAtSettlementRest: residentAtSettlementRestDestination(resident),
+        });
+        // Recheck newly admitted disturbance at commit, not the old selection.
+        // An active Promise still outranks ordinary need/duty/clock preference.
+        if (circadian === null || circadian.posture.state !== "awake"
+          || resident.perception.beliefs.some((belief) => belief.lastObservedTick === tick
+            && belief.strongInterrupt && belief.salience >= circadian.policy.wakeSensitivity)) continue;
+        if (origin === undefined || origin.inventory[contract.resource] < contract.quantity
+          || routePlan === undefined || firstRoute === undefined) {
+          world.residents[world.residents.indexOf(resident)] = replaceResidentActivity(resident, {
+            ...activity, pickupTask: {
+              ...pickup, phase: "waiting",
+              waitReason: origin === undefined || origin.inventory[contract.resource] < contract.quantity
+                ? "no-stock" : "no-active-route",
+              nextReassessmentAtTick: tick + 1,
+            },
+          });
+          continue;
+        }
+      }
       if (origin !== undefined && resident !== undefined && routePlan !== undefined && firstRoute !== undefined && origin.inventory[contract.resource] >= contract.quantity) {
         contract.porterRouteIds = [...routePlan.routeIds];
         contract.porterSettlementIds = [...routePlan.settlementIds];
@@ -2068,6 +2099,7 @@ function residentDepartureActivityEventLocus(
     ...(residentActivitySupportsRations(activity) ? { rationTask: null } : {}),
     ...(residentActivitySupportsMaterials(activity) ? { materialTask: null } : {}),
     ...(residentActivitySupportsInspection(activity) ? { inspectionTask: null } : {}),
+    ...(residentActivitySupportsPickup(activity) ? { pickupTask: null } : {}),
   });
   return captureResidentActivityEventLocus(prepared, tick);
 }
@@ -2102,6 +2134,7 @@ function commitResidentActivityWorldStep(
     let rationTask = activity.rationTask ?? null;
     let materialTask = activity.materialTask ?? null;
     let inspectionTask = activity.inspectionTask ?? null;
+    let pickupTask = activity.pickupTask ?? null;
     if (task !== null && (resident.location.kind !== "settlement"
       || resident.location.settlementId !== task.settlementId || resident.activeContractId !== null)) {
       task = null;
@@ -2117,6 +2150,11 @@ function commitResidentActivityWorldStep(
     if (inspectionTask !== null && (resident.location.kind !== "settlement"
       || resident.location.settlementId !== inspectionTask.settlementId
       || resident.homeSettlementId !== inspectionTask.settlementId || resident.activeContractId !== null)) inspectionTask = null;
+    if (pickupTask !== null) {
+      const pickup = residentAcceptedPickupBinding(world, resident);
+      if (pickup === null || pickup.contract.id !== pickupTask.contractId
+        || pickup.contract.originSettlementId !== pickupTask.settlementId) pickupTask = null;
+    }
     const priorLocation = snapshot.location;
     const currentLocation = resident.location;
     const changedLocation = priorLocation.kind !== currentLocation.kind
@@ -2131,6 +2169,7 @@ function commitResidentActivityWorldStep(
       rationTask = null;
       materialTask = null;
       inspectionTask = null;
+      pickupTask = null;
     }
     if (task?.origin === "selected" && task.phase === "arrived"
       && !residentRestTargetHasDrySupport(world, task.target)) {
@@ -2151,11 +2190,15 @@ function commitResidentActivityWorldStep(
     if (inspectionTask?.phase === "arrived" && !residentRestTargetHasDrySupport(world, inspectionTask.target)) {
       inspectionTask = { ...inspectionTask, phase: "waiting", waitReason: "no-traversable-route", nextReassessmentAtTick: tick + 1 };
     }
+    if (pickupTask?.phase === "arrived" && !residentRestTargetHasDrySupport(world, pickupTask.target)) {
+      pickupTask = { ...pickupTask, phase: "waiting", waitReason: "no-traversable-route", nextReassessmentAtTick: tick + 1 };
+    }
     replacements.push({ index, resident: replaceResidentActivity(resident, {
       ...activity, tick, poses: [pose], restTask: task,
       ...(residentActivitySupportsRations(activity) ? { rationTask } : {}),
       ...(residentActivitySupportsMaterials(activity) ? { materialTask } : {}),
       ...(residentActivitySupportsInspection(activity) ? { inspectionTask } : {}),
+      ...(residentActivitySupportsPickup(activity) ? { pickupTask } : {}),
     }) });
   }
   // No half-population publication if a later replacement fails validation.

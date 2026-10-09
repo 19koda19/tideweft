@@ -16,16 +16,20 @@ import {
   RESIDENT_INSPECTION_ACTIVITY_VERSION,
   RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID,
   RESIDENT_ENVIRONMENT_ACTIVITY_VERSION,
+  RESIDENT_PICKUP_ACTIVITY_OWNER_ID,
+  RESIDENT_PICKUP_ACTIVITY_VERSION,
   residentActivitySupportsEnvironment,
   residentActivitySupportsInspection,
   residentActivitySupportsMaterials,
   residentActivitySupportsRations,
+  residentActivitySupportsPickup,
   RESIDENT_REST_APPROACH_STEP_UNITS,
   type ResidentBodyPose,
   type ResidentRestTask,
   type ResidentRationTask,
   type ResidentMaterialTask,
   type ResidentInspectionTask,
+  type ResidentPickupTask,
   type ResidentPhysicalWaitReason,
 } from "../sim/residentActivity";
 import {
@@ -34,6 +38,7 @@ import {
   residentSettlementRestTarget,
   residentSettlementRationTarget,
   residentSettlementMaterialProject,
+  residentAcceptedPickupBinding,
 } from "../sim/residentActivityWorld";
 import { residentRationPriorityEligible } from "../sim/residentRationUse";
 import { residentMaterialPriorityEligible } from "../sim/residentMaterialUse";
@@ -213,16 +218,20 @@ export function prepareResidentRestActivities(
       // never invents prior poses or turns an old rest arrival into meal use.
       const activity = canonicalizeResidentActivity({
         ...priorActivity,
-        version: inspectionSettlement !== null || residentActivitySupportsEnvironment(priorActivity)
+        version: inspectionSettlement !== null || residentActivitySupportsPickup(priorActivity)
+          ? RESIDENT_PICKUP_ACTIVITY_VERSION : residentActivitySupportsEnvironment(priorActivity)
           ? RESIDENT_ENVIRONMENT_ACTIVITY_VERSION : residentActivitySupportsInspection(priorActivity)
           ? RESIDENT_INSPECTION_ACTIVITY_VERSION : RESIDENT_CIVIC_ACTIVITY_VERSION,
-        ownerId: inspectionSettlement !== null || residentActivitySupportsEnvironment(priorActivity)
+        ownerId: inspectionSettlement !== null || residentActivitySupportsPickup(priorActivity)
+          ? RESIDENT_PICKUP_ACTIVITY_OWNER_ID : residentActivitySupportsEnvironment(priorActivity)
           ? RESIDENT_ENVIRONMENT_ACTIVITY_OWNER_ID : residentActivitySupportsInspection(priorActivity)
           ? RESIDENT_INSPECTION_ACTIVITY_OWNER_ID : RESIDENT_CIVIC_ACTIVITY_OWNER_ID,
         rationTask: priorActivity.rationTask ?? null,
         materialTask: priorActivity.materialTask ?? null,
         ...(inspectionSettlement !== null || residentActivitySupportsInspection(priorActivity)
           ? { inspectionTask: priorActivity.inspectionTask ?? null } : {}),
+        ...(inspectionSettlement !== null || residentActivitySupportsPickup(priorActivity)
+          ? { pickupTask: priorActivity.pickupTask ?? null } : {}),
       }, { actorId: resident.identity.stableId, tick });
       if (activity === null || activity.poses.length !== 1) return false;
       const duty = dutyByActor.get(resident.identity.stableId) ?? null;
@@ -328,8 +337,23 @@ export function prepareResidentRestActivities(
           materialTask = { ...materialTask, phase: "approaching", waitReason: null };
         }
       }
+      let pickupTask = activity.pickupTask ?? null;
+      const pickup = residentActivitySupportsPickup(activity) ? residentAcceptedPickupBinding(world, resident) : null;
+      const wantsPickup = pickup !== null && routine.effectivePreference === "active" && routine.posture.state === "awake";
+      if (!wantsPickup) pickupTask = null;
+      else if (pickupTask === null) {
+        pickupTask = {
+          kind: "contract-pickup", contractId: pickup.contract.id,
+          settlementId: pickup.contract.originSettlementId, target: pickup.target,
+          selectedAtTick: tick, lastProgressAtTick: tick, nextReassessmentAtTick: tick,
+          phase: "approaching", waitReason: null,
+        };
+      } else if (pickupTask.phase === "waiting" && pickupTask.nextReassessmentAtTick <= tick) {
+        pickupTask = { ...pickupTask, phase: "approaching", waitReason: null };
+      }
       let candidate = replaceResidentActivity(resident, { ...activity, restTask: task, rationTask, materialTask,
         ...(residentActivitySupportsInspection(activity) ? { inspectionTask } : {}),
+        ...(residentActivitySupportsPickup(activity) ? { pickupTask } : {}),
       });
       // Clearing a continued episode changes arrival and wake together. Do not
       // commit the old projection's arrived=true bit beside an awake body.
@@ -374,7 +398,7 @@ export function advanceResidentRestActivities(
           arrivedAtSettlementRest: residentAtSettlementRestDestination(resident),
         }) === null) return null;
       let pose: ResidentBodyPose = activity.poses[activity.poses.length - 1]!;
-      let task: ResidentRestTask | ResidentRationTask | ResidentMaterialTask | ResidentInspectionTask | null = activity.restTask ?? activity.rationTask ?? activity.materialTask ?? activity.inspectionTask ?? null;
+      let task: ResidentRestTask | ResidentRationTask | ResidentMaterialTask | ResidentInspectionTask | ResidentPickupTask | null = activity.restTask ?? activity.rationTask ?? activity.materialTask ?? activity.inspectionTask ?? activity.pickupTask ?? null;
       if (task?.phase === "approaching") {
         if (!residentRestTargetHasDrySupport(world, task.target)) {
           task = waitForRest(task, tick, "no-traversable-route");
@@ -422,6 +446,8 @@ export function advanceResidentRestActivities(
           ? { materialTask: task?.kind === "settlement-material" ? task : null } : {}),
         ...(residentActivitySupportsInspection(activity)
           ? { inspectionTask: task?.kind === "settlement-inspection" ? task : null } : {}),
+        ...(residentActivitySupportsPickup(activity)
+          ? { pickupTask: task?.kind === "contract-pickup" ? task : null } : {}),
       });
       if (task?.kind === "settlement-rest" && task.phase === "arrived" && activity.restTask?.phase !== "arrived") {
         candidate = alignCircadianArrival(candidate, tick);
@@ -458,13 +484,13 @@ function alignCircadianArrival(resident: ResidentState, tick: number): ResidentS
   });
 }
 
-function arriveAtRest<T extends ResidentRestTask | ResidentRationTask | ResidentMaterialTask | ResidentInspectionTask>(task: T, tick: number): T {
+function arriveAtRest<T extends ResidentRestTask | ResidentRationTask | ResidentMaterialTask | ResidentInspectionTask | ResidentPickupTask>(task: T, tick: number): T {
   return { ...task, phase: "arrived", waitReason: null, lastProgressAtTick: tick, nextReassessmentAtTick: tick + 1 };
 }
 
 function waitForRest(task: ResidentRestTask, tick: number, reason: ResidentRestTask["waitReason"]): ResidentRestTask;
-function waitForRest<T extends ResidentRestTask | ResidentRationTask | ResidentMaterialTask | ResidentInspectionTask>(task: T, tick: number, reason: ResidentPhysicalWaitReason): T;
-function waitForRest<T extends ResidentRestTask | ResidentRationTask | ResidentMaterialTask | ResidentInspectionTask>(task: T, tick: number, reason: ResidentRestTask["waitReason"]): T {
+function waitForRest<T extends ResidentRestTask | ResidentRationTask | ResidentMaterialTask | ResidentInspectionTask | ResidentPickupTask>(task: T, tick: number, reason: ResidentPhysicalWaitReason): T;
+function waitForRest<T extends ResidentRestTask | ResidentRationTask | ResidentMaterialTask | ResidentInspectionTask | ResidentPickupTask>(task: T, tick: number, reason: ResidentRestTask["waitReason"]): T {
   return { ...task, phase: "waiting", waitReason: reason, nextReassessmentAtTick: tick + 1 };
 }
 

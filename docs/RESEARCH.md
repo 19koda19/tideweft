@@ -4497,6 +4497,117 @@ The original full run stays FAIL; focused evidence is not a new whole-suite
 certificate. These are correctness durations, not production performance,
 normal-play, build, release or deferred-soak proof.
 
+### Contract-bound origin pickup — 2026-10-08
+
+Local construction on `d85ceac6c20762b1fb140a9a115972b547f0fc74` replaces
+timer-only origin pickup for explicit body-v6 residents with actual selected
+approach/arrival. [Architecture](./ARCHITECTURE.md#contract-bound-origin-pickup)
+owns the binding and transaction. Existing `ContractState.cargoQuantity` remains
+the one aggregate cargo authority; route execution and destination handoff
+remain coarse, not completed physical travel or addressable item custody.
+Outer56 deliberately versions the new nullable task; supported50–55, exact
+frozen body1–5 histories, carry14, world4/rules6, generator and release baseline
+remain unchanged. There is no retired reader, new migration chain, dependency,
+renderer, acoustic emitter or platform configuration change.
+
+Native runtime fixture `runtime baseline estuary`, wild pressure, starts at420
+with the actual offered parts Promise127, origin5→1, quantity8 and native stock,
+terrain and resident offsets. Controlled exclusivity/weather/need pressure,
+not an authored assignment/task/body/arrival, permits normal automatic acceptance
+at421 by an existing origin resident. Ordinary accepted fixed steps then approach the generated
+dry service point; fine arrival alone cannot debit stock. Closure performs the
+same existing stock-to-cargo transaction once. The earlier test fixture's
+unrelated exclusivity beyond its actual deadline was invalid; it was removed
+before the lower commit-time tests could exercise their intended action. That
+initial failed result is retained rather than called a production regression.
+
+Phase4/9 cold continuation matches uninterrupted authoritative saved roots
+(session recap/presentation restart is explicitly excluded). Native source
+stock or incident-route removal prevents pickup at actual arrival. Restoring
+stock by transfer from another existing settlement, or restoring those original
+route traces, preserves the body/request age and permits one transfer at424,
+none again at425. Prior consumption remains recorded; no stock is minted.
+Cancellation/expiry revoke partial work without a source snap or cargo creation;
+those command/expiry witnesses are lower-engine fixtures from a real runtime
+approach, not proof of a new player control. Supported55 mid-interval history
+stays v5 through cold phase9 and upgrades only at genuine phasezero.
+
+Focused lower-engine fixtures also admit fresh strong/weak/neutral sensory
+inputs before commit. A qualifying strong disturbance blocks the debit, retains
+the body and is subsequently consumed by the actual routine owner; neutral or
+subthreshold evidence is retained without blocking legitimate pickup. These
+trusted input fixtures are not real acoustic-producer or natural audibility
+proof. The new runtime late-closure failure restores all saved roots and releases
+no committed vocal cue; the existing introduction/knowledge/audio rollback
+case independently passes1selected/97unselected in7.12s.
+
+The first40-file affected run ends668PASS/3FAIL in104.10s. All three failures
+are in older porter-voice fixtures; bounded diagnostics retain their actual
+causes. Two assumed next-minute departure from generated wet source/target
+positions, so dry-foot execution correctly waits without cargo. The third
+actually departs at422 with `Easy.` and an independently admitted chicken
+`SQUAWK.`; global one-expression cardinality incorrectly excludes the shared
+world. Fixtures now select an actual native dry cardinal one-tile source/target,
+validate both acceptance/departure tides, and preserve original exact porter
+admission/sample/schema, hearing, caption priority, audio, reload and tamper
+assertions without requiring unrelated actors to stay silent. No terrain/body/
+task/arrival is injected and no coarse-compatibility fallback is enabled.
+The unchanged failed assertions and opt-in diagnostic results remain local;
+temporary logging was removed. The three corrected cases pass29.87s.
+
+Two independent actual production-runtime stationary captures, not synthetic
+version rewrites, compare d85/body5/outer55 with candidate body6/outer56 at the
+same30accepted steps/3world advances/3human observation collections/completed423.
+Estuary and density8 each retain42residents and no selected pickup task.
+Each has exactly129 expected path differences:42versions,42owners,42explicit
+null pickup fields, outer version and the two seals; every other root/path is
+exact, including body poses, knowledge, perception, ecology, stock and events.
+Original SaveRecords are neither normalized nor resealed for comparison.
+Current save SHA256 values are
+`b549c127533a6243637de686955bb6561ac413bc8a39906cc3b5971085ddccc7`
+and `4a71fe51ce48607cb759f96daab9c2f7c606999609539437b22ee80745a01412`;
+1845523/1901807bytes, exactly840more perseed for42nullable fields. This is not
+long-run growth or performance certification. Fixture, manifests, commands,
+original records and exact comparator are retained locally under
+`artifacts/validation/world0-cumulative-diagnosis/pickup-capture-record.md`.
+Baseline during/after296-input identity is exact; candidate before/after is
+exact. The inactive detached baseline checkout was removed after preservation,
+without touching the primary installation or necessary private backup.
+
+Final affected-domain command (frozen source, tests, configuration and assets):
+
+```sh
+npx vitest run src/sim/residentAttention.test.ts src/sim/residentCircadian.persistence.test.ts src/sim/residentMaterialActivity.test.ts src/sim/residentRationActivity.test.ts src/sim/residentRationPulse.test.ts src/sim/residentPickupActivity.test.ts src/sim/residentPickupUse.test.ts src/sim/residentActivity.test.ts src/sim/residentActivityCapabilities.test.ts src/sim/residentSurfaceKnowledge.test.ts src/sim/residentRationUse.test.ts src/sim/residentActivityEventLocus.test.ts src/sim/residentActivity.world.integration.test.ts src/sim/residentRations.test.ts src/sim/residentInspectionActivity.test.ts src/sim/residentRations.integration.test.ts src/sim/residentCircadianPhysiology.test.ts src/sim/phase8.test.ts src/sim/systemComposition.integration.test.ts src/game/residentActivityPersistence.test.ts src/game/residentActivityExecution.test.ts src/game/residentActivitySaveBoundary.test.ts src/game/residentEnvironmentExecution.test.ts src/game/residentRationActivity.integration.test.ts src/game/residentMaterialActivity.integration.test.ts src/game/runtime.residentActivityPublication.test.ts src/game/runtime.residentActivityCircadian.test.ts src/game/runtime.residentSoundPhases.test.ts src/game/runtime.residentAlarmLocus.test.ts src/game/runtime.workingPeople.integration.test.ts src/game/residentSpatial.test.ts src/game/residentCircadian.test.ts src/game/workingPeopleExpression.activity.test.ts src/game/workingPeopleExpression.test.ts src/game/residentIntroductionExpression.activity.test.ts src/game/residentWeatherHoldExpression.activity.test.ts src/game/projection.perception.test.ts src/game/projection.residentPickup.test.ts src/game/saveCompatibilityPolicy.test.ts src/game/humanPerception.restSurface.test.ts src/game/runtime.residentPickup.integration.test.ts src/game/runtime.residentRest.integration.test.ts src/game/runtime.performanceTelemetry.test.ts src/game/runtime.keeperInspection.integration.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/pickup-domain-accepted.json
+```
+
+44files/717PASS,233.69s,0failed; report SHA256
+`7e0184fd3770d0661214b45983b992f212ed27c690f0694793f3d88806409b8d`.
+All722 public non-Markdown inputs, including tests/configuration/assets, remain
+exact before/after with manifest SHA256
+`7a24b844221aa3f756dd0a0be85f2a8dff209b37a77dda3bfcd7926b29eb3ff1`,
+Node22.20.0/npm10.9.3. Earlier40-file failed report remains SHA256
+`839968714ffa67cf4de356cfb361e2159614e87c1bf34d88d361b93bda4691fe`;
+the correction does not relabel that invocation or older cumulative failures.
+The independently executed native scarcity/recovery owner also passes8/8 in
+27.69s, and the focused corrected Voice cases pass3/3 with9unselected.
+Final `npm run typecheck` PASS; `npm run test:documentation-reuse`45PASS;
+`npm run test:smoke -- --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/pickup-smoke-final.json`
+passes the maintained6files/105tests in4.12s.
+Exact focused commands:
+
+```sh
+npx vitest run src/game/runtime.residentPickup.integration.test.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/pickup-native-recovery-final.json
+npx vitest run src/game/runtime.workingPeople.integration.test.ts -t 'presents, persists, and perceives one nearby heavy departure|rejects a self-consistent checksum whose expired porter cooldown was forged|stays silent for.*light Promise cargo' --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/pickup-old-voice-fixture-fixed.json
+npx vitest run src/game/runtime.test.ts -t 'rolls back introduction facts, save, and vocal audio when later interval closure fails' --maxWorkers=1 --reporter=default --reporter=json --outputFile=artifacts/validation/world0-cumulative-diagnosis/pickup-existing-introduction-rollback.json
+```
+
+This is affected-domain correctness, not a fresh complete cumulative certificate,
+normal Chart/Relief visual proof, production performance, build, package, public
+release or full traveler/directive completion. Extended profiling/longitudinal
+soaks remain deferred to full Living Foliage; the accepted Relief/world hitch
+and the requested VoiceOver testing hold are unchanged. Completed directive
+bytes remain immutable; no gameplay-order transition is implied.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

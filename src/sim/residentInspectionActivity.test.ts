@@ -101,8 +101,8 @@ describe("explicit resident inspection activity protocol", () => {
     const absent = { ...raw };
     delete absent.inspectionTask;
     for (const malformed of [absent, { ...raw, inspectionTask: undefined },
-      { ...raw, version: 6, ownerId: "sim:resident-activity:v6" },
-      { ...frozenProtocol(raw, 1), version: 6, ownerId: "sim:resident-activity:v6" },
+      { ...raw, version: 99, ownerId: "sim:resident-activity:v99" },
+      { ...frozenProtocol(raw, 1), version: 99, ownerId: "sim:resident-activity:v99" },
       { ...raw, ownerId: RESIDENT_CIVIC_ACTIVITY_OWNER_ID }]) {
       expect(canonicalizeResidentActivity(malformed, binding)).toBeNull();
     }

@@ -8,7 +8,7 @@ import {
   type WorldPosition,
 } from "../game/worldPosition";
 import { canonicalizeLivingCircadianPersistentState } from "./livingCircadian";
-import { canonicalizeResidentActivity, residentActivitySupportsEnvironment, residentActivitySupportsInspection, residentActivitySupportsMaterials, type ResidentActivity } from "./residentActivity";
+import { canonicalizeResidentActivity, residentActivitySupportsEnvironment, residentActivitySupportsInspection, residentActivitySupportsMaterials, residentActivitySupportsPickup, type ResidentActivity } from "./residentActivity";
 import { waterDepthAt } from "./terrain";
 import type { ResidentState, TideState, WorldState } from "./types";
 import { RESOURCE_KINDS } from "./types";
@@ -18,6 +18,7 @@ export function residentCivicActivityCohortIsUniform(residents: readonly Residen
   let civic = 0;
   let inspection = 0;
   let environment = 0;
+  let pickup = 0;
   for (const resident of residents) {
     const activity = Object.getOwnPropertyDescriptor(resident, "activity");
     const version = activity !== undefined && Object.hasOwn(activity, "value")
@@ -29,11 +30,14 @@ export function residentCivicActivityCohortIsUniform(residents: readonly Residen
       && residentActivitySupportsInspection({ version: version.value })) inspection += 1;
     if (version !== undefined && Object.hasOwn(version, "value")
       && residentActivitySupportsEnvironment({ version: version.value })) environment += 1;
+    if (version !== undefined && Object.hasOwn(version, "value")
+      && residentActivitySupportsPickup({ version: version.value })) pickup += 1;
   }
   // This checks mode only. The existing shape/world validators remain binding.
   return (civic === 0 || civic === residents.length)
     && (inspection === 0 || inspection === residents.length)
-    && (environment === 0 || environment === residents.length);
+    && (environment === 0 || environment === residents.length)
+    && (pickup === 0 || pickup === residents.length);
 }
 
 /** A rest point belongs to the existing settlement; this creates no house/bed. */
@@ -56,6 +60,12 @@ export function residentSettlementRestTarget(
       kind: "settlement", settlementId: settlement.id,
     }, legacySettlementOrdinal)?.position ?? null;
   }
+  return settlementCenter(world, settlementId);
+}
+
+function settlementCenter(world: ResidentSpatialWorld, settlementId: number): WorldPosition | null {
+  const settlement = world.settlements.find(({ id }) => id === settlementId);
+  if (settlement === undefined) return null;
   const tile = world.terrain.tiles[settlement.tileIndex];
   if (tile === undefined || tile.index !== settlement.tileIndex
     || tile.x !== settlement.tileIndex % world.terrain.width
@@ -64,6 +74,23 @@ export function residentSettlementRestTarget(
   return createWorldPosition({ x: 0, y: 0 },
     tile.x * WORLD_POSITION_UNITS_PER_TILE + WORLD_POSITION_UNITS_PER_TILE / 2,
     tile.y * WORLD_POSITION_UNITS_PER_TILE + WORLD_POSITION_UNITS_PER_TILE / 2);
+}
+
+/** Binding only: stock, network readiness and expiry are transaction inputs. */
+export function residentAcceptedPickupBinding(world: WorldState, resident: ResidentState) {
+  if (resident.activeContractId === null || resident.location.kind !== "settlement") return null;
+  const candidates = world.contracts.filter((contract) => contract.id === resident.activeContractId
+    || (contract.carrierKind === "resident" && contract.assignedResidentId === resident.id
+      && (contract.status === "accepted" || contract.status === "in-transit")));
+  if (candidates.length !== 1) return null;
+  const contract = candidates[0]!;
+  if (contract.id !== resident.activeContractId || contract.status !== "accepted"
+    || contract.carrierKind !== "resident" || contract.assignedResidentId !== resident.id
+    || contract.originSettlementId !== resident.location.settlementId || contract.cargoQuantity !== 0
+    || contract.acceptedTick === null || !Number.isSafeInteger(contract.acceptedTick)
+    || contract.acceptedTick < 0 || Object.is(contract.acceptedTick, -0)) return null;
+  const target = settlementCenter(world, contract.originSettlementId);
+  return target === null ? null : Object.freeze({ contract, target });
 }
 
 /** New physical rest requires dry support, not merely a locomotion no-move. */
@@ -123,8 +150,16 @@ export function canonicalResidentActivityForWorld(
       id === resident.id && identity.stableId === resident.identity.stableId
     ))
   ) return null;
-  const task = activity.restTask ?? activity.rationTask ?? activity.materialTask ?? activity.inspectionTask ?? null;
+  const task = activity.restTask ?? activity.rationTask ?? activity.materialTask ?? activity.inspectionTask ?? activity.pickupTask ?? null;
   if (task === null) return activity;
+  if (task.kind === "contract-pickup") {
+    const binding = residentAcceptedPickupBinding(world, resident);
+    if (binding === null || binding.contract.id !== task.contractId
+      || binding.contract.originSettlementId !== task.settlementId
+      || task.selectedAtTick < binding.contract.acceptedTick!
+      || !samePosition(binding.target, task.target)) return null;
+    return task.phase === "arrived" && !residentRestTargetHasDrySupport(world, task.target) ? null : activity;
+  }
   if (resident.location.kind !== "settlement"
     || resident.location.settlementId !== task.settlementId || resident.activeContractId !== null
   ) return null;
