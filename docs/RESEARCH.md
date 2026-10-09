@@ -5314,8 +5314,7 @@ Commands:
 ```sh
 npx vitest run src/game/runtime.residentPickup.integration.test.ts \
   --testNamePattern='commits real helped entry and finite mat wear, cold restores it, and rolls both back on later publication failure' \
-  --maxWorkers=1 --reporter=default --reporter=json \
-  --outputFile=artifacts/validation/world0-service-shallow/shallow-civic-runtime-domain.json
+  --maxWorkers=1
 npx vitest run \
   src/sim/cargoEnvironment.test.ts src/sim/residentActivity.test.ts \
   src/sim/residentActivity.world.integration.test.ts src/sim/residentActivityCapabilities.test.ts \
@@ -6104,7 +6103,8 @@ case. Exact command:
 ```sh
 npx vitest run src/game/runtime.residentRest.integration.test.ts \
   -t 'completes native shallow-origin civic approach|uses real civic material after ordinary approach|uses native first-hour civic material without authored pressure' \
-  --maxWorkers=1
+  --maxWorkers=1 --reporter=default --reporter=json \
+  --outputFile=artifacts/validation/world0-service-shallow/shallow-civic-runtime-domain.json
 ```
 
 Default/JSON reporters retain exact local results. Maintained smoke passes
