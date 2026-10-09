@@ -22,7 +22,7 @@ import {
 import { clampInteger, compareText } from "./util";
 import { createInitialWorld, findRouteBetween, pressureMultiplier } from "./world";
 import { projectWorldTime } from "./worldTime";
-import { findAutonomousRoutePlan, routeIsActive } from "./network";
+import { describeAutonomousRoutePlan, findAutonomousRoutePlan, routeIsActive } from "./network";
 import {
   MAX_RESIDENT_MEMORIES,
   residentRainProtection,
@@ -65,6 +65,7 @@ import { selectResidentMaterialUser } from "./residentMaterialUse";
 import { advanceResidentMacroTravel, consumeResidentTravelAdvance, type PreparedResidentTravelAdvance, type ResidentTravelAdvanceAdmission } from "./residentTravelAdvance";
 import { residentTravelSegment, residentTravelSegmentOffset } from "./residentTravelRoute";
 import { residentRestSurfaceKnowledge } from "./residentSurfaceKnowledge";
+import { residentObservedDepartureAlternative } from "./residentKnownRoutes";
 import {
   resolveResidentRouteWorldPlacement,
   resolveResidentWorldPlacementAtEventLocation,
@@ -1918,10 +1919,11 @@ function advanceContracts(world: WorldState, tick: number, travelAdmission: Resi
     ) {
       const origin = settlementById(world, contract.originSettlementId);
       const resident = contract.assignedResidentId === null ? undefined : residentById(world, contract.assignedResidentId);
-      const routePlan = findAutonomousRoutePlan(world, contract.originSettlementId, contract.destinationSettlementId);
-      const firstRoute = routePlan === undefined
+      let routePlan = findAutonomousRoutePlan(world, contract.originSettlementId, contract.destinationSettlementId);
+      const firstRouteId = routePlan?.routeIds[0];
+      let firstRoute = firstRouteId === undefined
         ? undefined
-        : world.routes.find((candidate) => candidate.id === routePlan.routeIds[0]);
+        : world.routes.find((candidate) => candidate.id === firstRouteId);
       const pickupCapable = residentActivitySupportsPickup(resident?.activity);
       if (pickupCapable && resident !== undefined) {
         const activity = canonicalResidentActivityForWorld(world, resident, tick);
@@ -1950,6 +1952,13 @@ function advanceContracts(world: WorldState, tick: number, travelAdmission: Resi
             },
           });
           continue;
+        }
+        // Choose before custody transfer and Voice capture. Familiar topology
+        // cannot reveal remote safety; only fresh local endpoint facts decide.
+        const alternative = residentObservedDepartureAlternative(world, resident, contract, routePlan, tick);
+        if (alternative !== null) {
+          routePlan = describeAutonomousRoutePlan(world, alternative.routeIds, alternative.settlementIds);
+          firstRoute = alternative.firstSegment.route;
         }
       }
       if (origin !== undefined && resident !== undefined && routePlan !== undefined && firstRoute !== undefined && origin.inventory[contract.resource] >= contract.quantity) {

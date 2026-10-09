@@ -86,7 +86,9 @@ function settlementCenter(world: ResidentSpatialWorld, settlementId: number): Wo
 }
 
 /** Binding only: stock, network readiness and expiry are transaction inputs. */
-export function residentAcceptedPickupBinding(world: WorldState, resident: ResidentState) {
+export function residentAcceptedPickupBinding(
+  world: ResidentSpatialWorld, resident: ResidentState,
+) {
   if (resident.activeContractId === null || resident.location.kind !== "settlement") return null;
   const candidates = world.contracts.filter((contract) => contract.id === resident.activeContractId
     || (contract.carrierKind === "resident" && contract.assignedResidentId === resident.id

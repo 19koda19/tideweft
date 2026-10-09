@@ -126,8 +126,12 @@ qualitative local sight is task information, not threat pressure; stale or absen
 knowledge cannot erase an observed hold, and fresh evidence never replaces
 independent physical legality. The same contract applies to the authenticated
 [next physical travel endpoint](./ARCHITECTURE.md#observed-next-segment-travel-support),
-without giving frozen v7 or coarse journeys remote sight. This does not grant general crossing, support,
-equipment, route knowledge or remote perception.
+without giving frozen v7 or coarse journeys remote sight. Applicable origin
+pickup choices also join [familiar route inspection](./ARCHITECTURE.md#familiar-routes-at-origin-pickup):
+own retained fulfilled work grants topology only, while fresh local sight and
+independent support qualify the first edge before conserved pickup/Voice capture.
+This does not grant general crossing, equipment, mid-route rerouting or remote
+perception; missing/pruned history is unknown.
 
 Applicable `hard-country` and `material-culture` consumers reuse
 [source-qualified resident reed-mat service](./ARCHITECTURE.md#source-qualified-resident-reed-mat-service):

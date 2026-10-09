@@ -40,7 +40,7 @@ export function routeIsActive(route: RouteState): boolean {
   return route.traceStrength >= STRAND_AUTOMATION_THRESHOLD && route.condition >= 180_000;
 }
 
-function routeOpenInWeather(
+export function routeOpenInWeather(
   world: Pick<WorldState, "settlements">,
   route: RouteState,
   weather: WeatherState,
@@ -146,6 +146,23 @@ export function findAutonomousRoutePlan(
     travelTicks: Math.max(1, Math.trunc(total)),
     bottleneckReliability: Math.min(...reliabilities),
   };
+}
+
+/** Estimate the already selected itinerary; this does not choose actor beliefs. */
+export function describeAutonomousRoutePlan(
+  world: WorldState, routeIds: readonly number[], settlementIds: readonly number[],
+): AutonomousRoutePlan {
+  const routes = routeIds.map((id) => world.routes.find((route) => route.id === id));
+  if (routes.length === 0 || settlementIds.length !== routes.length + 1
+    || new Set(routeIds).size !== routeIds.length || new Set(settlementIds).size !== settlementIds.length
+    || routes.some((route, leg) => route === undefined
+      || route.fromSettlementId !== Math.min(settlementIds[leg]!, settlementIds[leg + 1]!)
+      || route.toSettlementId !== Math.max(settlementIds[leg]!, settlementIds[leg + 1]!))) {
+    throw new Error("Selected porter itinerary is unavailable");
+  }
+  return { routeIds: [...routeIds], settlementIds: [...settlementIds],
+    travelTicks: routes.reduce((sum, route) => sum + routeCost(world, route!), 0),
+    bottleneckReliability: Math.min(...routes.map((route) => route!.reliability)) };
 }
 
 export function calculateNetworkMetrics(world: Pick<WorldState, "settlements" | "routes">): NetworkMetrics {

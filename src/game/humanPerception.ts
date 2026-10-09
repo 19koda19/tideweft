@@ -13,8 +13,9 @@ import { globalTileToRegion } from "../sim/regions";
 import { queryResidentAttentionState, residentAttentionFocus } from "../sim/residentAttention";
 import { FIXED_POINT, type WorldView } from "../sim/types";
 import { canonicalizeResidentActivity, RESIDENT_ACTIVITY_MAX_PHASE, residentActivitySupportsEnvironment, residentActivitySupportsTravelEnvironment } from "../sim/residentActivity";
-import { residentSettlementRestTarget, residentTravelContractBinding } from "../sim/residentActivityWorld";
-import { residentTravelLocation, residentTravelSegment } from "../sim/residentTravelRoute";
+import { residentAcceptedPickupBinding, residentSettlementRestTarget, residentTravelContractBinding } from "../sim/residentActivityWorld";
+import { residentFamiliarDeparturePaths } from "../sim/residentKnownRoutes";
+import { residentTravelLocation, residentTravelSegment, residentTravelSegmentOffset } from "../sim/residentTravelRoute";
 import { residentRestSurfaceObservationId } from "../sim/residentSurfaceKnowledge";
 import {
   evaluateAudibleContact,
@@ -456,7 +457,8 @@ export function collectExistingHumanObservations(
     return (residentActivitySupportsEnvironment(resident.activity)
       && task?.origin === "selected" && task.phase !== "arrived")
       || (residentActivitySupportsTravelEnvironment(resident.activity)
-        && travel?.mode === "physical" && travel.phase !== "arrived");
+        && (travel?.mode === "physical" && travel.phase !== "arrived"
+          || resident.activity?.pickupTask?.phase === "arrived"));
   });
   const illumination = hasTaskSurfaceTargets ? buildOutdoorIlluminationField(world, cells) : null;
   if (hasTaskSurfaceTargets && illumination === null) return EMPTY_BATCHES;
@@ -689,8 +691,11 @@ export function collectExistingHumanObservations(
     }
     const restTask = resident.activity?.restTask;
     const travelTask = resident.activity?.travelTask;
+    const pickupTask = resident.activity?.pickupTask;
     let target: WorldPosition | null = null;
-    // One qualitative task sight uses remaining bounded capacity. Never
+    let departureTargets: readonly WorldPosition[] | null = null;
+    // One rest/travel sight, or <=4 distinct origin entrance sights, uses
+    // remaining bounded capacity. Never
     // displace lawful hearing or reject a full frame to append a ground fact;
     // unavailable information conservatively retains an existing held task.
     if (residentActivitySupportsEnvironment(resident.activity)
@@ -708,8 +713,37 @@ export function collectExistingHumanObservations(
         || location?.kind !== "route" || resident.location.kind !== "route"
         || resident.location.routeId !== location.routeId || resident.location.progress !== location.progress) return EMPTY_BATCHES;
       target = segment.end;
+    } else if (residentActivitySupportsTravelEnvironment(resident.activity)
+      && pickupTask?.phase === "arrived") {
+      const binding = residentAcceptedPickupBinding(economy, resident);
+      if (binding === null || binding.contract.id !== pickupTask.contractId
+        || binding.contract.originSettlementId !== pickupTask.settlementId
+        || pickupTask.selectedAtTick < binding.contract.acceptedTick!
+        || binding.target.region.x !== pickupTask.target.region.x
+        || binding.target.region.y !== pickupTask.target.region.y
+        || binding.target.localX !== pickupTask.target.localX
+        || binding.target.localY !== pickupTask.target.localY
+        || binding.target.region.x !== placement.position.region.x
+        || binding.target.region.y !== placement.position.region.y
+        || binding.target.localX !== placement.position.localX
+        || binding.target.localY !== placement.position.localY) return EMPTY_BATCHES;
+      const selected = residentTravelSegment(economy, binding.contract, {
+        contractId: binding.contract.id, legIndex: 0, waypointIndex: 1,
+      });
+      const familiar = residentFamiliarDeparturePaths(economy, resident, binding.contract, targetTick);
+      // No familiarity, no alternative inspection. Whole itineraries and
+      // distinct first cardinal supports only; no arbitrary remote targets.
+      if (selected !== null && familiar.length > 0) {
+        if (residentTravelSegmentOffset(selected, placement.position) !== 0) return EMPTY_BATCHES;
+        const unique = new Map<string, WorldPosition>();
+        for (const point of [selected.end, ...familiar.map(({ firstSegment }) => firstSegment.end)]) {
+          unique.set(`${point.region.x},${point.region.y}:${point.localX},${point.localY}`, point);
+        }
+        if (unique.size > 1) departureTargets = [...unique.values()];
+      }
     }
-    if (target !== null) {
+    const surfaceTargets = departureTargets ?? (target === null ? [] : [target]);
+    for (const target of surfaceTargets) {
       const observer = residentPlacementInRegionalWindow(placement, window);
       const point = projectedSamplePoint(frame, world, target);
       if (observer !== null && point !== null

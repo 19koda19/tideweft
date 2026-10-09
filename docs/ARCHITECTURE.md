@@ -2900,10 +2900,47 @@ rules6, carry14, item/cargo identity and the save lifecycle are unchanged. No
 format is retired; cold load adds no observation, time, motion or replayed sound.
 
 This is a bounded local/unpublished consumer, not general water/current/load
-appraisal, known alternatives, support equipment, cat evacuation or normal-play
+appraisal, mid-journey alternatives, support equipment, cat evacuation or normal-play
 certification. Representative producer/execution fixtures distinguish their
 arranged inputs from native autonomy; Research owns actual validation and
 remaining gameplay evidence.
+
+### Familiar routes at origin pickup
+
+Current local/unpublished v8 can make one positive alternative choice before
+the existing conserved origin pickup/departure. `residentKnownRoutes.ts` derives
+whole prior itineraries, or their exact reverses, from the same resident's retained
+fulfilled courier contracts with valid connected IDs, zero cargo and strictly
+ordered past work. Pruning those records means forgetting; no second route-memory
+root is created. Legitimate old coarse fulfillment establishes topology, not
+physical walking, current dryness, exact depth or remote safety. Unsuitable old
+history is unknown, not a reason to reject a deliberately supported save.
+
+At an authenticated arrived pickup body, `humanPerception.ts` may inspect the
+selected entrance and familiar distinct first endpoints, at most four cardinal
+supports total. Each uses existing facing, LOS, weather, light and actual-window
+gates, only remaining capacity in the unchanged48-observation frame. Hearing
+is not displaced. No scan/head-turn behavior or omnidirectional ground sight is
+implied; a remembered route does not make an unseen entrance observable.
+
+The commit owner rebinds fresh wet sight to the **actual** default plan after
+new tide/weather, then requires fresh dry sight and independent dry support/
+existing network-weather admission for a familiar first edge. New weather or
+earlier contracts can change the default: unmatched evidence remains unknown.
+Candidates are ordered by past completion then stable ID, never hidden current
+remote cost or condition. Shared network costs estimate the chosen itinerary's
+ETA afterward; they are transaction metadata, not acquired safety beliefs.
+Later supports remain unknown and retain normal execution checks and holds.
+
+The final itinerary is selected before stock debit, cargo transfer, cursor
+initialization and Voice capture. No departed itinerary, accepted pose, receipt
+or speech event is rewritten. Missing proof preserves existing behavior; this
+adds no persistent pre-pickup water hold or mid-route rerouting. Body8/outer58,
+world4/rules6/carry14 and the supported-reader set remain unchanged. Adapter
+tests arrange past history, pickup and contrasting surfaces; they prove source/
+consumer and cold lower-world work, not earned native familiarity, normal visual
+play or complete crossing acceptance. Native alternate topology additionally
+requires actual route reinforcement; the initial active network is a chain.
 
 ## First porter-dog living web
 

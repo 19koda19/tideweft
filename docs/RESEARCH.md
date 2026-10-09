@@ -5716,6 +5716,51 @@ Production, canonical policy, schemas, supported formats, dependencies and
 configuration are unchanged. No new cumulative/platform/performance/release
 or whole-directive closure is inferred; historical directives remain untouched.
 
+### Familiar origin departure — 2026-10-09
+
+At parent `9f03115`, a local/unpublished current-v8 consumer joins retained own
+fulfilled courier history, bounded lawful entrance sight, shared physical support
+and the existing conserved pickup. Architecture's **Familiar routes at origin
+pickup** owns the policy. A past itinerary conveys topology, not current remote
+safety; no departed path, receipt or captured Voice event is rewritten.
+
+The positive adapter fixture arranges past work, an arrived pickup body, an active
+chord, diagonal gaze and contrasting surfaces over actual estuary identities and
+finite stock. Production perception records wet/default and dry/familiar support;
+actual `stepWorld` chooses the remembered alternative, debits one part once and
+publishes the matching departure/cursor and eligible Working People source.
+Inner-world serialize/load and detached clone give exact terminal bytes; consumed
+load adds no debit. Withholding history, gaze or dry support removes the choice;
+frozen v7 keeps the old departure. This is source/consumer foundation evidence,
+not native-earned familiarity, outer58 relaunch, rendered play or complete water
+acceptance. Native alternate topology requires earned route reinforcement.
+
+Independent review tightened chronology and authenticated pickup fields without
+changing supported readers. Two initial new-fixture failures are retained locally:
+the first arranged task had the wrong activity version; the later hostile source
+incorrectly used a trusted factory that correctly rejected it first. Only new
+fixture construction was corrected; no existing assertion or validator weakened.
+Final affected14files/359tests and maintained6file/105test smoke pass. Existing
+runtime integration passes6files/57tests in154.82s; the mandatory late closure
+rollback case passes, with97 other runtime cases deliberately unselected. Commands
+below omit reporter/output arguments, retained in the ignored validation record:
+
+```sh
+npx vitest run src/sim/residentKnownRoutes.test.ts src/game/residentKnownRoutes.integration.test.ts src/sim/residentPickupUse.test.ts src/game/humanPerception.test.ts src/game/humanPerception.restSurface.test.ts src/game/humanPerception.travelSurface.test.ts src/sim/residentTravelRoute.test.ts src/sim/residentTravelAdvance.test.ts src/game/residentTravelEnvironmentExecution.test.ts src/game/workingPeopleExpression.activity.test.ts src/game/residentActivitySaveBoundary.test.ts src/sim/residentActivity.world.integration.test.ts src/sim/systemComposition.integration.test.ts src/sim/simulation.test.ts --maxWorkers=2
+npx vitest run src/game/runtime.residentPickup.integration.test.ts src/game/runtime.residentTravelEnvironmentCompatibility.integration.test.ts src/game/runtime.workingPeople.integration.test.ts src/game/runtime.residentSoundPhases.test.ts src/game/residentIntroductionExpression.activity.test.ts src/game/residentWeatherHoldExpression.activity.test.ts --maxWorkers=2
+npx vitest run src/game/runtime.test.ts -t 'rolls back introduction facts, save, and vocal audio when later interval closure fails' --maxWorkers=1
+npm run test:smoke
+npm run typecheck
+```
+
+All734 public non-Markdown inputs match final-domain/smoke before/after, digest
+`9e99a9de3c305f18feb9d8f5b17257905626011221e6ec9f79cffcfae678e380`.
+The supplemental runtime/rollback run differs only in the two new known-route
+testfiles: production, existing tests, configuration and toolchain match.
+Typecheck passes on the final inputs. No schema/support-set, dependency, timing,
+configuration, historical-directive or release change; no new cumulative,
+production performance, platform artifact or whole-directive certificate.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

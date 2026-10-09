@@ -54,7 +54,7 @@ export function residentTravelInteractionFrame(window: LivingActorInteractionWin
 export function residentTravelSegment(
   world: ResidentTravelGeography,
   contract: ContractState,
-  task: ResidentPhysicalTravelTask,
+  task: Pick<ResidentPhysicalTravelTask, "contractId" | "legIndex" | "waypointIndex">,
 ): ResidentTravelSegment | null {
   if (task.contractId !== contract.id || !Number.isSafeInteger(task.legIndex) || task.legIndex < 0
     || task.legIndex >= contract.porterRouteIds.length
