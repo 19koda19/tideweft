@@ -5,12 +5,14 @@ import type { SaveRecord, SaveRepository } from "../platform/persistence";
 import { createWorld, deserializeWorld, serializeWorld } from "../sim/public";
 import { RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID, RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION } from "../sim/residentActivity";
 import { canonicalResidentActivityForWorld } from "../sim/residentActivityWorld";
+import { waterDepthAt } from "../sim/terrain";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import * as canonicalUtil from "../sim/util";
 import { CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID } from "./coreEcologyBreadthHabitat";
 import { deserializeBio0Ecology } from "./bio0Ecology";
 import { LIVING_ACTOR_ADDRESS_VERSION } from "./livingActor";
+import { ORDINARY_FOOT_MAX_WATER_DEPTH } from "./footing";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { createPlayerAnimalCallKnowledge } from "./playerAnimalCallKnowledge";
 import { createPlayerExpressionRecencyState } from "./playerExpressionRecency";
@@ -136,7 +138,7 @@ function assertStationaryCivicWorld(envelope: Record<string, unknown>, seed: str
     current.residents.map(({ activity }) => activity),
   )).digest("hex");
   const bodyDigests: Readonly<Record<string, string>> = {
-    "runtime baseline estuary": "e7059760302d3cf658c33900482ad98441eb114ca3370d6f9af7cab1003e0d23",
+    "runtime baseline estuary": "1e4f6676254535bc2b66643e304999e14091fd4cffb386d1c0e8614e3e4d366f",
     "breathing room regional density 8": "07e06dbd7ed58890651ebe0aea1d946cee906e261ccd47166ff83d02e1e79f48",
   };
   if (process.env.TIDEWEFT_WORLD_ADVANCE_DIAGNOSTICS === "1") process.stdout.write(`resident-inspection-characterization ${JSON.stringify({
@@ -184,6 +186,22 @@ function assertStationaryCivicWorld(envelope: Record<string, unknown>, seed: str
     // first tick granted exactly 2,500 legacy exhaustion relief before routine
     // adoption. Awake membership no longer proves restorative arrival.
     expect(resident.condition.exhaustion).toBe(original.condition.exhaustion);
+    if (seed === "runtime baseline estuary" && [64, 74, 82, 83].includes(resident.id)) {
+      // Initial standard/hard pressure shares seed geometry and placement;
+      // these untouched runtime actors actually start in foot-shallow water.
+      const sourceTile = initial.terrain.tiles[source.compatibilityTileIndex]!;
+      const sourceDepth = waterDepthAt(sourceTile, initial.tide);
+      expect(sourceTile.terrain).not.toBe("deep-water");
+      expect(sourceDepth).toBeGreaterThan(0);
+      expect(sourceDepth).toBeLessThanOrEqual(ORDINARY_FOOT_MAX_WATER_DEPTH);
+      expect(activity?.materialTask).toMatchObject({ phase: "arrived", usedAtTick: null });
+      expect(pose.position).toEqual(activity!.materialTask!.target);
+      const arrived = resolveResidentWorldPlacement(current, resident);
+      expect(arrived).not.toBeNull();
+      // Resident64's target is wet at420 and only dries at421. The current
+      // arrival is dry; no initial-dry target or premature hourly use is claimed.
+      expect(waterDepthAt(current.terrain.tiles[arrived!.compatibilityTileIndex]!, current.tide)).toBe(0);
+    }
   }
   expect(bio0.porterAddress).toEqual({
     version: LIVING_ACTOR_ADDRESS_VERSION,
@@ -216,6 +234,41 @@ function assertStationaryCivicWorld(envelope: Record<string, unknown>, seed: str
   });
   // Keep an exact full-cohort oracle after the meaningful behavior assertions.
   expect(bodyDigest).toBe(bodyDigests[seed]);
+}
+
+/** Retained real contact hearing is knowledge, not disposable diagnostics. */
+function assertResidentContactHearing(envelope: Record<string, unknown>, seed: string): void {
+  const world = deserializeWorld(envelope.world as string);
+  const listeners = world.residents.map((resident) => ({
+    resident,
+    // This production sample namespace belongs to accepted resident tile
+    // contact, not speech, player movement, or identified visual observation.
+    beliefs: resident.perception.beliefs.filter(({ sourceObservationId }) => (
+      sourceObservationId.includes("-prc-")
+    )),
+  })).filter(({ beliefs }) => beliefs.length > 0);
+  expect(listeners.flatMap(({ beliefs }) => beliefs)).toHaveLength(
+    seed === "runtime baseline estuary" ? 59 : 0,
+  );
+  expect(listeners.map(({ resident }) => resident.id)).toEqual(
+    seed === "runtime baseline estuary"
+      ? [64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 82, 83, 84, 100, 101, 102, 103, 104, 105]
+      : [],
+  );
+  for (const { resident, beliefs } of listeners) {
+    for (const belief of beliefs) {
+      expect(belief).toMatchObject({
+        channel: "hearing", perceivedClass: "physical-thud",
+        identification: "anonymous", subjectId: null, strongInterrupt: false,
+      });
+      expect(belief.sourceObservationId).toMatch(new RegExp(
+        `^hp-h-(421|422|423)-${resident.id}-prc-[0-9a-f]{16}$`,
+      ));
+      expect(belief.firstObservedTick).toBeGreaterThan(world.meta.completedTick - 3);
+      expect(belief.lastObservedTick).toBeLessThanOrEqual(world.meta.completedTick);
+      expect(belief.area.radiusUnits).toBeGreaterThan(0);
+    }
+  }
 }
 
 async function assertEqualUninstrumentedWork(seed: string, worldJson: string): Promise<void> {
@@ -313,6 +366,11 @@ describe("runtime performance telemetry", () => {
         // the stationary work has no accepted journey to change behavior.
         // Freeze the entire current save, including all meaningful consequences.
         assertStationaryCivicWorld(envelope, seed);
+        // Committed dry contact adds anonymous hearing; occupied shallow-source
+        // service egress changes real poses and therefore the heard causes.
+        // Independent exact-checkpoint captures explain both changes (Research).
+        // Neither knowledge nor bodies are stripped to restore an older hash.
+        assertResidentContactHearing(envelope, seed);
         if (seed === "runtime baseline estuary") {
           const session = envelope.session as Record<string, unknown>;
           expect(session.announcement).toEqual({
@@ -339,7 +397,7 @@ describe("runtime performance telemetry", () => {
           });
         }
         const baselineDigests: Readonly<Record<string, string>> = {
-          "runtime baseline estuary": "4948c73b38a07dce842b662a74a409a5806d454bf9e5c0665e0939dc17501568",
+          "runtime baseline estuary": "cd127e124ad5ad6718283e670c5415597662c7d4993d262032772f42d48dfc38",
           "breathing room regional density 8": "a7b713dd04b7e96e637c441c313ef6bc4b124715ff2ebf4fd39301c5dbbe2944",
         };
         expect(createHash("sha256").update(worldJson).digest("hex")).toBe(baselineDigests[seed]);

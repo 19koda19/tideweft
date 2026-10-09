@@ -6120,6 +6120,100 @@ keeper autonomy, cat evacuation, current-force response, normal rendered play,
 performance and major closure remain unproved. Main's separate frozen parent
 cumulative result does not certify this additive test/canonical delta.
 
+### Stationary save characterization after contact and service motion — 2026-10-09
+
+Exact `f00b2d5094ce273f818f1551bfc5270699a936cf` cumulative regression
+completed415 files/5,282 tests:414 files/5,281 PASS, one FAIL,0 pending,
+2,927.01s. All737 public non-Markdown input fingerprints and HEAD matched
+before/after. Its sole failure was the estuary complete-save golden in
+`runtime.performanceTelemetry.test.ts`; complete telemetry-on/off equality
+and the current body/store assertions passed first. This is a failed
+cumulative checkpoint, not a partial certificate represented as PASS.
+
+Independent frozen captures used both actual stationary seeds, ordinary
+new-world controls,30 accepted fixed steps and3 advances420→423, the same
+existing installation and unchanged capture fixture. Actual gameplay is the
+runtime's hard/wild policy, not the requested legacy journey label. Pristine
+`67e0cf507cbea1423e2b9819726a7b32a1c71a5f` reproduces the previous estuary
+SHA `4948c73b38a07dce842b662a74a409a5806d454bf9e5c0665e0939dc17501568`.
+Current f00b reproduces
+`bef509ba7728fe385f96de5878193ece945fab6dba670e7c0e1ebcb6373a83c0`.
+Both are current outer58 saves, not a synthetic downgrade/reseal comparison.
+
+The complete parsed comparison changes151 paths: integrity/checksum and149
+resident-perception consequences—63 anonymous noninterrupting contact beliefs,
+63 attention keys,18 pressure changes and5 noticed transitions, across23
+listeners. Bodies, tasks, stock, cargo, events, circadian state and other save
+roots remain unchanged. Resident dry-contact production committed in
+`2da02741d00923b19c3d50059431a07f4f5bbbe0` explains the delta:
+accepted body tile entry → `residentContactAcoustics` → phase-correct runtime
+physical samples → shared human hearing → existing perception/attention.
+Heard impacts disclose neither emitter identity nor an exact hidden source.
+The dense seed remains byte-identical at both checkpoints.
+
+The accepted service tree
+`9db03903af30d9dcd3b31e0777972c407ff95105` independently captures the
+intended occupied-shallow-source extension:21 activity paths and89 perception
+paths plus integrity/checksum differ from f00b. Only residents64,74,82,83,84,85
+and87 are affected. Four native workers64/74/82/83 reach their material targets;
+84 arrives earlier and87 follows its changed lawful approach. No stock,
+project, event, cargo, circadian, session or ecology result changes during
+these three minutes. Initial source depths13,045/8,042/3,909/5,835 are within
+the existing ordinary-foot band. Resident64's target starts453 deep and dries
+at421: final dry arrival does not assert initial dry access. Standard/hard
+pressure shares initial seed geometry/placement; it is not a second gameplay
+policy or proof of general wading/current resistance.
+
+Final estuary body SHA is
+`1e4f6676254535bc2b66643e304999e14091fd4cffb386d1c0e8614e3e4d366f`;
+complete-save SHA is
+`cd127e124ad5ad6718283e670c5415597662c7d4993d262032772f42d48dfc38`,
+1,876,807 bytes. It retains59 anonymous contact beliefs across21 listeners.
+Dense remains exactly
+`a7b713dd04b7e96e637c441c313ef6bc4b124715ff2ebf4fd39301c5dbbe2944`,
+1,902,647 bytes, with no resident-contact beliefs. The independently captured
+production inputs match before/after at each checkpoint; no source changed
+while any capture ran.
+
+The test correction preserves every existing meaningful assertion, exact
+full-cohort body hash, complete current-save hash and telemetry-on/off equality.
+It additionally checks native foot-shallow origins, current dry material
+arrival without premature use, and anonymous/null-subject/noninterrupting,
+time-bounded, uncertain contact hearing. Neither knowledge nor body fields
+are removed or normalized to restore an obsolete oracle. No production,
+schema, supported-reader, dependency or release change belongs to this
+characterization. Its focused correctness result cannot erase the failed
+parent cumulative checkpoint; a new complete checkpoint must certify the
+integrated executable state.
+
+Final local validation passes the entire telemetry file4 tests19.75s, maintained
+smoke6 files/105 tests4.19s, typecheck and documentation-reuse45. Relevant
+contact/service/knowledge selection passes5 files/130 tests27.11s; its source,
+tests, configuration and dependencies remain unchanged after the additional
+native-arrival assertions in the separate telemetry file. Exact commands:
+
+```sh
+npx vitest run src/game/runtime.performanceTelemetry.test.ts --maxWorkers=1 \
+  --reporter=default --reporter=json \
+  --outputFile=artifacts/validation/world0-cumulative-diagnosis/contact-telemetry-final2-test.json
+npx vitest run src/game/residentContactAcoustics.test.ts \
+  src/game/residentServiceShallowEgress.test.ts src/game/residentRestShallowEgress.test.ts \
+  src/game/humanPerception.test.ts src/sim/actorPerception.test.ts --maxWorkers=2 \
+  --reporter=default --reporter=json \
+  --outputFile=artifacts/validation/world0-cumulative-diagnosis/contact-telemetry-domain.json
+npm run test:smoke -- --reporter=default --reporter=json \
+  --outputFile=artifacts/validation/world0-cumulative-diagnosis/contact-telemetry-final2-smoke.json
+npm run typecheck
+npm run test:documentation-reuse
+```
+
+All738 final public non-Markdown inputs match before/after at parent9db0390,
+digest `9e749cf494652a0d4db6052a786414c321e343bfb60c107d201dfa3c7eccdf90`.
+Local reports retain exact identities. These are correctness timings, not a
+production performance comparison, platform artifact, new cumulative
+certificate or release. The correction changes only this test and evidence;
+current executable behavior stays with its accepted production owners.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
