@@ -5487,6 +5487,39 @@ whole-directive closure is inferred. Broader crossing/current/alternatives,
 legal carried failure and normal acquisition/placement proof remain open.
 Dependency and configuration changes: none. Historical directives are unchanged.
 
+### Working People departure fixture continuation — 2026-10-09
+
+The complete regression at `b497f055cadc016bb58f6f4197ed8786bcdb445c`
+failed15tests in two unchanged Working People/Voice files;5178tests passed
+across the remaining409files. Two selected reproductions confirmed that the
+fixtures still expected pickup after the earlier ten-step allowance. This
+failure remains recorded, not reclassified as a cumulative pass.
+
+The test-only correction uses actual accepted steps and closing transactions.
+The native meadow fixture first proves970units of unfinished approach, no
+cargo or departure, conserved stock/ledger and the retained body. A real second
+interval reaches the source and permits pickup. Runtime seeds are checked for
+dry native support through that closing tick. No body, task, arrival or voice
+event is injected; production, schemas and supported readers are unchanged.
+Existing anonymous reception, inspector equivalence, expired-receipt handling,
+no-replay, sensory/cooldown/sample forgery and phase4/9 cold assertions remain
+intact. The passing storm-hold fixture is byte-identical.
+
+Both complete files pass29tests in110.30s; maintained smoke passes105tests
+in4.26s, and typecheck passes. Commands:
+
+```sh
+npx vitest run src/game/workingPeopleExpression.activity.test.ts \
+  src/game/runtime.workingPeople.integration.test.ts --maxWorkers=1
+npm run test:smoke
+npm run typecheck
+```
+
+All731 public non-Markdown inputs match before/after, digest
+`1056485ba96e96f339fc03fce51383ae1405798bfef19bb5b330755a778101a8`.
+This proves the affected Voice boundary, not a new complete regression pass,
+visual/platform/performance result, release or major-directive closure.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

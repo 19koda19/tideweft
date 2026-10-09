@@ -180,7 +180,8 @@ function resealCurrentRecord(
  * integration contract is that only the runtime's newly committed departure
  * may produce speech; loading the older acceptance event is never a trigger.
  * Select actual dry, adjacent native geometry so this Voice fixture can enact
- * pickup in its ten accepted steps. A flooded historical slot must now wait;
+ * pickup in two normal ten-step intervals with current dry-ground drag. A
+ * flooded historical slot must now wait;
  * neither a body/task/arrival nor a dry terrain result is authored here.
  */
 function workingPeopleFixture(
@@ -200,7 +201,8 @@ function workingPeopleFixture(
       if (source === undefined || target === null
         || Math.abs(source.localX - target.localX) + Math.abs(source.localY - target.localY)
           !== WORLD_POSITION_UNITS_PER_TILE
-        || ![world.meta.completedTick + 1, world.meta.completedTick + 2].every((tick) => {
+        || ![world.meta.completedTick + 1, world.meta.completedTick + 2,
+          world.meta.completedTick + 3].every((tick) => {
           const physical = { ...world, tide: tideAtTick(tick) };
           return residentRestTargetHasDrySupport(physical, source)
             && residentRestTargetHasDrySupport(physical, target);
@@ -252,7 +254,8 @@ function workingPeopleFixture(
   expect(acceptedSource).toEqual(source);
   expect(pickup?.contract).toBe(contract);
   expect(pickup?.target).toEqual(target);
-  for (const tick of [world.meta.completedTick, world.meta.completedTick + 1]) {
+  for (const tick of [world.meta.completedTick, world.meta.completedTick + 1,
+    world.meta.completedTick + 2]) {
     const physical = { ...world, tide: tideAtTick(tick) };
     expect(residentRestTargetHasDrySupport(physical, source)).toBe(true);
     expect(residentRestTargetHasDrySupport(physical, target)).toBe(true);
@@ -577,7 +580,7 @@ describe("runtime Working People heavy-porter expression", () => {
         if (inspector === undefined) throw new Error("Development inspector is unavailable");
         inspector.setEnabled(inspect);
         soundscapePlay.mockClear();
-        advancePlayerSteps(runtime, 10);
+        advancePlayerSteps(runtime, 20);
         await runtime.save();
         const pending = decodeCurrent(repository);
         const channel = pending.perceptionCarry.situatedExpressionChannels.channels
@@ -696,6 +699,21 @@ describe("runtime Working People heavy-porter expression", () => {
     const runtime = await createTideweftRuntime(repository);
     soundscapePlay.mockClear();
 
+    advancePlayerSteps(runtime, 10);
+    await runtime.save();
+    const approachingWorld = deserializeWorld(decodeCurrent(repository).world);
+    expect(approachingWorld.contracts.find(({ id }) => id === fixture.contractId))
+      .toMatchObject({ status: "accepted", cargoQuantity: 0, departedTick: null });
+    expect(approachingWorld.events.filter((event) => (
+      event.type === "contract-departed" && event.subjectId === fixture.contractId
+    ))).toEqual([]);
+    expect((runtime.getRenderView().expressions ?? []).filter(({ sourceActorId }) => (
+      sourceActorId === fixture.actorId
+    ))).toEqual([]);
+    expect(strainedCueCount()).toBe(0);
+
+    // Current ground drag cannot cover the native one-tile approach in ten
+    // steps. Only the next real interval may commit pickup and departure.
     advancePlayerSteps(runtime, 10);
 
     // Actual resident motion can also alarm a chicken. Assert this exact
@@ -847,7 +865,7 @@ describe("runtime Working People heavy-porter expression", () => {
     const runtime = await createTideweftRuntime(repository);
     soundscapePlay.mockClear();
 
-    advancePlayerSteps(runtime, 10);
+    advancePlayerSteps(runtime, 20);
     advancePlayerSteps(runtime, 8);
     await runtime.save();
     const expired = decodeCurrent(repository);
@@ -904,7 +922,7 @@ describe("runtime Working People heavy-porter expression", () => {
     });
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
-    advancePlayerSteps(setup, 10);
+    advancePlayerSteps(setup, 20);
     advancePlayerSteps(setup, 8);
     await setup.save();
     setup.destroy();
@@ -952,7 +970,7 @@ describe("runtime Working People heavy-porter expression", () => {
     const runtime = await createTideweftRuntime(repository);
     soundscapePlay.mockClear();
 
-    advancePlayerSteps(runtime, 10);
+    advancePlayerSteps(runtime, 20);
     await runtime.save();
 
     const committed = decodeCurrent(repository);
@@ -1009,7 +1027,7 @@ describe("runtime Working People heavy-porter expression", () => {
     });
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
-    advancePlayerSteps(setup, 10);
+    advancePlayerSteps(setup, 20);
     await setup.save();
     setup.destroy();
 
@@ -1035,7 +1053,7 @@ describe("runtime Working People heavy-porter expression", () => {
     });
     const baselineRepository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(baselineRepository);
-    advancePlayerSteps(setup, 10);
+    advancePlayerSteps(setup, 20);
     await setup.save();
     setup.destroy();
     const baselineRecord = baselineRepository.snapshot();
@@ -1108,7 +1126,7 @@ describe("runtime Working People heavy-porter expression", () => {
     });
     const repository = new MemoryRepository(fixture.record);
     const setup = await createTideweftRuntime(repository);
-    advancePlayerSteps(setup, 10);
+    advancePlayerSteps(setup, 20);
     await setup.save();
     setup.destroy();
 

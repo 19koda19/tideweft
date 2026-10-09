@@ -188,6 +188,33 @@ function physicalDepartureFixture() {
     expect(contract.cargoQuantity).toBe(0);
   }
   expect(moved).toBe(true);
+  // Current unladen pickup inherits native meadow97 contact. The first ten
+  // real samples pay970 of1000, not an authored arrival or cargo transfer.
+  const retained = residentAt(state, id).activity!.poses.at(-1)!.position;
+  const firstWork = worldPositionDelta(source, retained);
+  expect(Math.hypot(firstWork.x, firstWork.y)).toBe(970);
+  expect(retained).not.toEqual(binding.target);
+  expect(residentAt(state, id).activity?.pickupTask?.phase).toBe("approaching");
+  expect(contract).toMatchObject({ status: "accepted", cargoQuantity: 0, departedTick: null });
+  expect(origin.inventory[contract.resource]).toBe(stock);
+  expect(state.events.filter(({ type, subjectId }) => type === "contract-departed" && subjectId === contract.id)).toHaveLength(0);
+  const unfinished = prepareResidentTravelAdvance(state, PHYSICAL_WINDOW);
+  expect(unfinished).not.toBeNull();
+  try { stepWorld(state, [], undefined, undefined, unfinished!); }
+  finally { revokeResidentTravelAdvance(unfinished!); }
+  expect(state.meta.completedTick).toBe(initialTick + 2);
+  expect(contract).toMatchObject({ status: "accepted", cargoQuantity: 0, departedTick: null });
+  expect(origin.inventory[contract.resource]).toBe(stock);
+  expect(state.ledger).toEqual(ledger);
+  expect(state.events.filter(({ type, subjectId }) => type === "contract-departed" && subjectId === contract.id)).toHaveLength(0);
+  expect(residentAt(state, id).activity?.poses[0]?.position).toEqual(retained);
+  expect(prepareResidentRestActivities(state, [], store)).toBe(true);
+  for (let phase = 1; phase <= 10; phase += 1) {
+    expect(advanceResidentRestActivities(state, phase, PHYSICAL_WINDOW)).not.toBeNull();
+    if (phase === 1) expect(residentAt(state, id).activity?.pickupTask?.phase).toBe("arrived");
+    expect(origin.inventory[contract.resource]).toBe(stock);
+    expect(contract.cargoQuantity).toBe(0);
+  }
   expect(residentAt(state, id).activity?.pickupTask?.phase).toBe("arrived");
   expect(residentAt(state, id).activity?.poses.at(-1)?.position).toEqual(binding.target);
   const closing = prepareResidentTravelAdvance(state, PHYSICAL_WINDOW);
