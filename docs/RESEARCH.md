@@ -5849,6 +5849,40 @@ outer fixture belongs to421 and is deliberately not resealed around a422 world
 with mismatched carry/ecology/expression roots. Schemas, supported readers,
 dependencies and gameplay policy remain unchanged; no broader closure follows.
 
+### Rising-water observation order and cold continuation — 2026-10-09
+
+At parent `88071687`, one additive travel-environment foundation reaches
+tick1079 by running the actual lower engine for659 ticks. It retains all14
+existing carried journeys and four fulfilled contracts, selects only a free
+resident/unassigned offer, and transfers conserved parts14. The fixture's
+terrain and initial transit remain arranged; it is not a native ford.
+
+Ten accepted dry-bank steps reach offset430. The actual tide peaks at1080,
+blocking further movement without changing position/custody. Pre-world wet
+sight admitted at1081 retains the hold even though the physical tide has
+already fallen. Only newly admitted dry sight at1082 permits actual progress
+to473. Original, inner-world deserialize and plain-clone branches split at
+phase9 agree in complete bytes, including ordinary hourly production, needs,
+prior coarse arrivals and events. No task, belief or successful result is
+assigned after setup, and no old fulfilled contract is reopened.
+
+Focused1case passes1.96s; affected6files/168tests pass7.14s, maintained smoke105
+passes4.72s and typecheck passes. All734 public non-Markdown inputs match,
+digest `408ebbb02739826ff108b66f3298ea6e8630ffde63aa23ed02af0ac45fe06b78`.
+
+```sh
+npx vitest run src/game/residentTravelEnvironmentExecution.test.ts -t 'stops real dry-bank progress as water rises and resumes only after freshly admitted falling-water sight' --maxWorkers=1
+npx vitest run src/game/residentTravelEnvironmentExecution.test.ts src/game/humanPerception.travelSurface.test.ts src/game/humanPerception.restSurface.test.ts src/sim/residentSurfaceKnowledge.test.ts src/sim/residentTravelAdvance.test.ts src/sim/residentTravelRoute.test.ts --maxWorkers=2
+npm run test:smoke
+npm run typecheck
+```
+
+This is controlled producer/execution evidence, not autonomous crossing,
+ordinary controls, outer58 relaunch, rendered play, general water/current
+behavior, performance or directive closure. Production, schemas, supported
+readers, dependencies and policy remain unchanged. The reusable sight/response
+contract was already canonical; this acceptance addition does not redefine it.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

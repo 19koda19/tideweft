@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createActorObservation, createActorPerceptionState, stepActorPerception, type ActorObservation } from "../sim/actorPerception";
-import { assertWorldInvariants, createWorld, createWorldView, deserializeWorld, serializeWorld, stepWorld } from "../sim/public";
+import { assertWorldInvariants, createWorld, createWorldView, deserializeWorld, runTicks, serializeWorld, stepWorld } from "../sim/public";
 import {
   replaceResidentActivity,
   RESIDENT_TRAVEL_ACTIVITY_OWNER_ID,
@@ -48,13 +48,14 @@ function fixture(
     resident.condition.exhaustion = 100_000;
   }
   for (const contract of world.contracts) {
+    if (contract.status !== "offered") continue;
     contract.playerExclusiveUntilTick = tick + 1_000;
     contract.dueTick = tick + 2_000;
   }
   expect(adoptResidentActivities(world)).toBe(true);
   const selected = [...world.residents].sort((left, right) => left.identity.stableId.localeCompare(right.identity.stableId))
     .find((resident) => {
-      if (resident.location.kind !== "settlement") return false;
+      if (resident.location.kind !== "settlement" || resident.activeContractId !== null) return false;
       const settlementId = resident.location.settlementId;
       return world.settlements.find(({ id }) => id === settlementId)!.inventory[resource] >= quantity;
     });
@@ -64,14 +65,17 @@ function fixture(
   const route = world.routes.find((candidate) => candidate.fromSettlementId === originId || candidate.toSettlementId === originId)!;
   route.traceStrength = FIXED_POINT;
   const destinationId = route.fromSettlementId === originId ? route.toSettlementId : route.fromSettlementId;
-  const contract = { ...world.contracts[0]!, originSettlementId: originId, destinationSettlementId: destinationId,
+  const contractIndex = world.contracts.findIndex((candidate) => candidate.status === "offered"
+    && candidate.cargoQuantity === 0 && candidate.carrierKind === null && candidate.assignedResidentId === null);
+  if (contractIndex === -1) throw new Error("Synthetic transit requires an unassigned existing offer");
+  const contract = { ...world.contracts[contractIndex]!, originSettlementId: originId, destinationSettlementId: destinationId,
     requesterResidentId: world.settlements.find(({ id }) => id === destinationId)!.residentIds[0]!,
     status: "in-transit" as const, carrierKind: "resident" as const, assignedResidentId: selected.id,
     resource, quantity, cargoQuantity: quantity, createdTick: tick - 3,
     playerExclusiveUntilTick: tick - 3, acceptedTick: tick - 2, departedTick: tick - 1,
     arrivalTick: tick + 100, dueTick: tick + 600, completedTick: null, routeId: route.id,
     porterRouteIds: [route.id], porterSettlementIds: [originId, destinationId] };
-  world.contracts[0] = contract;
+  world.contracts[contractIndex] = contract;
   const stock = world.settlements.find(({ id }) => id === originId)!.inventory;
   expect(stock[resource]).toBeGreaterThanOrEqual(quantity);
   // The same finite origin stock becomes this aggregate contract's cargo.
@@ -84,7 +88,12 @@ function fixture(
   const pose = residentTravelSegmentPose(segment, 0);
   world.residents = world.residents.map((resident) => replaceResidentActivity(resident, {
     ...resident.activity!, version, ownerId: version === 8 ? RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID : RESIDENT_TRAVEL_ACTIVITY_OWNER_ID,
-    inspectionTask: null, pickupTask: null, travelTask: null,
+    inspectionTask: null, pickupTask: null,
+    // A later real lower-world source may contain already-carried journeys.
+    // Preserve their actual coarse location/custody, not invented fine history.
+    travelTask: resident.location.kind === "route" ? {
+      kind: "contract-travel", mode: "legacy-coarse", contractId: resident.activeContractId!, adoptedAtTick: tick,
+    } : null,
   }));
   const actorId = selected.identity.stableId;
   const get = () => world.residents.find(({ identity }) => identity.stableId === actorId)!;
@@ -219,6 +228,149 @@ describe("informed next-segment water hold execution foundations", () => {
     // Cargo retains its104-unit ceiling; actual meadow contact gives96.
     expect(current.get().activity!.poses.at(-1)!.position).toEqual(residentTravelSegmentPose(current.segment, 96).position);
     expect(current.contract).toMatchObject({ status: "in-transit", cargoQuantity: 1, assignedResidentId: current.get().id });
+  });
+
+  it("stops real dry-bank progress as water rises and resumes only after freshly admitted falling-water sight", () => {
+    // Arranged transit/terrain foundations, not a native ford or autonomous
+    // scenario. Reach the late clock through the real pre-body engine first;
+    // preserve every prior journey rather than rebinding only clock roots.
+    const source = structuredClone(BASE);
+    runTicks(source, 1_079 - source.meta.completedTick);
+    assertWorldInvariants(source);
+    expect(source.meta.completedTick).toBe(1_079);
+    expect(source.tide).toEqual(tideAtTick(1_079));
+    expect(source.residents.every(({ perception }) => perception.tick === 1_079)).toBe(true);
+    const nativeCarried = source.contracts.filter(({ status }) => status === "in-transit");
+    expect(nativeCarried).toHaveLength(14);
+    expect(source.contracts[0]).toMatchObject({ status: "fulfilled", cargoQuantity: 0 });
+    const retainedContracts = structuredClone(source.contracts.filter(({ status }) => status !== "offered"));
+    const sourceText = serializeWorld(source);
+    const current = fixture(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION, { resource: "parts", quantity: 14 }, source);
+    expect(serializeWorld(source)).toBe(sourceText);
+    expect(current.world.contracts.filter(({ id }) => retainedContracts.some((contract) => contract.id === id)))
+      .toEqual(retainedContracts);
+    expect(current.contract.id).not.toBe(source.contracts[0]!.id);
+    for (const contract of nativeCarried) {
+      const oldCarrier = source.residents.find(({ id }) => id === contract.assignedResidentId)!;
+      const carrier = current.world.residents.find(({ id }) => id === contract.assignedResidentId)!;
+      expect(carrier.activeContractId).toBe(oldCarrier.activeContractId);
+      expect(carrier.location).toEqual(oldCarrier.location);
+      expect(carrier.activity?.travelTask).toEqual({ kind: "contract-travel", mode: "legacy-coarse",
+        contractId: contract.id, adoptedAtTick: 1_079 });
+    }
+    const task = current.get().activity!.travelTask!;
+    if (task.mode !== "physical") throw new Error("Rising-water foundation requires its arranged physical commitment");
+    const custody = structuredClone(current.contract);
+    const cohort = current.world.residents.map(({ id, identity }) => ({ id, identity }));
+    const commitmentEvents = current.world.events.filter(({ type, subjectId }) => subjectId === custody.id
+      && (type === "contract-departed" || type === "contract-fulfilled"));
+    const sourceTile = current.world.terrain.tiles[Math.floor(current.segment.start.localY / 1_000)
+      * current.world.terrain.width + Math.floor(current.segment.start.localX / 1_000)]!;
+    const targetTile = current.world.terrain.tiles[Math.floor(current.target.localY / 1_000)
+      * current.world.terrain.width + Math.floor(current.target.localX / 1_000)]!;
+    expect(sourceTile.index).not.toBe(targetTile.index);
+    sourceTile.terrain = "ridge";
+    // The actual tide alone changes support after this controlled elevation:
+    // dry1079 → wet1080 → dry1081. The source bank stays dry throughout.
+    const beforePeak = tideAtTick(1_079);
+    const peak = tideAtTick(1_080);
+    expect(beforePeak).toMatchObject({ level: 559_083, direction: 1 });
+    expect(peak.level).toBe(MAX_TIDE_LEVEL);
+    expect(tideAtTick(1_081)).toMatchObject({ level: beforePeak.level, direction: -1 });
+    targetTile.elevation = Math.floor((beforePeak.level + peak.level) / 2);
+    expect(residentRestTargetHasDrySupport(current.world, current.target)).toBe(true);
+    expect(residentTravelStepUnits(current.get().activity!, current.contract)).toBe(77);
+    const get = (world: WorldState) => world.residents.find(({ identity }) => identity.stableId === current.actorId)!;
+    const expectOffset = (world: WorldState, offset: number) => {
+      expect(get(world).activity!.poses.at(-1)).toEqual(residentTravelSegmentPose(current.segment, offset));
+    };
+    const closeObservedInterval = (world: WorldState, completedPhase: number,
+      surface: "water-covered-ground" | "dry-ground") => {
+      for (let phase = completedPhase + 1; phase <= 10; phase += 1) {
+        expect(advanceResidentRestActivities(world, phase, WINDOW)).not.toBeNull();
+      }
+      const window = createRegionalTerrainWindow(world.meta.rootSeed,
+        createTerrainRegionStreamingState({ rootSeed: world.meta.rootSeed }), WINDOW.origin);
+      const view = createRegionalWorldView(createWorldView(world), window,
+        projectRegionalCartographyWindow(createRegionalCartography(world.meta.rootSeed), window));
+      const targetTick = world.meta.completedTick + 1;
+      const batches = collectExistingHumanObservations({ world: view, window, targetTick, playerSamples: [] });
+      expect(humanObservationCollectionRejected(batches)).toBe(false);
+      expect(batches.find(({ observerId }) => observerId === current.actorId)?.observations)
+        .toContainEqual(expect.objectContaining({ id: residentRestSurfaceObservationId(current.actorId, current.target),
+          observedAtTick: targetTick, perceivedClass: surface, interrupt: "information",
+          area: { center: current.target, radiusUnits: 0 } }));
+      const byResident = new Map(batches.map(({ residentId, observations }) => [residentId, observations]));
+      const frame = { tick: targetTick, residents: world.residents.map((resident) => ({
+        residentId: resident.id, actorId: resident.identity.stableId, observations: byResident.get(resident.id) ?? [],
+      })) };
+      const admission = prepareResidentTravelAdvance(world, WINDOW);
+      expect(admission).not.toBeNull();
+      try { stepWorld(world, [], frame, undefined, admission!); }
+      finally { revokeResidentTravelAdvance(admission!); }
+      expect(prepareResidentRestActivities(world)).toBe(true);
+      expect(world.residents.every((resident) => canonicalResidentActivityForWorld(world, resident) !== null)).toBe(true);
+      assertWorldInvariants(world);
+    };
+    for (let phase = 1; phase <= 10; phase += 1) {
+      expect(advanceResidentRestActivities(current.world, phase, WINDOW)?.movedActorIds).toContain(current.actorId);
+      // Conserved parts14 allows77; actual source ridge permits43. Ten steps
+      // remain below the500-unit tile edge, never entering the future wet cell.
+      expectOffset(current.world, phase * 43);
+    }
+    closeObservedInterval(current.world, 10, "dry-ground");
+    expect(current.world.meta.completedTick).toBe(1_080);
+    expect(residentRestTargetHasDrySupport(current.world, current.target)).toBe(false);
+    expectOffset(current.world, 430);
+    expect(current.get().activity?.travelTask).toMatchObject({ phase: "approaching", waitReason: null });
+    const blocked = advanceResidentRestActivities(current.world, 1, WINDOW);
+    expect(blocked).not.toBeNull();
+    expect(blocked?.movedActorIds).not.toContain(current.actorId);
+    expect(current.get().activity?.travelTask).toMatchObject({ phase: "waiting", waitReason: "no-traversable-route",
+      selectedAtTick: task.selectedAtTick });
+    for (let phase = 2; phase <= 9; phase += 1) {
+      expect(advanceResidentRestActivities(current.world, phase, WINDOW)?.movedActorIds).not.toContain(current.actorId);
+      expectOffset(current.world, 430);
+    }
+    const phase9 = serializeWorld(current.world);
+    const continuations = [current.world, deserializeWorld(phase9), structuredClone(current.world)];
+    for (const world of continuations) {
+      expect(serializeWorld(world)).toBe(phase9);
+      closeObservedInterval(world, 9, "water-covered-ground");
+      expect(world.meta.completedTick).toBe(1_081);
+      expect(residentRestTargetHasDrySupport(world, current.target)).toBe(true);
+      expectOffset(world, 430);
+      expect(get(world).activity?.travelTask).toMatchObject({ phase: "waiting", waitReason: "observed-water",
+        selectedAtTick: task.selectedAtTick });
+      expect(get(world).perception.beliefs).toContainEqual(expect.objectContaining({
+        sourceObservationId: residentRestSurfaceObservationId(current.actorId, current.target), lastObservedTick: 1_081,
+        perceivedClass: "water-covered-ground",
+      }));
+    }
+    const held = serializeWorld(current.world);
+    for (const world of continuations.slice(1)) expect(serializeWorld(world)).toBe(held);
+    for (const world of continuations) {
+      for (let phase = 1; phase <= 10; phase += 1) {
+        expect(advanceResidentRestActivities(world, phase, WINDOW)?.movedActorIds).not.toContain(current.actorId);
+        expectOffset(world, 430);
+      }
+      closeObservedInterval(world, 10, "dry-ground");
+      expect(world.meta.completedTick).toBe(1_082);
+      expect(get(world).activity?.travelTask).toMatchObject({ phase: "approaching", waitReason: null,
+        selectedAtTick: task.selectedAtTick });
+      expectOffset(world, 430);
+      expect(advanceResidentRestActivities(world, 1, WINDOW)?.movedActorIds).toContain(current.actorId);
+      expectOffset(world, 473);
+      expect(world.contracts.find(({ id }) => id === custody.id)).toEqual(custody);
+      expect(world.residents.map(({ id, identity }) => ({ id, identity }))).toEqual(cohort);
+      expect(world.events.filter(({ type, subjectId }) => subjectId === custody.id
+        && (type === "contract-departed" || type === "contract-fulfilled"))).toEqual(commitmentEvents);
+      assertWorldInvariants(world);
+    }
+    const resumed = serializeWorld(current.world);
+    for (const world of continuations.slice(1)) expect(serializeWorld(world)).toBe(resumed);
+    // Full inner-world bytes include real hourly production, needs, prior
+    // coarse arrivals and events; no frozen global stock or outer58 claim.
   });
 
   it.each(["stale", "evicted", "foreign", "wrong-target"] as const)("retains an observed hold with %s knowledge even when physical support is dry", (kind) => {
