@@ -55,6 +55,11 @@ import {
 } from "../sim/residentTravelRoute";
 import { residentTravelIntervalWorkUsed, residentTravelStepUnits } from "../sim/residentTravelAdvance";
 import { TERRAIN_DRAG_PERMILLE } from "./footing";
+import {
+  applyWayknotServiceWear, queryWayknotEffects, MAX_WAYKNOT_CAPACITY,
+  WAYKNOT_FULL_STRENGTH, WAYKNOT_PERMILLE, WAYKNOT_STATE_VERSION,
+  type WayknotState,
+} from "./wayknots";
 import type { LivingActorInteractionWindow } from "./livingActorSimulation";
 import { residentRationPriorityEligible } from "../sim/residentRationUse";
 import { residentMaterialPriorityEligible } from "../sim/residentMaterialUse";
@@ -65,7 +70,7 @@ import type { SettlementEcologyState } from "./settlementEcology";
 import { settlementKeeperInspectionCauseForWorld } from "./settlementKeeperInspection";
 import { waterDepthAt } from "../sim/terrain";
 import { residentRestSurfaceKnowledge } from "../sim/residentSurfaceKnowledge";
-import type { ResidentState, WorldState } from "../sim/types";
+import { WORLD_HEIGHT, WORLD_WIDTH, type ResidentState, type WorldState } from "../sim/types";
 import { createLivingActorAddress, headingFromRadians } from "./livingActor";
 import {
   createLivingActorTraversabilityCellsFromCodes,
@@ -85,6 +90,9 @@ import {
   type WorldPosition,
 } from "./worldPosition";
 
+/** Persistent aid addresses never inherit a legacy compatibility grid's stride. */
+const TRAVEL_WAYKNOT_GRID = Object.freeze({ width: WORLD_WIDTH, height: WORLD_HEIGHT });
+
 /** Local dry-foot rest/service approach, not full-route planning or watercraft. */
 const CORRIDOR_PADDING_TILES = 4;
 const MAX_CORRIDOR_AXIS_TILES = 16;
@@ -102,6 +110,8 @@ export interface ResidentRestActivityStepResult {
   readonly waitingActorIds: readonly string[];
   /** Diagnostic bound, not persisted authority or a frame-time quota. */
   readonly maximumSurfaceCells: number;
+  /** Same accepted aid root, or its staged successor; caller commits with bodies. */
+  readonly wayknots?: WayknotState;
 }
 
 /**
@@ -429,11 +439,14 @@ export function prepareResidentRestActivities(
  * Exactly one accepted 100ms body step, including a stationary pose for every
  * adopted human. The caller owns timing, publication, hearing and rollback.
  * This does not itself enable runtime movement or authorize an old save format.
+ * Optional aids must be the caller's already accepted canonical player root;
+ * this adapter bounds queries but is not an untrusted aid-record decoder.
  */
 export function advanceResidentRestActivities(
   world: WorldState,
   phase: number,
   window?: LivingActorInteractionWindow,
+  wayknots?: WayknotState,
 ): ResidentRestActivityStepResult | null {
   if (!Number.isSafeInteger(phase) || phase < 1 || phase > RESIDENT_ACTIVITY_MAX_PHASE) return null;
   const tick = world.meta.completedTick;
@@ -442,7 +455,15 @@ export function advanceResidentRestActivities(
   const arrivedActorIds: string[] = [];
   const waitingActorIds: string[] = [];
   let maximumSurfaceCells = 0;
+  let nextWayknots = wayknots;
   try {
+    // This is the existing accepted player aid root, not a new save reader.
+    // Retain its six-piece query bound even for an incorrect internal caller.
+    if (nextWayknots !== undefined && (nextWayknots.version !== WAYKNOT_STATE_VERSION
+      || !Number.isSafeInteger(nextWayknots.capacity) || nextWayknots.capacity < 0
+      || nextWayknots.capacity > MAX_WAYKNOT_CAPACITY
+      || !Array.isArray(nextWayknots.wayknots)
+      || nextWayknots.wayknots.length > MAX_WAYKNOT_CAPACITY)) return null;
     const travelFrame = window === undefined ? null : residentTravelInteractionFrame(window);
     if (window !== undefined && travelFrame === null) return null;
     for (const resident of world.residents) {
@@ -485,9 +506,28 @@ export function advanceResidentRestActivities(
             const sourceY = Math.floor(pose.position.localY / WORLD_POSITION_UNITS_PER_TILE);
             const sourceTile = world.terrain.tiles[sourceY * world.terrain.width + sourceX];
             if (sourceTile === undefined || sourceTile.x !== sourceX || sourceTile.y !== sourceY) return null;
-            const contactStepUnits = residentActivitySupportsTravelEnvironment(activity)
+            const bareContactStepUnits = residentActivitySupportsTravelEnvironment(activity)
               ? Math.floor(allowance * TERRAIN_DRAG_PERMILLE[sourceTile.terrain] / 1_000)
               : allowance;
+            let contactStepUnits = bareContactStepUnits;
+            let winningMatId: number | null = null;
+            if (residentActivitySupportsTravelEnvironment(activity) && nextWayknots !== undefined) {
+              const effects = queryWayknotEffects(nextWayknots, {
+                tileIndex: sourceY * WORLD_WIDTH + sourceX, terrain: sourceTile.terrain,
+                waterDepth: 0, windExposed: false,
+              }, TRAVEL_WAYKNOT_GRID, tick, pose.position.region);
+              if (effects.movementCostPermille < WAYKNOT_PERMILLE) {
+                // Query strength is already setup-scaled. Do not halve again
+                // or let support exceed the same cargo-qualified step quota.
+                const winner = effects.influences.find((influence) => influence.kind === "reed-mat"
+                  && influence.movementCostPermille === effects.movementCostPermille);
+                if (winner === undefined) return null;
+                winningMatId = winner.id;
+                const drag = Math.min(WAYKNOT_PERMILLE,
+                  TERRAIN_DRAG_PERMILLE[sourceTile.terrain] + WAYKNOT_PERMILLE - effects.movementCostPermille);
+                contactStepUnits = Math.floor(allowance * drag / WAYKNOT_PERMILLE);
+              }
+            }
             const resolution = resolveLivingActorLocomotion({
               requestId: `contract-travel:${resident.identity.stableId}:${contract.id}`,
               tick, actor: createLivingActorAddress({ actorId: resident.identity.stableId, species: "human", persistence: "promoted",
@@ -498,6 +538,17 @@ export function advanceResidentRestActivities(
             if (resolution.kind === "moved") {
               const nextOffset = residentTravelSegmentOffset(segment, resolution.actor.position);
               if (nextOffset === null || nextOffset <= offset || nextOffset > targetOffset) return null;
+              const enteredTile = Math.floor(resolution.actor.position.localX / WORLD_POSITION_UNITS_PER_TILE) !== sourceX
+                || Math.floor(resolution.actor.position.localY / WORLD_POSITION_UNITS_PER_TILE) !== sourceY;
+              const bareDistance = Math.min(maximumStepUnits, bareContactStepUnits, targetOffset - offset);
+              if (winningMatId !== null && nextWayknots !== undefined && enteredTile && nextOffset - offset > bareDistance) {
+                // One actual entry helped by this SOURCE mat, not a query,
+                // repeated fine sample or a destination aid not yet contacted.
+                const service = applyWayknotServiceWear(nextWayknots, winningMatId, tick,
+                  WAYKNOT_FULL_STRENGTH, pose.position.region);
+                if (!service.ok) return null;
+                nextWayknots = service.state;
+              }
               pose = { position: resolution.actor.position, heading: resolution.actor.heading };
               travelTask = { ...travelTask, lastProgressAtTick: tick };
               const next = advanceResidentTravelWaypoint(world, contract, travelTask, pose.position, tick);
@@ -588,6 +639,7 @@ export function advanceResidentRestActivities(
     phase, movedActorIds: Object.freeze(movedActorIds),
     arrivedActorIds: Object.freeze(arrivedActorIds), waitingActorIds: Object.freeze(waitingActorIds),
     maximumSurfaceCells,
+    ...(wayknots === undefined ? {} : { wayknots: nextWayknots! }),
   });
 }
 

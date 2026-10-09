@@ -5266,6 +5266,88 @@ legal carried failure remain unfinished. No dependency/configuration, schema,
 historical directive, artifact/platform/release or whole-directive change.
 Earlier cumulative certificates retain their exact checkpoint scope only.
 
+### Resident source-mat support and finite service — 2026-10-09
+
+Local, unpublished follow-up on `56d80fe8c966579683a319bebd1965f32296d2c2`
+connects current-v8 dry contract travel to an existing deployed source reed mat.
+The shared setup-scaled effect increases resolved displacement beneath the same
+cargo and interval ceilings; only an actual strictly helped tile entry charges
+the winning source piece. Bodies and aid condition publish/roll back together.
+[Architecture](./ARCHITECTURE.md#source-qualified-resident-reed-mat-service)
+owns the exact law; broader channels, wet traversal and player-assisted wear
+are not supplied by this consumer. Schemas58/carry14/readers stay unchanged.
+
+Twenty new lower-owner cases characterize full/setting support and12,000/6,000
+nominal service, source rather than destination contact, zero-benefit clipping,
+inactive/reclaimed/removed aids, final use before breakage, wet rejection,
+frozen-v7 parity, phase4/9 detached continuation and staged-roster failure.
+The valid64×48 address contrast uses controlled geometry and persistent96-column
+aid addresses; it is a dimension/conservation foundation, not native legacy
+acquisition or player UI evidence.
+
+The appended runtime case uses the existing generated estuary offer127 for
+eight parts, real automatic acceptance/pickup and ordinary accepted steps
+through native ebb. It discovers an actual qualifying entry at any fine phase,
+cold-replays the exact interval prefix, then stages the finite saved starter
+through the existing placement kernel. Placement debit/setup remain real, but
+this is **foundation-only deployment**, not ordinary player movement/F placement.
+Removing just that aid changes displacement. Equal-phase bare/aided stock and
+the complete conservation ledger agree while legitimate settlement production
+continues. Current-save phase4/9 continuations preserve every compared durable
+root and replay no sound. Later real resident publication failure restores
+body/aid/all saved roots; cold retry matches the successful step.
+
+Initial new-case diagnostics failed on unavailable high-tide contact, a phase9
+sampling restriction, a mismatched frame shape and stale pre-ebb stock totals.
+Those failed reports remain failed. Corrections follow actual tidal opportunity,
+all-phase service and equal-work comparison; they do not reshape native terrain,
+move a body, assign a winner, clear lawful water knowledge or suppress production.
+
+Final selected native case passes1test/13deliberately unselected in70.210s.
+The complete affected35-file domain passes814tests,0failed/0pending,263.19s,
+including all14 pickup cases and all3 native forward/interrupted/reverse journeys.
+Maintained smoke passes6files/105tests in6.08s; the existing late Voice-closure
+rollback and F-sounding/reclaim cases pass2tests/96deliberately unselected.
+Initial/final typecheck and the45-case documentation-reuse self-test pass.
+Commands:
+
+```sh
+npx vitest run src/game/runtime.residentPickup.integration.test.ts \
+  --testNamePattern='commits real helped entry and finite mat wear, cold restores it, and rolls both back on later publication failure' \
+  --maxWorkers=1
+npx vitest run \
+  src/sim/cargoEnvironment.test.ts src/sim/residentActivity.test.ts \
+  src/sim/residentActivity.world.integration.test.ts src/sim/residentActivityCapabilities.test.ts \
+  src/sim/residentActivityEventLocus.test.ts src/sim/residentSurfaceKnowledge.test.ts \
+  src/sim/residentPickupUse.test.ts src/sim/residentPickupActivity.test.ts \
+  src/sim/residentTravelRoute.test.ts src/sim/residentTravelActivity.test.ts \
+  src/sim/residentTravelAdvance.test.ts src/sim/systemComposition.integration.test.ts \
+  src/game/looseCargo.test.ts src/game/player.test.ts \
+  src/game/residentActivityExecution.test.ts src/game/residentTravelEnvironmentExecution.test.ts \
+  src/game/residentActivityPersistence.test.ts src/game/residentActivitySaveBoundary.test.ts \
+  src/game/saveCompatibilityPolicy.test.ts src/game/humanPerception.activity.test.ts \
+  src/game/humanPerception.presentation.test.ts src/game/projection.residentPickup.test.ts \
+  src/game/runtime.residentActivityCircadian.test.ts src/game/runtime.residentActivityPublication.test.ts \
+  src/game/runtime.residentRest.integration.test.ts src/game/runtime.residentPickup.integration.test.ts \
+  src/game/runtime.residentTravel.integration.test.ts src/game/runtime.residentTravelEnvironmentCompatibility.integration.test.ts \
+  src/game/footing.test.ts src/game/footing.release.audit.test.ts src/game/player.gear.integration.test.ts \
+  src/game/wayknots.test.ts src/game/wayknots.integration.test.ts src/game/regionalWayknots.test.ts \
+  src/render/wayknots.test.ts --maxWorkers=2
+npx vitest run src/game/runtime.test.ts \
+  --testNamePattern='rolls back introduction facts, save, and vocal audio when later interval closure fails|requires a sounding before binding a flooded non-channel anchor but still permits reclaim' \
+  --maxWorkers=1
+npm run test:smoke
+npm run typecheck
+npm run test:documentation-reuse
+```
+
+All731 public non-Markdown inputs and parent HEAD match before/after:
+`d71517d17470c78d01e6d722a52a8556374aef8fc4004ca8ca7fabac76584b9a`.
+Timing above describes correctness runs, not production performance evidence.
+No normal visual play, new cumulative certificate, package, public release or
+whole-directive closure is claimed. Broader current/alternative/failure and
+native multi-leg runtime work remain unfinished; no dependency change occurred.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

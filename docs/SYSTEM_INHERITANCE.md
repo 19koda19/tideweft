@@ -129,6 +129,12 @@ independent physical legality. The same contract applies to the authenticated
 without giving frozen v7 or coarse journeys remote sight. This does not grant general crossing, support,
 equipment, route knowledge or remote perception.
 
+Applicable `hard-country` and `material-culture` consumers reuse
+[source-qualified resident reed-mat service](./ARCHITECTURE.md#source-qualified-resident-reed-mat-service):
+physical benefit and qualified wear share the same finite aid identity and
+atomic body/aid transaction. This narrow dry-travel consumer grants no NPC
+equipment/deployment, wet capability or other staged service channel.
+
 ## Mandatory feature inheritance audit
 
 Before implementing any substantial new actor, species, human role,

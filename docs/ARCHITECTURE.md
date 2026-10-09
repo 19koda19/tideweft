@@ -2756,7 +2756,8 @@ quota is not charged drag twice. Actual dry flats, marsh, meadow and ridge can
 therefore change displacement without changing stock or custody. Player values
 and arithmetic are unchanged. Frozen v7, all already accepted poses and the
 explicit macro owner retain their existing behavior. This is not general grade,
-water/current, injury, mat assistance, gear or a change to service/approach pace.
+water/current, injury, gear or a change to service/approach pace. The narrow
+shared mat consumer below adds support without changing these ground values.
 
 `residentTravelAdvance.ts` owns the narrow macro-transport exception to generic
 coarse actor immobility. One source-bound, one-shot closing admission captures
@@ -2812,6 +2813,34 @@ cold rejection and receipt tests remain foundation evidence, not additional
 native journeys or normal visual play. This does not close the
 whole traveler/environment directive or prove broader crossings, addressable
 porter cargo, failure/recovery breadth, visual acceptance or performance.
+
+#### Source-qualified resident reed-mat service
+
+Current local/unpublished v8 dry contract travel can use the already accepted
+`player.wayknots` root, not an NPC inventory or new aid authority. The bounded
+six-piece query uses the actual source/contact tile and the existing
+setup-scaled movement benefit. Its added ground allowance is capped at 1000
+permille before applying the same cargo-qualified step ceiling and unscaled
+remaining interval quota. Frozen v7, macro transport and other approaches do
+not gain this interaction. Terrain indexing uses its actual width; persistent
+regional aid addresses retain 96×72 even for supported 64×48 lower-world terrain.
+
+One service is an actual tile-entry transition whose resolved displacement
+strictly exceeds the identical clipped, same-budget bare step. The lowest-ID
+winning source mat is charged **after** resolution through the existing wear
+kernel: nominally 12,000 full-strength or 6,000 while setting, with setup scaling
+applied once and remaining condition clamped at zero. Queries, standing,
+repeated fine samples without entry, zero-benefit clipping and a destination
+mat not yet contacted spend no condition. Positive pre-event condition supplies
+that resolved step; breakage follows it.
+
+All candidate bodies and the immutable aid successor are staged together;
+runtime publishes them under the existing fail-closed player/world transaction.
+Save/load retains condition, identity and current body work without replayed
+audio. Schemas/readers and placement/reclaim controls are unchanged. This grants
+no wet crossing, remote knowledge, NPC acquisition or deployment. Kernel-staged
+placement at a real native source remains foundation evidence, not ordinary
+player movement/F placement or normal visual play.
 
 ### Observed next-segment travel support
 

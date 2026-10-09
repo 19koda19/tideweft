@@ -14285,9 +14285,11 @@ export async function createTideweftRuntime(
     }
     if (world.residents.some((resident) => Object.hasOwn(resident, "activity"))) {
       const phase = playerStepsSinceWorldTick + 1;
-      if (advanceResidentRestActivities(world, phase, regionalTravel.window) === null) {
+      const activityStep = advanceResidentRestActivities(world, phase, regionalTravel.window, player.wayknots);
+      if (activityStep === null || activityStep.wayknots === undefined) {
         throw new Error("Resident rest approach failed validation");
       }
+      player.wayknots = activityStep.wayknots;
       publishResidentActivities(phase);
     }
     const endingTileWaterDepth = worldView.terrain.tiles[playerTileIndex(player)]?.waterDepth;
