@@ -1,5 +1,8 @@
 import { FIXED_POINT, type TerrainKind } from "../sim/types";
 
+/** Existing ordinary human foot band; this is not ADRIFT stand/swim capability. */
+export const ORDINARY_FOOT_MAX_WATER_DEPTH = 35_000 as const;
+
 /** Existing physical ground-motion profile, shared without gait or equipment. */
 export const TERRAIN_DRAG_PERMILLE: Readonly<Record<TerrainKind, number>> = Object.freeze({
   "deep-water": 720,
@@ -244,7 +247,7 @@ export function evaluateFooting(input: FootingInput): FootingEvaluation {
     {
       code: "deep-water",
       label: "deep water",
-      pressure: depth > 35_000 ? depth - 35_000 : 0,
+      pressure: depth > ORDINARY_FOOT_MAX_WATER_DEPTH ? depth - ORDINARY_FOOT_MAX_WATER_DEPTH : 0,
       weight: FIXED_POINT,
     },
     {

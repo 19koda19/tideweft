@@ -16,7 +16,7 @@ import { stableStringify } from "../sim/util";
 import { deserializeBio0Ecology } from "./bio0Ecology";
 import { livingActorAddressForResident } from "./livingActor";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
-import type { PlayerState } from "./player";
+import { PLAYER_FOOT_MAX_WATER_DEPTH, type PlayerState } from "./player";
 import { restorePlayerRegionalTravel } from "./regionalPlayerTravel";
 import * as residentActivityExecution from "./residentActivityExecution";
 import * as humanPerception from "./humanPerception";
@@ -27,7 +27,7 @@ import * as situatedExpressionChannelBank from "./situatedExpressionChannelBank"
 import * as residentIntroductionAuthority from "./residentIntroductionAdmissionAuthority";
 import { observableResidentRationUse, RESIDENT_CONVERSATION_RANGE_TILES } from "./projection";
 import { pressureMultiplier } from "../sim/world";
-import { tideAtTick } from "../sim/terrain";
+import { tideAtTick, waterDepthAt } from "../sim/terrain";
 import { playerWorldPositionInRegionalWindow, resolveResidentWorldPlacement } from "./residentSpatial";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import {
@@ -1049,45 +1049,144 @@ describe("ordinary runtime resident rest execution", () => {
     expect(soundscapePlay).not.toHaveBeenCalled();
   }, 60_000);
 
-  it("waits on an actual native wet source without phantom arrival or recovery, including a cold continuation", async () => {
+  it("leaves an actual native foot-shallow source for a dry refuge without phantom recovery, preserving cold work and rollback", async () => {
     const fixture = await firstNativeFixture("wet-source");
     const repository = new MemoryRepository(fixture.record);
     const runtime = await open(repository);
     const original = deserializeWorld(decode(fixture.record).world);
     expect(residentRestTargetHasDrySupport(original, fixture.source)).toBe(false);
     expect(residentRestTargetHasDrySupport(original, fixture.target)).toBe(true);
+    const sourceTile = original.terrain.tiles[Math.floor(fixture.source.localY / WORLD_POSITION_UNITS_PER_TILE)
+      * original.terrain.width + Math.floor(fixture.source.localX / WORLD_POSITION_UNITS_PER_TILE)]!;
+    expect(waterDepthAt(sourceTile, original.tide)).toBeGreaterThan(0);
+    expect(waterDepthAt(sourceTile, original.tide)).toBeLessThanOrEqual(PLAYER_FOOT_MAX_WATER_DEPTH);
     const originalTerrain = stableStringify(original.terrain);
     advanceOrdinaryFixedSteps(runtime, 4);
     await runtime.save();
     const middleRecord = repository.snapshot();
     const middle = decode(middleRecord);
-    const waiting = resident(middle, fixture.actorId);
-    expect(waiting.activity?.restTask).toMatchObject({
-      cause: "urgent-rest", origin: "selected", phase: "waiting", target: fixture.target,
-      waitReason: "no-traversable-route", nextReassessmentAtTick: fixture.tick + 1,
+    const approaching = resident(middle, fixture.actorId);
+    expect(approaching.activity?.version).toBe(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION);
+    expect(approaching.activeContractId).toBeNull();
+    expect(approaching.activity?.restTask).toMatchObject({
+      cause: "urgent-rest", origin: "selected", phase: "approaching", target: fixture.target,
+      waitReason: null,
     });
-    expect(waiting.activity?.poses.every(({ position }) => stableStringify(position) === stableStringify(fixture.source))).toBe(true);
-    expect(waiting.condition.exhaustion).toBe(fixture.exhaustion);
-    expect(waiting.circadian).toMatchObject({ restDestinationArrived: false, posture: { state: "awake" } });
+    expect(approaching.activity!.poses.at(-1)!.position).not.toEqual(fixture.source);
+    for (let phase = 1; phase <= 4; phase += 1) {
+      const delta = worldPositionDelta(approaching.activity!.poses[phase - 1]!.position,
+        approaching.activity!.poses[phase]!.position);
+      expect(Math.hypot(delta.x, delta.y)).toBeLessThanOrEqual(RESIDENT_REST_APPROACH_STEP_UNITS);
+    }
+    // The genuine420 tide is still wet. This is egress, not waiting for423 drying.
+    expect(deserializeWorld(middle.world).meta.completedTick).toBe(fixture.tick);
+    expect(waterDepthAt(sourceTile, deserializeWorld(middle.world).tide)).toBeGreaterThan(0);
+    expect(approaching.condition.exhaustion).toBe(fixture.exhaustion);
+    expect(approaching.circadian).toMatchObject({ restDestinationArrived: false, posture: { state: "awake" } });
     expect(stableStringify(deserializeWorld(middle.world).terrain)).toBe(originalTerrain);
-    advanceOrdinaryFixedSteps(runtime, 6);
+    advanceOrdinaryFixedSteps(runtime, 5);
+    await runtime.save();
+    const phase9Record = repository.snapshot();
+    const phase9 = decode(phase9Record);
+    expect(phase9.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    const egressPrefix = resident(phase9, fixture.actorId).activity!.poses;
+    expect(egressPrefix).toHaveLength(10);
+    for (const { position } of egressPrefix) {
+      const x = Math.floor(position.localX / WORLD_POSITION_UNITS_PER_TILE);
+      const y = Math.floor(position.localY / WORLD_POSITION_UNITS_PER_TILE);
+      const tile = original.terrain.tiles[y * original.terrain.width + x]!;
+      const depth = waterDepthAt(tile, original.tide);
+      if (depth > 0) {
+        expect(tile.index).toBe(sourceTile.index);
+        expect(depth).toBeLessThanOrEqual(PLAYER_FOOT_MAX_WATER_DEPTH);
+      }
+    }
+    advanceOrdinaryFixedSteps(runtime, 1);
     await runtime.save();
     const uninterrupted = decode(repository.snapshot());
     const afterWorld = resident(uninterrupted, fixture.actorId);
-    expect(afterWorld.activity?.poses[0]?.position).toEqual(fixture.source);
+    expect(afterWorld.activity?.poses[0]?.position).not.toEqual(fixture.source);
+    expect(afterWorld.activity?.restTask?.phase).toBe("approaching");
     expect(afterWorld.condition.exhaustion).toBe(fixture.exhaustion);
     expect(afterWorld.circadian?.restDestinationArrived).toBe(false);
     expect(deserializeWorld(uninterrupted.world).meta.completedTick).toBe(fixture.tick + 1);
+    advanceOrdinaryFixedSteps(runtime, 9);
+    await runtime.save();
+    const beforeArrivalRecord = repository.snapshot();
+    const beforeArrival = decode(beforeArrivalRecord);
+    expect(deserializeWorld(beforeArrival.world).meta.completedTick).toBe(fixture.tick + 1);
+    expect(beforeArrival.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    expect(resident(beforeArrival, fixture.actorId).condition.exhaustion).toBe(fixture.exhaustion);
+    advanceOrdinaryFixedSteps(runtime, 1);
+    await runtime.save();
+    const arrived = decode(repository.snapshot());
+    expect(deserializeWorld(arrived.world).meta.completedTick).toBe(fixture.tick + 2);
+    const rested = resident(arrived, fixture.actorId);
+    expect(rested.activity?.poses[0]?.position).toEqual(fixture.target);
+    expect(rested.activity?.restTask?.phase).toBe("arrived");
+    expect(rested.circadian).toMatchObject({ restDestinationArrived: true, posture: { state: "resting" } });
+    expect(rested.condition.exhaustion).toBeLessThan(fixture.exhaustion);
+    expect(stableStringify(deserializeWorld(arrived.world).terrain)).toBe(originalTerrain);
+    assertWorldInvariants(deserializeWorld(arrived.world));
     close(runtime);
 
-    const coldRepository = new MemoryRepository(middleRecord);
-    const cold = await open(coldRepository);
-    await cold.save();
-    expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(middle));
-    advanceOrdinaryFixedSteps(cold, 6);
-    await cold.save();
-    expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(uninterrupted));
-  }, 60_000);
+    for (const [prefixRecord, prefix] of [[middleRecord, middle], [phase9Record, phase9]] as const) {
+      const coldRepository = new MemoryRepository(prefixRecord);
+      soundscapePlay.mockClear();
+      const cold = await open(coldRepository);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(prefix));
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      advanceOrdinaryFixedSteps(cold, 10 - prefix.perceptionCarry.playerStepsSinceWorldTick);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(uninterrupted));
+      advanceOrdinaryFixedSteps(cold, 10);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(arrived));
+      close(cold);
+    }
+
+    // Reject after the genuine dry arrival/recovery attempted at422. Neither
+    // that result nor acoustic playback may escape the failed transaction.
+    const failedRepository = new MemoryRepository(beforeArrivalRecord);
+    const failed = await open(failedRepository);
+    const attemptedRecovery: Array<Readonly<{ position: WorldPosition; exhaustion: number; phase: string | undefined }>> = [];
+    const actualStepWorld = simulation.stepWorld;
+    const worldStep = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+      const result = actualStepWorld(...args);
+      if (args[0].meta.completedTick === fixture.tick + 2) {
+        const human = args[0].residents.find(({ identity }) => identity.stableId === fixture.actorId);
+        if (human?.activity !== undefined) attemptedRecovery.push({
+          position: human.activity.poses[0]!.position, exhaustion: human.condition.exhaustion,
+          phase: human.activity.restTask?.phase,
+        });
+      }
+      return result;
+    });
+    const closure = vi.spyOn(situatedExpressionChannelBank, "closeSituatedExpressionChannelBankInterval")
+      .mockReturnValueOnce(null);
+    soundscapePlay.mockClear();
+    advanceOrdinaryFixedStepsForExpectedFailure(failed, 1);
+    expect(closure).toHaveBeenCalledTimes(1);
+    expect(attemptedRecovery.some(({ position, exhaustion, phase }) => phase === "arrived"
+      && stableStringify(position) === stableStringify(fixture.target) && exhaustion < fixture.exhaustion)).toBe(true);
+    expect(failed.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+    expect(soundscapePlay.mock.calls).toEqual([["warning", 1]]);
+    await failed.save();
+    const rolledBackRecord = failedRepository.snapshot();
+    expect(authoritativeRoots(decode(rolledBackRecord))).toEqual(authoritativeRoots(beforeArrival));
+    closure.mockRestore();
+    worldStep.mockRestore();
+    close(failed);
+    const retryRepository = new MemoryRepository(rolledBackRecord);
+    soundscapePlay.mockClear();
+    const retry = await open(retryRepository);
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advanceOrdinaryFixedSteps(retry, 1);
+    await retry.save();
+    expect(authoritativeRoots(decode(retryRepository.snapshot()))).toEqual(authoritativeRoots(arrived));
+    close(retry);
+  }, 120_000);
 
   it.each([
     { seed: "marsh wait", observed: false },

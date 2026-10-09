@@ -39,7 +39,7 @@ import {
   type GearBenefitId,
   type GearEffectContext,
 } from "./gearEffects";
-import { evaluateFooting, TERRAIN_DRAG_PERMILLE as TERRAIN_DRAG, type FootingEvaluation, type FootingSurface } from "./footing";
+import { evaluateFooting, ORDINARY_FOOT_MAX_WATER_DEPTH, TERRAIN_DRAG_PERMILLE as TERRAIN_DRAG, type FootingEvaluation, type FootingSurface } from "./footing";
 import {
   evaluateFallRiskOnEntry,
   type FallConsequenceQuote,
@@ -81,7 +81,7 @@ export const BASE_CARGO_CAPACITY = 18;
 /** A fixed step can begin only above this reserve; reaching it collapses to exhausted zero. */
 export const PLAYER_MOVEMENT_STAMINA_GATE = 12_000 as const;
 /** Greatest water depth still treated as ordinary dry-foot travel rather than wading. */
-export const PLAYER_FOOT_MAX_WATER_DEPTH = 35_000 as const;
+export const PLAYER_FOOT_MAX_WATER_DEPTH = ORDINARY_FOOT_MAX_WATER_DEPTH;
 
 export type TravelPace = "rest" | "steady" | "swift";
 export type StabilityTrend = "recovering" | "steady" | "falling";

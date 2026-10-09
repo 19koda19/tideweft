@@ -1,4 +1,5 @@
 import { FIXED_POINT } from "../sim/types";
+import { ORDINARY_FOOT_MAX_WATER_DEPTH } from "./footing";
 
 export const WATER_FLOW_VERSION = 1 as const;
 
@@ -46,7 +47,7 @@ function fixedUnion(left: number, right: number): number {
  */
 export function deriveWaterFlowProfile(input: WaterFlowInput): WaterFlowProfile {
   const depth = unit(input.waterDepth);
-  if (depth <= 35_000) {
+  if (depth <= ORDINARY_FOOT_MAX_WATER_DEPTH) {
     return {
       version: WATER_FLOW_VERSION,
       strength: 0,

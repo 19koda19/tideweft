@@ -2445,7 +2445,8 @@ world advancement resets interval history without relocating stationary
 people, while actual legacy transport transitions retain their explicit coarse
 owner. `src/game/residentActivityExecution.ts` stages whole-roster adoption,
 selects rest through the existing circadian priorities, and uses bounded shared
-locomotion for dry-foot approach and exact supported arrival. Direct adapter
+locomotion for approach and exact dry-supported arrival. The current shallow-
+source exception below does not open wet destinations. Direct adapter
 and lower-world tests cover blocked waiting/retry, recovery and interrupted
 continuation. The dry-foot adapter has a bounded local corridor, not a streamed
 active-window input or an owned physical shelter. Binding a previously unbound
@@ -2461,7 +2462,7 @@ Legacy absent records remain absent on load and through an already-partly-consum
 its actual closure captures the first new anchor rather than inventing old
 poses. Runtime rest tests use ordinary RAF controls with explicitly controlled
 needs/weather/contracts, never injected tasks or arrival. They cover real dry
-approach, native wet-source waiting, exact arrival/recovery, moving keeper/BIO0
+approach, the preceding dry-only native wet-source wait, exact arrival/recovery, moving keeper/BIO0
 binding and phase4/9 cold equal-work continuation. Fine-step replacement and
 late world-closure failures restore the complete body/carry roots. This is not
 physical porter travel, complete settlement-service scope, manual visual proof,
@@ -2655,6 +2656,38 @@ full/coarse transitions, bounded planning and retries, scheduler fairness, and
 measured performance. The [inheritance applicability](./SYSTEM_INHERITANCE.md#existing-human-and-world-response-adoption)
 and [composition repair registry](./SYSTEM_COMPOSITION.md#high-leverage-composition-repair-registry)
 register these obligations without claiming that planned activity is live.
+
+#### Selected-rest shallow-source egress
+
+The local current-v8 resident execution now permits a narrowly applicable
+ordinary-foot escape from the **already occupied** source cell. This applies
+only to selected settlement-rest with no active cargo commitment and an
+authenticated dry refuge. `footing.ts:ORDINARY_FOOT_MAX_WATER_DEPTH` centralizes
+the existing35,000 foot band; the player alias, direct footing calculation and
+water-flow cutoff retain their exact prior values. It is not the55,000 ADRIFT
+standing rule, which requires a different posture and reserve.
+
+Only the occupied non-deep source can receive shallow access. Every other wet
+cell remains blocked, including intermediate supports and the destination.
+Ordinary shared pathfinding,105-unit accepted steps and the16×16 corridor
+remain unchanged. Actual local support is checked each step; no water body,
+vessel, physical gear, rated pack, injury or new health state is invented.
+Ration/material/inspection/pickup and loaded travel keep their dry-only law;
+frozen body1–7 retain theirs until genuine phase-zero adoption. Existing
+wet/dry target knowledge and observed-water holds are not reinterpreted as
+depth or safety knowledge, and only exact dry arrival admits recovery.
+
+The existing v8 pose/task protocol and current58/carry14 save boundaries
+already admit a pending wet source and authenticate the dry arrived target.
+Future accepted work changes; no retained pose is rewritten and no schema,
+reader or compatibility policy changes. Controlled native geometry now proves
+movement before the source dries, then dry arrival/recovery, equal-work cold
+continuation and late-failure rollback. Research owns exact evidence and limits.
+This remains partial capability, not ordinary untouched crowd/visual proof,
+general wading/crossing, meaningful current-force response or animal evacuation.
+Shared flow is zero within this foot band; the35k bound must not be cited as a
+current-resistance test. Water contact sound remains outside the narrow
+dry-contact producer rather than being fabricated from this new access.
 
 ### Observed settlement-rest support
 

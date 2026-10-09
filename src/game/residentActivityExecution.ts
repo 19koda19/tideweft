@@ -54,7 +54,7 @@ import {
   residentTravelSegmentPose, residentTravelWindowInterval,
 } from "../sim/residentTravelRoute";
 import { residentTravelIntervalWorkUsed, residentTravelStepUnits } from "../sim/residentTravelAdvance";
-import { TERRAIN_DRAG_PERMILLE } from "./footing";
+import { ORDINARY_FOOT_MAX_WATER_DEPTH, TERRAIN_DRAG_PERMILLE } from "./footing";
 import {
   applyWayknotServiceWear, queryWayknotEffects, MAX_WAYKNOT_CAPACITY,
   WAYKNOT_FULL_STRENGTH, WAYKNOT_PERMILLE, WAYKNOT_STATE_VERSION,
@@ -551,7 +551,10 @@ export function advanceResidentRestActivities(
         } else if (samePosition(pose.position, task.target)) {
           task = arriveAtRest(task, tick);
         } else {
-          const surface = restApproachSurface(world, resident, pose.position, task.target);
+          const shallowSourceEgress = activity.version === RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION
+            && task.kind === "settlement-rest" && task.origin === "selected"
+            && resident.activeContractId === null;
+          const surface = restApproachSurface(world, resident, pose.position, task.target, shallowSourceEgress);
           if (surface === null) task = waitForRest(task, tick, "outside-local-corridor");
           else {
             maximumSurfaceCells = Math.max(maximumSurfaceCells, surface.cells.length);
@@ -736,6 +739,7 @@ function restApproachSurface(
   resident: ResidentState,
   position: WorldPosition,
   target: WorldPosition,
+  shallowSourceEgress: boolean,
 ): LivingActorTraversabilitySurface | null {
   if (position.region.x !== 0 || position.region.y !== 0
     || target.region.x !== 0 || target.region.y !== 0) return null;
@@ -758,9 +762,13 @@ function restApproachSurface(
       const tile = world.terrain.tiles[y * world.terrain.width + x];
       if (tile === undefined || tile.x !== x || tile.y !== y) return null;
       const depth = waterDepthAt(tile, world.tide);
-      // First rest approach is dry-foot only. This grants no dog swimming,
-      // automatic player skiff, cliff equipment or new human injury behavior.
-      codes.push(tile.terrain === "deep-water" || depth > 0
+      // Current unladen rest may leave its already occupied ordinary-foot
+      // shallows, never enter another wet cell. Target support stays dry.
+      // Old protocols and other tasks retain their exact dry-only behavior;
+      // this grants no wading, ADRIFT, boat, gear or injury capability.
+      const occupiedShallows = shallowSourceEgress && x === ax && y === ay
+        && depth <= ORDINARY_FOOT_MAX_WATER_DEPTH;
+      codes.push(tile.terrain === "deep-water" || (depth > 0 && !occupiedShallows)
         ? -1 : Math.max(1, Math.min(1_000_000, tile.baseTravelCost)));
     }
   }

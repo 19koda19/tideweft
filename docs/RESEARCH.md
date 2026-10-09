@@ -5943,6 +5943,70 @@ produce no new contact until their established real phase-zero adoption.
 Ordinary crowd liveness, broader physical contacts and water/current behavior
 remain unfinished. No directive or publication boundary advances here.
 
+### Selected-rest shallow-source egress — 2026-10-09
+
+At parent `2da02741d00923b19c3d50059431a07f4f5bbbe0`, the native seed
+`resident activity executable rest approach` places resident75 at tile89,27:
+non-deep meadow, elevation502458, tide505000, depth2542. Its authenticated
+refuge90,26 and both diagonal support cells are dry. Controlled urgent-rest
+pressure selects the task through the actual routine; terrain, tide, clock,
+identity, body and arrival are not authored. Before the execution correction,
+the ordinary runtime case fails because the occupied wet source has no route.
+Natural drying occurs later; it is not evidence of successful earlier egress.
+
+The smallest production change opens only that occupied non-deep cell for
+current-v8 selected, unladen rest at depth≤35,000. The shared ordinary-foot
+constant replaces three identical existing literals without changing player
+or flow arithmetic. Dry destination and all other wet-cell exclusions remain;
+older protocols, other tasks, loaded travel, movement quotas and knowledge
+admission retain their owners. No schema, reader, equipment, injury, vessel,
+current-resistance capability or wet-contact sound is added.
+
+Fifteen pure cases cover native motion before any tide change, the exact35k
+boundary, deep-source/wet-target/wet-intermediate counterfactuals, frozen1–7
+waiting, inner-world clone/load and actual closing arrival. The revised native
+runtime case covers accepted motion while still wet, no phantom recovery,
+dry arrival and real recovery, outer58 phase4/9 cold equality, and a later
+interval failure after recovery actually occurred. Complete rollback and cold
+retry preserve every authoritative save root; consumed load emits no audio.
+These are controlled-need runtime and arranged capability foundations, not
+untouched crowd behavior or rendered play.
+
+Broader validation exposed an independently stale supported55 assertion.
+An isolated clean checkout of the exact parent reproduces the same failure
+before the shallow-source change. The old test compared remaining v5 work
+with uninterrupted v8, although v5 intentionally cannot acquire the newly
+implemented contact hearing. Its correction compares identical supported55
+initial records and accepted work, adds an actual phase9 relaunch, and keeps
+complete authoritative-root equality without stripping perception. A separate
+positive-v8/negative-v5 hearing contrast preserves the capability distinction.
+No supported reader or old interval semantics are changed to make it pass.
+
+Focused native egress and supported55 checks pass. The affected pure domain
+passes11 files/235 tests in12.61s. Final broader runtime validation passes
+3 files/33 tests in198.57s; maintained smoke passes6 files/105 tests in4.94s,
+and typecheck/documentation-reuse45 pass. All737 final public non-Markdown
+inputs match before/after, digest
+`1bca34256309a994f73d3ccdd571eabec1f3bff316dffc5731fe2ef50dacf284`,
+on Node22.20.0. Only the supported55 runtime test changed after the pure-domain
+run; its exact production and affected-test bytes remain unchanged, and the
+final complete runtime selection covers the corrected assertion. An independent
+bounded static review found no blocking ownership or compatibility defect.
+
+```sh
+npx vitest run src/game/residentRestShallowEgress.test.ts src/game/residentActivityExecution.test.ts src/game/residentActivitySaveBoundary.test.ts src/game/residentActivityPersistence.test.ts src/sim/residentActivity.world.integration.test.ts src/game/humanPerception.restSurface.test.ts src/game/footing.test.ts src/game/waterFlow.test.ts src/game/player.test.ts src/game/residentTravelEnvironmentExecution.test.ts src/game/residentContactAcoustics.test.ts --maxWorkers=2
+npx vitest run src/game/runtime.residentRest.integration.test.ts src/game/runtime.residentTravelEnvironmentCompatibility.integration.test.ts src/game/runtime.residentPickup.integration.test.ts --maxWorkers=2
+npm run test:smoke
+npm run typecheck
+npm run test:documentation-reuse
+```
+
+Shared flow is zero within this foot band. These results do not establish
+meaningful current response, general wading/crossing, cat evacuation, broad
+task liveness, normal controls/visual proof, production performance, a new
+platform build, cumulative certification or release. Remaining obligations
+retain their existing owners; no directive or publication boundary advances.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

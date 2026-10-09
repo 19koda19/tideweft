@@ -1011,8 +1011,18 @@ describe("ordinary runtime resident origin pickup", () => {
 
     advance(current, 6);
     await current.save();
-    const uninterrupted = decode(currentRepository.snapshot());
+    const currentFuture = decode(currentRepository.snapshot());
     close(current);
+
+    // Compare equal accepted work under the SAME retained protocol. v5 must
+    // not acquire v8-only contact hearing or shallow egress while finishing
+    // its accepted interval; matching it to continued v8 would erase that law.
+    const uninterruptedRepository = new MemoryRepository(legacyRecord);
+    const uninterruptedRuntime = await open(uninterruptedRepository);
+    advance(uninterruptedRuntime, 6);
+    await uninterruptedRuntime.save();
+    const uninterrupted = decode(uninterruptedRepository.snapshot());
+    close(uninterruptedRuntime);
 
     const repository = new MemoryRepository(legacyRecord);
     const runtime = await open(repository);
@@ -1022,20 +1032,32 @@ describe("ordinary runtime resident origin pickup", () => {
     expect(loaded.perceptionCarry).toEqual(legacy.perceptionCarry);
     advance(runtime, 5);
     await runtime.save();
-    const phase9 = decode(repository.snapshot());
+    const phase9Record = repository.snapshot();
+    const phase9 = decode(phase9Record);
     expect(phase9.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
     expect(deserializeWorld(phase9.world).residents.every((human) => human.activity?.version === RESIDENT_ENVIRONMENT_ACTIVITY_VERSION
       && human.activity.poses.length === 10 && !Object.hasOwn(human.activity, "pickupTask")
       && !Object.hasOwn(human.activity, "travelTask"))).toBe(true);
-    advance(runtime, 1);
-    await runtime.save();
-    const boundary = decode(repository.snapshot());
+    close(runtime);
+    const closingRepository = new MemoryRepository(phase9Record);
+    const closingRuntime = await open(closingRepository);
+    await closingRuntime.save();
+    expect(authoritativeRoots(decode(closingRepository.snapshot()))).toEqual(authoritativeRoots(phase9));
+    advance(closingRuntime, 1);
+    await closingRuntime.save();
+    const boundary = decode(closingRepository.snapshot());
     const boundaryWorld = deserializeWorld(boundary.world);
     expect(boundary.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
     expect(boundaryWorld.meta.completedTick).toBe(422);
     expect(boundaryWorld.residents.every((human) => human.activity?.version === RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION
       && human.activity.poses.length === 1 && human.activity.pickupTask === null && human.activity.travelTask === null)).toBe(true);
+    expect(boundaryWorld).toEqual(deserializeWorld(uninterrupted.world));
     expect(authoritativeRoots(boundary)).toEqual(authoritativeRoots(uninterrupted));
+    const contactBeliefs = (source: Envelope) => deserializeWorld(source.world).residents
+      .flatMap((human) => human.perception?.beliefs ?? [])
+      .filter((belief) => belief.lastObservedTick === 422 && belief.sourceObservationId.includes("-prc-"));
+    expect(contactBeliefs(currentFuture).length).toBeGreaterThan(0);
+    expect(contactBeliefs(boundary)).toEqual([]);
     assertWorldInvariants(boundaryWorld);
   }, 90_000);
 
