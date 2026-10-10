@@ -583,6 +583,29 @@ describe("deterministic visual perception", () => {
     expect(aroundEdge.detailVisibilityGrades[columns + 1]).toBe(VISIBILITY_DIRECT);
   });
 
+  it("keeps terrain and detail corner blocking independent for mixed elevated and opaque flanks", () => {
+    const cells = flatCells(9);
+    cells[1] = { elevation: 1, obstruction: 0 };
+    cells[3] = { elevation: 0, obstruction: 1 };
+    const ranges = { closePeripheralRange: 3, directSightRange: 3, forwardConeRadians: Math.PI / 2 };
+    const input = sightInput(3, 3, 0, {
+      cells, facingRadians: Math.PI / 4,
+      rangeOverrides: ranges, detailRangeOverrides: ranges,
+    });
+    const mixed = evaluatePerception(input);
+    // Only one flank blocks the terrain ray, but both independently block
+    // detail. A shared walk must not conflate those two corner decisions.
+    expect(mixed.visibilityGrades[4]).toBe(VISIBILITY_DIRECT);
+    expect(mixed.detailVisibilityGrades[4]).toBe(VISIBILITY_HIDDEN);
+    const open = evaluatePerception({ ...input, cells: cells.map((cell, index) => (
+      index === 3 ? { elevation: 0, obstruction: 0 } : cell
+    )) });
+    expect(open.visibilityGrades[4]).toBe(VISIBILITY_DIRECT);
+    expect(open.detailVisibilityGrades[4]).toBe(VISIBILITY_DIRECT);
+    expect(hasValidPerceptionSignature(mixed, 3, 3)).toBe(true);
+    expect(hasValidPerceptionSignature(open, 3, 3)).toBe(true);
+  });
+
   it("uses intermediate elevation as a Bresenham terrain horizon", () => {
     const cells = flatCells(5);
     cells[2] = { elevation: 0.5, obstruction: 0 };

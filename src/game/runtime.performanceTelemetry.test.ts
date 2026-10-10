@@ -11,6 +11,7 @@ import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import * as canonicalUtil from "../sim/util";
 import * as coreEcology from "./coreEcology";
 import * as projectionOwner from "./projection";
+import * as perceptionOwner from "./perception";
 import * as breadthHabitatOwner from "./coreEcologyBreadthHabitat";
 import * as breadthEcologyOwner from "./regionalBreadthEcology";
 import type { CoreEcologyAggregatePatchState } from "./coreEcology";
@@ -404,6 +405,48 @@ describe("runtime performance telemetry", () => {
         }> = [];
         const frameBuckets = new Map<number, "zero-step" | "accepted-nonadvancing" | "advancing-correlated">();
         let currentFrame = -1;
+        const perceptionCellArrayIds = new WeakMap<object, number>();
+        let nextPerceptionCellArrayId = 0;
+        const perceptionCalls: Array<{
+          frame: number; cellArrayId: number; columns: number; rows: number;
+          valid: boolean; hypotCalls: number; detailVisibleNonplayer: number;
+          signature: string; resultDigest: string;
+        }> = [];
+        const originalPerception = perceptionOwner.evaluatePerception;
+        const originalHypot = Math.hypot;
+        const perceptionEvaluator = vi.spyOn(perceptionOwner, "evaluatePerception")
+          .mockImplementation((input) => {
+            let hypotCalls = 0;
+            // Count arithmetic only within this original-once pure evaluator.
+            // Do not retain argument arrays or claim private-ray call counts.
+            Math.hypot = (...values) => {
+              hypotCalls += 1;
+              return originalHypot(...values);
+            };
+            let result: perceptionOwner.PerceptionResult;
+            try {
+              result = originalPerception(input);
+            } finally {
+              Math.hypot = originalHypot;
+            }
+            let cellArrayId = perceptionCellArrayIds.get(input.cells);
+            if (cellArrayId === undefined) {
+              cellArrayId = nextPerceptionCellArrayId++;
+              perceptionCellArrayIds.set(input.cells, cellArrayId);
+            }
+            perceptionCalls.push({
+              frame: currentFrame, cellArrayId, columns: input.columns, rows: input.rows,
+              valid: result.valid, hypotCalls,
+              detailVisibleNonplayer: result.detailVisibleTileIndices.filter((index) => (
+                index !== result.playerTileIndex
+              )).length,
+              signature: result.signature,
+              // Complete disclosed arrays, partitions and signature. Use the
+              // saved encoder outside the observed encoding families.
+              resultDigest: createHash("sha256").update(originalEncoder(result)).digest("hex"),
+            });
+            return result;
+          });
         let nextInputId = 0;
         let beforeFixedSteps = 0;
         let beforeAdvances = 0;
@@ -503,6 +546,7 @@ describe("runtime performance telemetry", () => {
           worldBinder.mockRestore();
           hasher.mockRestore();
           breadthAdvancer.mockRestore();
+          perceptionEvaluator.mockRestore();
         }
         const telemetry = runtime.getPerformanceTelemetry();
         expect(telemetry.fixedStep.totalCount).toBe(30);
@@ -513,6 +557,28 @@ describe("runtime performance telemetry", () => {
         // cannot change any world, custody, knowledge, session or integrity byte.
         await assertEqualUninstrumentedWork(seed, worldJson);
         const digest = createHash("sha256").update(worldJson).digest("hex");
+        expect(Math.hypot).toBe(originalHypot);
+        expect(perceptionCalls.length).toBeGreaterThan(0);
+        expect(perceptionCalls.every(({ frame, valid, columns, rows }) => (
+          frameBuckets.has(frame) && valid && columns === 120 && rows === 120
+        ))).toBe(true);
+        expect(perceptionCalls.every(({ hypotCalls, detailVisibleNonplayer }) => (
+          hypotCalls > 0 && detailVisibleNonplayer > 0
+        ))).toBe(true);
+        expect(nextPerceptionCellArrayId).toBe(3);
+        expect(perceptionCalls.map(({ frame, cellArrayId }) => [frame, cellArrayId]))
+          .toEqual([[10, 0], [20, 1], [30, 2]]);
+        for (const call of perceptionCalls) {
+          expect(call).toMatchObject(seed === "runtime baseline estuary" ? {
+            hypotCalls: 323_681, detailVisibleNonplayer: 1791,
+            signature: "perception-v3:c3552d11",
+            resultDigest: "3ad52fdaabf936e5c964be4dc03a12482196759fa8d13af630b542e0fcc97eac",
+          } : {
+            hypotCalls: 255_320, detailVisibleNonplayer: 1176,
+            signature: "perception-v3:baaf234e",
+            resultDigest: "c37a956207c4221541e02cae0bcbebfb53de8e238d0e64d4b868d128e0ddcfe5",
+          });
+        }
         // Posthoc child sizing is outside every observer and the world steps.
         // Keep all matching parents, including durable-batch work; this scope
         // does not identify individual private callers or measure CPU time.
@@ -596,6 +662,11 @@ describe("runtime performance telemetry", () => {
           breadthParents: {
             scope: "original-once exported advance; exact-shape parent encoder arguments sharing a frozen derivation; all occurrences retained; not recursive child-call/private-caller/CPU counts",
             advances: breadthParentCensus,
+          },
+          perceptionEvaluation: {
+            scope: "original-once evaluator inside31callbacks; complete result digests and scoped Math.hypot calls; not private-ray counts, CPU timing or removable cost; current detail-visible nonplayer cells prove a lower bound on twice-successful terrain/detail ray paths",
+            uniqueCellArrays: nextPerceptionCellArrayId,
+            calls: perceptionCalls.map((call) => ({ ...call, bucket: frameBuckets.get(call.frame) })),
           },
           worldBinding: {
             scope: "original-once exported habitat world-binding calls inside31callbacks; setup/save excluded; not a timed profile",

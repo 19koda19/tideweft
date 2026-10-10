@@ -8104,6 +8104,31 @@ claimed from this sampled diagnostic. Local observer parameters only choose
 new evidence/sourcemap paths; old captures remain untouched and no profiling
 flags, maps or private material enter the shipped artifact.
 
+### Native terrain/detail ray characterization — 2026-10-10
+
+Current packaged CPU attribution identifies `hasLineOfSight`56.324ms inclusive
+and nested `cellBlocksRay`40.816ms over19 advancing callbacks. These overlap
+the evaluator's88.440ms and are not exact or removable durations. Source
+inspection shows that full-grid terrain/detail queries may walk the same ray
+twice with different obstruction policies; existing projection and illumination
+caches already operate and are not new optimization proposals.
+
+An original-once evaluator observer in the existing native telemetry fixture
+counts only its `Math.hypot` calls, restores that function in `finally` before
+recording complete result digests, and restores all observers before independent
+save comparison. Both seeds evaluate three120×120 cell arrays in callbacks
+10/20/30. Per evaluation, estuary records323,681 arithmetic calls and1,791
+visible nonplayer detail cells; density8 records255,320 and1,176. Those visible
+cells establish a lower bound on twice-successful ray paths in this current
+algorithm, not private-ray counts. Arithmetic counts include candidate, ray
+and frontier work and are not CPU measurements. Complete result hashes remain
+`3ad52fda…`/`c37a9562…`; full current-save hashes remain`922d9c80…`/`a7b713dd…`,
+equal to uninstrumented30-step work. The new mixed elevated/opaque diagonal
+flank oracle keeps terrain visible while hiding detail, then admits both when
+one flank opens. Characterization adds no application change or performance
+gain; any combined-walk candidate must retain full validation, independent
+policy outcomes, endpoint/supercover/light/range/signature and failure laws.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
