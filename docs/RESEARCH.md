@@ -6841,6 +6841,45 @@ and typecheck pass. Ignored `native-civic-fairness-final.json` and
 test/evidence only: no runtime, schema, supported-reader, dependency, visual,
 performance, public-release or directive-closure change is claimed.
 
+### Untouched native keeper closure and current-save continuity — 2026-10-10
+
+At local parent `e759f75`, an additive
+`runtime.keeperInspection.integration.test.ts` case starts the untouched
+`runtime baseline estuary` with ordinary journey/wander controls. Native needs,
+weather, offers, recipes, stocks, terrain, tasks and evidence remain unchanged.
+Store5's keeper makes a real civic material approach from its adjacent source;
+the accepted phase9 body prefix contains positive movement toward the actual
+store. There is no inspection task or player warning/selection.
+
+The store remains open at420/phase9 with no committed keeper evidence. At421,
+fresh lower-admitted identified sight of the exposed food lot and actual dry
+store contact authorize the existing in-place securing transaction. Its receipt
+binds the same keeper, store, evidence, tick, risk and confidence. A read-only
+observer returns the original action result and verifies transaction-local
+carrier/custody equality; legitimate domestic consumption elsewhere in that
+interval is not mistaken for a closure debit. This is not a dedicated
+inspection-driven trip or a general profession.
+
+Independent pending420/phase9→421 and consumed421→422 cold continuations match
+every saved root apart from the established session/envelope-integrity
+exclusions. Loading emits no audio. The subsequent minute retains the closure
+receipt and knowledge without a second securing action. Existing controlled
+source-removal, inspection approach, priority, supported-history and rollback
+cases remain unchanged.
+
+`npx vitest run src/game/runtime.keeperInspection.integration.test.ts
+src/game/settlementKeeperInspection.test.ts src/game/settlementEcology.test.ts
+src/game/settlementKeeperStoreResponseExpression.activity.test.ts --maxWorkers=1`
+passes four files/70 tests in54.61s. After strengthening only the new native
+case's approach assertions, the same runtime file with
+`-t 'secures the untouched native store' --maxWorkers=1` passes one selected/
+20 unselected cases in7.287s of tests/9.52s total. Maintained critical smoke
+six files/105 tests and final typecheck pass. The ignored
+`native-keeper-domain.json` and `native-keeper-current-save-final.json` retain
+the exact scopes. This is test/evidence only, not a runtime, schema, supported-
+reader, dependency, visual, performance, public-release or directive-closure
+change. One native in-place closure does not certify all-keeper liveness.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

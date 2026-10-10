@@ -16,6 +16,7 @@ import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { CURRENT_GAME_SAVE_VERSION, FIRST_RESIDENT_CIVIC_GAME_SAVE_VERSION, FIRST_RESIDENT_INSPECTION_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import {
   deserializeSettlementEcologyState, serializeSettlementEcologyState,
+  projectSettlementKeeperStoreClosureAuthority,
   stageSettlementDomesticFoodUse, resolveSettlementDomesticFoodUse,
   SETTLEMENT_DOMESTIC_FOOD_USE_VERSION,
 } from "./settlementEcology";
@@ -244,6 +245,145 @@ async function closingFixture(initialMaterialShortage = false) {
 }
 
 describe("ordinary autonomous keeper inspection", () => {
+  it("secures the untouched native store through actual in-place sight with exact pending and consumed cold continuation", async () => {
+    const repository = new MemoryRepository();
+    const runtime = await open(repository);
+    runtime.dispatchUI({ type: "new-world", seed: "runtime baseline estuary", posture: "journey", sessionShape: "wander" });
+    await runtime.save();
+    const initial = decode(repository.snapshot());
+    const initialWorld = deserializeWorld(initial.world);
+    const initialStore = deserializeSettlementEcologyState(initial.settlementEcology);
+    const actorId = initialStore.identity.keeperActorId;
+    const initialKeeper = keeper(initialWorld, actorId);
+    const tick = initialWorld.meta.completedTick;
+    expect(tick).toBe(420);
+    expect(initialStore.identity.settlementId).toBe(5);
+    expect(initialStore.closure).toBe("open");
+    expect(initialStore.lastClosureTransactionId).toBeNull();
+    expect(initialStore.keeperKnowledge).toEqual([]);
+    expect(initialKeeper.activity).toBeUndefined();
+    expect(initialKeeper.activeContractId).toBeNull();
+    const source = resolveResidentWorldPlacement(initialWorld, initialKeeper)?.position;
+    if (source === undefined) throw new Error("Untouched keeper lacks its native body source");
+    const delta = worldPositionDelta(source, initialStore.identity.position);
+    expect(Math.abs(delta.x) + Math.abs(delta.y)).toBe(WORLD_POSITION_UNITS_PER_TILE);
+
+    // Observe the existing transaction without replacing its calculation or
+    // assigning needs, weather, supplies, tasks, evidence, body or results.
+    const original = keeperInspection.advanceSettlementKeeperStoreInspection;
+    const closures: { evidenceId: string; confidence: number }[] = [];
+    vi.spyOn(keeperInspection, "advanceSettlementKeeperStoreInspection").mockImplementation((input) => {
+      const result = original(input);
+      if (input.settlement.closure === "open" && result?.closure === "secured") {
+        const observation = input.observations[0];
+        expect(input.observations).toHaveLength(1);
+        expect(observation).toMatchObject({
+          observerId: actorId, observedAtTick: tick + 1,
+          channel: "vision", perceivedClass: "exposed-food", identification: "identified",
+          subjectId: initialStore.identity.foodLotId,
+          area: { center: initialStore.identity.position, radiusUnits: 0 }, interrupt: "none",
+        });
+        if (observation === undefined) throw new Error("Native closure lacks actual sight");
+        expect(result.carrier).toEqual(input.settlement.carrier);
+        expect(result.domesticCustodies).toEqual(input.settlement.domesticCustodies);
+        closures.push({ evidenceId: observation.id, confidence: observation.confidence });
+      }
+      return result;
+    });
+    advance(runtime, 9);
+    await runtime.save();
+    const pendingRecord = repository.snapshot();
+    const pending = decode(pendingRecord);
+    const pendingWorld = deserializeWorld(pending.world);
+    const pendingStore = deserializeSettlementEcologyState(pending.settlementEcology);
+    expect(pendingWorld.meta.completedTick).toBe(tick);
+    expect(pending.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    expect(pendingStore.closure).toBe("open");
+    expect(pendingStore.lastClosureTransactionId).toBeNull();
+    expect(pendingStore.keeperKnowledge).toEqual(initialStore.keeperKnowledge);
+    expect(projectSettlementKeeperStoreClosureAuthority(pendingStore)).toBeNull();
+    const pendingActivity = keeper(pendingWorld, actorId).activity;
+    expect(pendingActivity?.inspectionTask).toBeNull();
+    expect(pendingActivity?.materialTask).toMatchObject({
+      kind: "settlement-material", settlementId: initialStore.identity.settlementId,
+      target: initialStore.identity.position,
+    });
+    expect(pendingActivity?.poses).toHaveLength(10);
+    expect(pendingActivity?.poses[0]?.position).toEqual(source);
+    const approachingPosition = pendingActivity?.poses.at(-1)?.position;
+    if (approachingPosition === undefined) throw new Error("Native civic approach lacks its accepted body history");
+    const approached = worldPositionDelta(source, approachingPosition);
+    expect(Math.abs(approached.x) + Math.abs(approached.y)).toBeGreaterThan(0);
+    expect(Math.abs(approached.x) + Math.abs(approached.y)).toBeLessThanOrEqual(WORLD_POSITION_UNITS_PER_TILE);
+    expect(keeper(pendingWorld, actorId).perception.beliefs.some(({ subjectId }) => subjectId === initialStore.identity.foodLotId)).toBe(false);
+    expect(closures).toHaveLength(0);
+
+    advance(runtime, 1);
+    await runtime.save();
+    const consumedRecord = repository.snapshot();
+    const consumed = decode(consumedRecord);
+    const consumedWorld = deserializeWorld(consumed.world);
+    const consumedKeeper = keeper(consumedWorld, actorId);
+    const consumedStore = deserializeSettlementEcologyState(consumed.settlementEcology);
+    expect(consumedWorld.meta.completedTick).toBe(tick + 1);
+    expect(consumed.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expect(consumedStore.identity).toEqual(initialStore.identity);
+    expect(consumedStore.closure).toBe("secured");
+    expect(consumedKeeper.activity?.poses).toHaveLength(1);
+    expect(consumedKeeper.activity?.poses[0]?.position).toEqual(initialStore.identity.position);
+    // The actual civic approach permits in-place inspection; this is not
+    // evidence of an inspection-task-driven trip or a manufactured profession.
+    expect(consumedKeeper.activity?.inspectionTask).toBeNull();
+    expect(consumedKeeper.activeContractId).toBeNull();
+    expect(closures).toHaveLength(1);
+    const sight = closures[0]!;
+    expect(projectSettlementKeeperStoreClosureAuthority(consumedStore)).toEqual({
+      transactionId: consumedStore.lastClosureTransactionId,
+      keeperActorId: actorId, storeId: initialStore.identity.storeId,
+      sourceEvidenceId: sight.evidenceId, source: "direct-observation",
+      sourceActorId: actorId, sourceEvidenceAtTick: tick + 1,
+      sourceRisk: "food-exposed", sourceConfidence: sight.confidence,
+    });
+    expect(consumedStore.keeperKnowledge).toEqual([{
+      evidenceId: sight.evidenceId, source: "direct-observation", sourceActorId: actorId,
+      learnedAtTick: tick + 1, risk: "food-exposed", confidence: sight.confidence,
+    }]);
+    expect(consumedKeeper.perception.beliefs.find(({ sourceObservationId }) => sourceObservationId === sight.evidenceId))
+      .toMatchObject({
+        lastObservedTick: tick + 1, channel: "vision", perceivedClass: "exposed-food",
+        subjectId: initialStore.identity.foodLotId, identification: "identified",
+        area: { center: initialStore.identity.position, radiusUnits: 0 }, confidence: sight.confidence,
+      });
+    assertWorldInvariants(consumedWorld);
+
+    advance(runtime, 10);
+    await runtime.save();
+    const subsequent = decode(repository.snapshot());
+    const subsequentStore = deserializeSettlementEcologyState(subsequent.settlementEcology);
+    expect(deserializeWorld(subsequent.world).meta.completedTick).toBe(tick + 2);
+    expect(subsequentStore.closure).toBe("secured");
+    expect(subsequentStore.lastClosureTransactionId).toBe(consumedStore.lastClosureTransactionId);
+    expect(subsequentStore.keeperKnowledge).toEqual(consumedStore.keeperKnowledge);
+    expect(closures).toHaveLength(1);
+    close(runtime);
+
+    for (const [record, before, steps] of [
+      [pendingRecord, pending, 1], [consumedRecord, consumed, 10],
+    ] as const) {
+      const coldRepository = new MemoryRepository(record);
+      soundscapePlay.mockClear();
+      const cold = await open(coldRepository);
+      await cold.save();
+      expect(roots(decode(coldRepository.snapshot()))).toEqual(roots(before));
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      advance(cold, steps);
+      await cold.save();
+      expect(roots(decode(coldRepository.snapshot()))).toEqual(roots(steps === 1 ? consumed : subsequent));
+      close(cold);
+    }
+    expect(closures).toHaveLength(2); // Warm action and its equal-work pending replay only.
+  }, 60_000);
+
   it("keeps a pending inspection and every root unchanged when a normal warning's acoustic admission fails", async () => {
     const base = await fixture("work", true);
     const repository = new MemoryRepository(base.record);
