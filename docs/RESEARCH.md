@@ -6407,6 +6407,53 @@ world-hitch result, longitudinal-soak result, ZIP/install/signing claim,
 Linux/Windows certification, deployment or directive closure. The earlier exact
 c06124a cumulative pass does not certify later bytes.
 
+### Native flowing-water encounter retains custody and fresh-sight resumption — 2026-10-09
+
+At local parent `8bbc691`, one additive test continues the existing estuary
+offer127 fixture through ordinary accepted runtime steps. Its declared initial
+clear-weather, need and player-exclusivity controls are retained; native terrain,
+routes, source stock, assignment, approach, pickup and body motion are not
+authored. This is a controlled headless encounter, not untouched ordinary play.
+The same resident picks up eight parts at423 with exactly one departure.
+
+The next generated route121 endpoint43,46 is genuinely flowing when the actual
+body holds at bank43,47, waypoint15, at453: depth48,215, strength214,487 and
+turbulence187,475 through the existing shared flow owner. At468, strength is0
+but depth34,465 remains wet; the body and cargo remain held. At506 the physical
+endpoint first becomes dry, but its admitted pre-world505 wet observation
+still prevents progress. Fresh dry sight at507 releases the hold; four accepted
+steps then produce bounded real motion. Terrain, native tide, assigned Promise,
+cargo8 and the exact departure event are checked throughout, with no fulfillment.
+
+Cold phase4 restores the same complete authoritative saved roots without load
+audio and reaches the recorded phase9 after equal work. A separately opened
+phase9 advances the same five-step suffix to identical final507/phase4 roots.
+Only existing envelope integrity and presentation/session recaps are excluded.
+The original fourteen cases and assertions remain unchanged and are unselected
+by this command. The first new-case run failed solely on its added assertion's
+incorrect `carrier` field; correcting it to schema-owned `carrierKind` gives
+one PASS in46.163s/47.87s wall. The failed report remains local evidence.
+
+```sh
+npx vitest run src/game/runtime.residentPickup.integration.test.ts --maxWorkers=1 \
+  -t 'retains native cargo at a genuinely flowing tidal endpoint until fresh dry sight permits progress' \
+  --reporter=default --reporter=json \
+  --outputFile=artifacts/validation/world0-native-current/native-flowing-endpoint-carrier-corrected.json
+npx vitest run src/game/waterFlow.test.ts src/game/humanPerception.travelSurface.test.ts \
+  src/game/residentTravelEnvironmentExecution.test.ts src/sim/residentSurfaceKnowledge.test.ts \
+  src/sim/residentTravelAdvance.test.ts --maxWorkers=1 --reporter=default --reporter=json \
+  --outputFile=artifacts/validation/world0-native-current/native-flowing-domain.json
+npm run test:smoke -- --reporter=default --reporter=json \
+  --outputFile=artifacts/validation/world0-native-current/native-flowing-smoke.json
+npm run typecheck
+```
+
+Affected domain5files137PASS8.90s, maintained smoke6files105PASS4.25s and
+typecheck pass. Production code, schema and supported readers are unchanged.
+This proves a real flowing-water encounter under the current conservative
+wet/dry policy, not current-force-sensitive appraisal, loaded water access,
+complete journey, rendered play, performance, cumulative or directive closure.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

@@ -24,13 +24,14 @@ import {
   residentTravelBodyIsLocal, residentTravelInteractionFrame, residentTravelSegment,
   residentTravelSegmentOffset, residentTravelSegmentPose, residentTravelWindowInterval,
 } from "../sim/residentTravelRoute";
-import { MIN_TIDE_LEVEL, tideAtTick } from "../sim/terrain";
+import { MIN_TIDE_LEVEL, tideAtTick, waterDepthAt } from "../sim/terrain";
 import { stableStringify } from "../sim/util";
 import { prepareResidentTravelAdvance, residentTravelIntervalWorkUsed, residentTravelStepUnits, revokeResidentTravelAdvance } from "../sim/residentTravelAdvance";
 import { findAutonomousRoutePlan } from "../sim/network";
 import { WORLD_HEIGHT, WORLD_WIDTH, type SimCommand } from "../sim/types";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { TERRAIN_DRAG_PERMILLE } from "./footing";
+import { deriveWaterFlowProfile } from "./waterFlow";
 import type { SupplementalSoundSample } from "./humanPerception";
 import * as humanPerception from "./humanPerception";
 import { advanceResidentRestActivities } from "./residentActivityExecution";
@@ -550,6 +551,157 @@ describe("ordinary runtime native traveler water response", () => {
       await retry.save();
       expect(authoritativeRoots(decode(retryRepository.snapshot()))).toEqual(authoritativeRoots(final.envelope));
     }
+  }, 180_000);
+
+  it("retains native cargo at a genuinely flowing tidal endpoint until fresh dry sight permits progress", async () => {
+    // Native terrain/route/body/cargo, with only acceptedFixture's declared
+    // initial need/weather/exclusivity controls. This is a wet/dry response to
+    // a real flowing-water encounter, NOT appraisal of current force, loaded
+    // water traversal, a complete journey, or a rendered-play observation.
+    const fixture = await acceptedFixture();
+    const { runtime, repository } = fixture;
+    const endpoint: WorldPosition = { region: { x: 0, y: 0 }, localX: 43_500, localY: 46_500 };
+    const bank: WorldPosition = { region: { x: 0, y: 0 }, localX: 43_500, localY: 47_500 };
+    const initial = deserializeWorld(fixture.accepted.world);
+    const terrain = stableStringify(initial.terrain);
+    const tile = initial.terrain.tiles[46 * initial.terrain.width + 43]!;
+    expect(tile).toMatchObject({ x: 43, y: 46, elevation: 426_535, roughness: 123_481 });
+    const originalContract = initial.contracts.find(({ id }) => id === fixture.contractId)!;
+    const dryTick = Array.from({ length: originalContract.dueTick - initial.meta.completedTick },
+      (_, index) => initial.meta.completedTick + index + 1)
+      .find((tick) => waterDepthAt(tile, tideAtTick(tick)) === 0);
+    // A finite opportunity in this actual Promise, not a stretched deadline.
+    expect(dryTick).toBe(506);
+    if (dryTick === undefined) throw new Error("Native endpoint has no dry opportunity before the real deadline");
+    const flowAt = (world: WorldState) => {
+      const currentTile = world.terrain.tiles[46 * world.terrain.width + 43]!;
+      const depth = waterDepthAt(currentTile, world.tide);
+      return { tick: world.meta.completedTick, depth,
+        ...deriveWaterFlowProfile({ waterDepth: depth, bedRoughness: currentTile.roughness,
+          tideLevel: world.tide.level, weatherIntensity: world.weather.intensity }) };
+    };
+    const save = async () => {
+      await runtime.save();
+      const record = repository.snapshot();
+      const envelope = decode(record);
+      const world = deserializeWorld(envelope.world);
+      assertWorldInvariants(world);
+      expect(world.tide).toEqual(tideAtTick(world.meta.completedTick));
+      expect(stableStringify(world.terrain)).toBe(terrain);
+      return { record, envelope, world, human: actor(world, fixture.actorId) };
+    };
+    let current = await completeNativeOriginApproach(fixture);
+    const departedTick = current.world.meta.completedTick;
+    const departure = departedEvents(current.world, fixture.contractId)[0]!;
+    expect(departedEvents(current.world, fixture.contractId)).toHaveLength(1);
+    expect(current.world.contracts.find(({ id }) => id === fixture.contractId))
+      .toMatchObject({ status: "in-transit", cargoQuantity: 8, departedTick });
+    const custody = (world: WorldState) => {
+      expect(world.contracts.find(({ id }) => id === fixture.contractId))
+        .toMatchObject({ status: "in-transit", cargoQuantity: 8, departedTick,
+          assignedResidentId: current.human.id, carrierKind: "resident", resource: "parts" });
+      expect(departedEvents(world, fixture.contractId)).toEqual([departure]);
+      expect(world.events.filter((event) => event.type === "contract-fulfilled"
+        && event.subjectId === fixture.contractId)).toHaveLength(0);
+    };
+    const held = (world: WorldState, human: ResidentState) => {
+      const task = human.activity?.travelTask;
+      expect(task).toMatchObject({ mode: "physical", contractId: fixture.contractId,
+        phase: "waiting", waitReason: "observed-water", legIndex: 0, waypointIndex: 15 });
+      if (task?.mode !== "physical") throw new Error("Native held traveler lost its physical cursor");
+      const contract = world.contracts.find(({ id }) => id === fixture.contractId)!;
+      const segment = residentTravelSegment(world, contract, task);
+      expect(segment?.route.id).toBe(121);
+      expect(segment?.start).toEqual(bank);
+      expect(segment?.end).toEqual(endpoint);
+      expect(human.activity!.poses.every(({ position }) => stableStringify(position) === stableStringify(bank))).toBe(true);
+      custody(world);
+    };
+    let encounter: ReturnType<typeof flowAt> | undefined;
+    let noFlowWet: ReturnType<typeof flowAt> | undefined;
+    const recent: unknown[] = [];
+    while (current.world.meta.completedTick < dryTick - 1) {
+      advance(runtime, 10);
+      current = await save();
+      const task = current.human.activity?.travelTask;
+      recent.push({ tick: current.world.meta.completedTick, task, position: current.human.activity?.poses[0]?.position });
+      if (recent.length > 4) recent.shift();
+      if (encounter === undefined && task?.mode === "physical" && task.waypointIndex === 15) {
+        held(current.world, current.human);
+        encounter = flowAt(current.world);
+        expect(encounter.depth, JSON.stringify(recent)).toBeGreaterThan(35_000);
+        expect(encounter.strength, JSON.stringify(recent)).toBeGreaterThan(0);
+        expect(residentRestSurfaceKnowledge(current.human.perception, endpoint, encounter.tick)).toBe("wet");
+      }
+      if (encounter !== undefined) held(current.world, current.human);
+      if (current.world.meta.completedTick === 468) {
+        held(current.world, current.human);
+        noFlowWet = flowAt(current.world);
+        expect(noFlowWet.depth).toBeGreaterThan(0);
+        expect(noFlowWet.strength).toBe(0);
+        expect(residentRestSurfaceKnowledge(current.human.perception, endpoint, 468)).toBe("wet");
+      }
+    }
+    if (encounter === undefined) throw new Error(`No native flowing-water encounter: ${JSON.stringify(recent)}`);
+    expect(noFlowWet).toBeDefined();
+    expect(current.world.meta.completedTick).toBe(dryTick - 1);
+    advance(runtime, 10);
+    const dryBoundary = await save();
+    expect(dryBoundary.world.meta.completedTick).toBe(dryTick);
+    expect(flowAt(dryBoundary.world)).toMatchObject({ depth: 0, strength: 0 });
+    expect(residentRestTargetHasDrySupport(dryBoundary.world, endpoint)).toBe(true);
+    // Closing506 admitted the genuinely wet pre-world505 surface. Physical
+    // drying alone does not overwrite that receipt or move the carrying body.
+    held(dryBoundary.world, dryBoundary.human);
+    expect(residentRestSurfaceKnowledge(dryBoundary.human.perception, endpoint, dryTick)).toBe("wet");
+    advance(runtime, 4);
+    const phase4 = await save();
+    expect(phase4.envelope.perceptionCarry.playerStepsSinceWorldTick).toBe(4);
+    held(phase4.world, phase4.human);
+    advance(runtime, 5);
+    const phase9 = await save();
+    expect(phase9.envelope.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    held(phase9.world, phase9.human);
+    advance(runtime, 1);
+    const freshBoundary = await save();
+    expect(freshBoundary.world.meta.completedTick).toBe(dryTick + 1);
+    expect(residentRestSurfaceKnowledge(freshBoundary.human.perception, endpoint, dryTick + 1)).toBe("dry");
+    expect(freshBoundary.human.activity?.travelTask).toMatchObject({ mode: "physical",
+      phase: "approaching", waitReason: null, legIndex: 0, waypointIndex: 15 });
+    expect(freshBoundary.human.activity?.poses[0]?.position).toEqual(bank);
+    custody(freshBoundary.world);
+    advance(runtime, 4);
+    const final = await save();
+    expectBoundedMotion(bank, final.human.activity!.poses);
+    expect(final.human.activity?.poses.at(-1)?.position).not.toEqual(bank);
+    custody(final.world);
+    close(runtime);
+
+    // One economical exact-work chain: cold4 joins the real9, then detached9
+    // runs the closing/fresh-dry/motion suffix. No load consumes pending work.
+    soundscapePlay.mockClear();
+    const cold4Repository = new MemoryRepository(phase4.record);
+    const cold4 = await open(cold4Repository);
+    await cold4.save();
+    expect(authoritativeRoots(decode(cold4Repository.snapshot()))).toEqual(authoritativeRoots(phase4.envelope));
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advance(cold4, 5);
+    await cold4.save();
+    expect(authoritativeRoots(decode(cold4Repository.snapshot()))).toEqual(authoritativeRoots(phase9.envelope));
+    close(cold4);
+    soundscapePlay.mockClear();
+    const cold9Repository = new MemoryRepository(phase9.record);
+    const cold9 = await open(cold9Repository);
+    await cold9.save();
+    expect(authoritativeRoots(decode(cold9Repository.snapshot()))).toEqual(authoritativeRoots(phase9.envelope));
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advance(cold9, 5);
+    await cold9.save();
+    expect(authoritativeRoots(decode(cold9Repository.snapshot()))).toEqual(authoritativeRoots(final.envelope));
+    close(cold9);
+    console.info("Native tidal encounter evidence", JSON.stringify({ encounter, noFlowWet,
+      departedTick, dryTick, freshDryTick: freshBoundary.world.meta.completedTick,
+      coldPhases: [4, 9], finalPhase: final.envelope.perceptionCarry.playerStepsSinceWorldTick }));
   }, 180_000);
 });
 
