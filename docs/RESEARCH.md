@@ -7264,6 +7264,37 @@ soak is certified. Existing full-Foliage deferrals and accepted older hitch
 remain distinct from this unfinished current regression gate.
 Dependency changes: NONE. Upstream p5/Electron source modified: NO.
 
+### Native traveler ordinary-controls observation — 2026-10-10
+
+**Local presentation evidence, not a causal-water or handoff certification.**
+Clean `3e7283592a74d1a7eabeecc0ee662e56bfe35230` retains executable `908cead`
+and the unchanged production JS `6f54f98b74794f98544fad7c0dbe0b41f1855cc483184f2daef1ca3971f90504`.
+A disposable Firefox157 profile serves actual static files at `/tideweft/`,
+1440×900 CSS/DPR1, native estuary with ordinary controls and no task, body,
+weather, needs, stock or save injection. Its bounded opt-in capture permits
+600s/1300 public samples; the ordinary short greeting mode remains unchanged.
+The actual515.484s run records845 public samples from420→1235. Sixty-nine
+physical ten-minute Wait controls, followed by one Cancel at1150, precede
+ordinary play observation. Camera focus follows only the already-projected
+person; it does not bypass sight or introduce another actor.
+
+The same public resident89 moves at1156, is stationary at43.5/47.5 while the
+adjacent route endpoint is visibly wet at1174, and moves again at1226 when
+that endpoint is dry. Paired Chart/Relief screenshots are retained; stationary
+Relief and post-motion Chart are inspected. Generic listening/investigating
+labels are not a private water-wait explanation. This establishes observable
+geometry and sequence, not contract assignment, causal hazard knowledge,
+cargo identity, exact depth, successful crossing or conserved handoff. Sampled
+civic480 and ration540/1200 labels likewise do not replace transaction tests.
+
+Complete tracked HEAD/diff, source, dist and driver fingerprints match before/
+after. There are zero guarded errors, navigations, prompts or context losses;
+one expected startup CSP eval denial remains explicitly reported. Firefox
+exits0 and its disposable profile is removed. No user browser/save is touched.
+This is not a timing benchmark, hardware-audio proof, all-roster fairness,
+longitudinal resource soak, new cumulative certificate or directive closure.
+Dependency changes: NONE. Upstream p5/Electron source modified: NO.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
