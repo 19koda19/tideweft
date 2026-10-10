@@ -7525,6 +7525,22 @@ startup CSP eval-probe denial remains recorded. Browser exits0 and disposable
 profile is removed; user browser/save untouched. No hardware-audio, timing,
 soak, new cumulative, desktop rerun, dependency or release result is claimed.
 
+### Perception selection characterization — 2026-10-10
+
+At parent `eaec45a`, three additive terrain-memo cases characterize the existing
+render/UI selectors before any optimization. Warm current-reference and
+distinct-clone selections produce identical complete views and perform the
+same positive number of signature checks, including sleeping detail suppression.
+The current owner still detects mutated cached typed masks; forged, turned,
+cold-copy and omitted render inputs preserve exact current fallback. A clone
+is not granted identity trust. This confirms a repeated candidate-validation
+call at the two selection sites, not a removable current-owner validation or
+a whole-runtime performance gain. No exported validator or runtime changes yet.
+Complete affected4files41PASS (15.61s), maintained critical6files105PASS
+(5.45s), typecheck PASS. Existing production control ASAR `4f5b37c8…` and
+matching launcher were frozen locally before a candidate build; no dependency,
+save, schema, timing, privacy, release or directive change is made.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

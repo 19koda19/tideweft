@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   FIXED_POINT,
@@ -7,7 +7,10 @@ import {
   type WorldView,
 } from "../sim/public";
 import { TILE_UNITS, createPlayer, type PlayerState } from "./player";
-import { projectGameView } from "./projection";
+import * as perceptionOwner from "./perception";
+import { projectGameView, projectPerception } from "./projection";
+import { createSessionState } from "./sessionTypes";
+import { projectUIView } from "./uiProjection";
 import {
   createRegionalCartography,
   projectRegionalCartographyWindow,
@@ -72,6 +75,67 @@ function uncachedProjection(world: WorldView, player: PlayerState) {
 }
 
 describe("terrain projection receipt", () => {
+  it.each([false, true])("characterizes current-reference selection and distinct-clone validation with sleeping=%s", (sleeping) => {
+    const { world, player } = createFixture("a current selection is not a new admission", true);
+    const session = createSessionState(world.seedText);
+    const current = projectPerception(world, player);
+    const clone = structuredClone(current);
+    const options = { suppressDetailPerception: sleeping };
+    const render = (perception: typeof current) => projectGameView(world, player, { ...options, perception });
+    const ui = (perception: typeof current) => projectUIView(world, player, session, { ...options, perception });
+    // Warm each existing cache before counting the candidate selection, not
+    // unrelated first-use terrain/light preparation or global validations.
+    const renderExpected = render(clone);
+    const uiExpected = ui(clone);
+    const signature = vi.spyOn(perceptionOwner, "hasValidPerceptionSignature");
+    try {
+      for (const [project, expected] of [[render, renderExpected], [ui, uiExpected]] as const) {
+        signature.mockClear();
+        expect(project(current)).toEqual(expected);
+        const currentChecks = signature.mock.calls.length;
+        signature.mockClear();
+        expect(project(clone)).toEqual(expected);
+        const cloneChecks = signature.mock.calls.length;
+        signature.mockClear();
+        expect(project(current)).toEqual(expected);
+        expect(signature.mock.calls.length).toBe(currentChecks);
+        expect(currentChecks).toBeGreaterThan(0);
+        // BEFORE characterization: both selectors repeat the same signature
+        // check despite choosing the already current object in either branch.
+        expect(cloneChecks).toBe(currentChecks);
+      }
+      expect(projectGameView(world, player, options)).toEqual(renderExpected);
+    } finally { signature.mockRestore(); }
+  });
+
+  it("preserves forged, stale, mutated-cache and cold supplied-perception fallback", () => {
+    const { world, player } = createFixture("selection cannot authenticate a stale mask", true);
+    const session = createSessionState(world.seedText);
+    const current = projectPerception(world, player);
+    const forged = structuredClone(current);
+    forged.detailVisibilityGrades.fill(2);
+    expect(projectGameView(world, player, { perception: forged })).toEqual(projectGameView(world, player));
+    expect(projectUIView(world, player, session, { perception: forged }))
+      .toEqual(projectUIView(world, player, session, { perception: current }));
+    player.facingMilliRadians += 1_571;
+    const turned = projectPerception(world, player);
+    expect(turned).not.toBe(current);
+    expect(projectGameView(world, player, { perception: current })).toEqual(projectGameView(world, player));
+    expect(projectUIView(world, player, session, { perception: current }))
+      .toEqual(projectUIView(world, player, session, { perception: turned }));
+    // Typed masks remain caller-mutable. The real current owner must detect
+    // poisoned cache bytes before identity can select its repaired result.
+    turned.detailVisibilityGrades.fill(2);
+    const repaired = projectPerception(world, player);
+    expect(repaired).not.toBe(turned);
+    expect(projectGameView(world, player, { perception: turned })).toEqual(projectGameView(world, player));
+    const cold = structuredClone(repaired);
+    expect(projectGameView(world, player, { perception: cold }))
+      .toEqual(projectGameView(world, player, { perception: repaired }));
+    expect(projectUIView(world, player, session, { perception: cold }))
+      .toEqual(projectUIView(world, player, session, { perception: repaired }));
+  });
+
   it("reuses only unchanged terrain across resident-only physical-publication siblings", () => {
     const { world, player } = createFixture("resident publication does not redraw the same terrain", true);
     const first = projectGameView(world, player);
