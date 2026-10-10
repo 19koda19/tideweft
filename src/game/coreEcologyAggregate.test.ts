@@ -457,20 +457,6 @@ describe("harbor-edge aggregate ecology", () => {
     }
   });
 
-  it("reuses only canonical identity for the strictly unchanged materialization result", () => {
-    const state = groupedAggregatePatch(0);
-    const input = { atTick: 0, actorIds: [] };
-    expect(setCoreEcologyAggregatePatchMaterializedActors(state, input)).toBe(state);
-    const cold = structuredClone(state);
-    const result = setCoreEcologyAggregatePatchMaterializedActors(cold, input);
-    expect(result).not.toBe(cold);
-    expect(serializeCoreEcologyAggregatePatch(result)).toBe(serializeCoreEcologyAggregatePatch(state));
-    expect(Object.isFrozen(result)).toBe(true);
-    expect(Object.isFrozen(result.populations[0]?.members)).toBe(true);
-    expect(Object.isFrozen(result.groups.groups)).toBe(true);
-    expect(setCoreEcologyAggregatePatchMaterializedActors(result, input)).toBe(result);
-  });
-
   it("still reconciles a lagged aggregate and activity clock at the current root tick", () => {
     const initial = aggregatePatch();
     const state = canonicalizeCoreEcologyAggregatePatch({ ...initial, updatedAtTick: 1 });

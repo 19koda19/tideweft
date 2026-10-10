@@ -6,6 +6,7 @@ import type { CoreWildlifeSpecies } from "../sim/coreWildlifeIdentity";
 import {
   CORE_ECOLOGY_MAX_MATERIALIZED_ACTORS,
   createCoreEcologyAggregatePatch,
+  serializeCoreEcologyAggregatePatch,
   type CoreEcologyAggregatePatchState,
   type CoreEcologyPopulationInput,
 } from "./coreEcology";
@@ -298,19 +299,24 @@ describe("regional ecology global materialization", () => {
     const first = setRegionalEcologyMaterializationForWindow(sources, window, 0);
     const second = setRegionalEcologyMaterializationForWindow(sources, window, 0);
     if (first === null || second === null) throw new Error("Expected unchanged source batches");
+    const firstPatch = first[0]?.patch;
+    const secondPatch = second[0]?.patch;
+    if (firstPatch === undefined || secondPatch === undefined) throw new Error("Expected both patches");
     expect(first).not.toBe(second);
-    expect(first[0]?.patch).toBe(source.patch);
-    expect(second[0]?.patch).toBe(source.patch);
+    expect(serializeCoreEcologyAggregatePatch(firstPatch))
+      .toBe(serializeCoreEcologyAggregatePatch(source.patch));
+    expect(serializeCoreEcologyAggregatePatch(secondPatch))
+      .toBe(serializeCoreEcologyAggregatePatch(source.patch));
     expect(isRegionalEcologyMaterializationBatchReceipt(first, sources, window, 0)).toBe(true);
     expect(isRegionalEcologyMaterializationBatchReceipt(structuredClone(first), sources, window, 0))
       .toBe(false);
     expect(regionalEcologyMaterializationBatchOwnsTransition(
-      first, source.sourceKey, source.patch, source.patch, 0,
+      first, source.sourceKey, source.patch, firstPatch, 0,
     )).toBe(true);
     releaseRegionalEcologyMaterializationBatchReceipt(first);
     expect(isRegionalEcologyMaterializationBatchReceipt(first, sources, window, 0)).toBe(false);
     expect(regionalEcologyMaterializationBatchOwnsTransition(
-      first, source.sourceKey, source.patch, source.patch, 0,
+      first, source.sourceKey, source.patch, firstPatch, 0,
     )).toBe(false);
     expect(isRegionalEcologyMaterializationBatchReceipt(second, sources, window, 0)).toBe(true);
     releaseRegionalEcologyMaterializationBatchReceipt(second);

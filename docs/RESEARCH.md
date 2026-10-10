@@ -7780,8 +7780,8 @@ The final characterization passes2 files/18 tests in20.52s; typecheck, the
 maintained6-file/105-test critical smoke and45 documentation-reuse checks pass.
 Local raw log `7a0548fe…` and report `ba0d2dae…` bind the exact test inputs.
 
-**Provisional application candidate, not yet a measured retained repair.**
-The aggregate materialization owner now returns its canonical patch only after
+**Provisional checkpoint `0c6a77b`; subsequent disposition is recorded below.**
+At that checkpoint, the aggregate materialization owner returned its canonical patch only after
 the existing complete patch/input/ID validation and the strict eligibility
 checks above. It introduces no cache or trust grant. Due-group, trailing-clock,
 changed-selection and cold inputs retain their original boundaries. Canonical
@@ -7791,8 +7791,68 @@ domain passes; typecheck, critical105 and the original selected late-interval
 rollback pass. Both30-step full-save digests remain exact; native calls are
 unchanged180/150 while165/111 outputs now retain their canonical input identity.
 The complete perception integration, runtime census and batch receipt set
-passes3 files/40 tests in230.87s. Unsampled platform comparisons remain pending;
-no production performance result or directive transition is claimed.
+passes3 files/40 tests in230.87s. Platform comparisons were then pending;
+that checkpoint did not claim a retained repair or directive transition.
+
+### Strict unchanged-materialization trial discarded — 2026-10-10
+
+**DISCARD, not a correctness failure or a repaired hitch.** The frozen original
+two-run world-mean/noise condition passed on both platforms. A further bounded
+reverse-order confirmation, specified before its measurements, left the
+no-material-rendering-regression and reproducibility requirement unestablished.
+Apply that prewritten uncertainty disposition; do not retroactively fail the
+original mean-gain condition or replace its unfavorable observations.
+
+The frozen BEFORE executable is `7f48b48`, ASAR `92d235c9…`, web JS `07ee6a33…`;
+candidate `0c6a77b` is ASAR `e1c7bf57…`, web JS `fbb7bf82…`. Existing native
+production runners measure estuary Relief in15-second windows, sequentially on
+AC Apple M4/16GiB, Low Power Mode0, 1440x900/DPR1, unchanged quality and at least
+30 renderer warm-up frames. Electron44.1.0/Chromium152 and Firefox157.0.1 use
+their existing guarded disposable profiles; no competing game/test/CPU sampler.
+
+| Comparison | World mean BEFORE→AFTER, ms | Draw mean BEFORE→AFTER, ms | Renderer callbacks/s BEFORE→AFTER |
+| --- | --- | --- | --- |
+| Electron original two-run means | 96.918→93.332 | 24.602→25.230 | 33.092→32.468 |
+| Firefox original two-run means | 167.769→163.367 | 20.976→20.819 | 30.145→29.956 |
+| Electron supplemental AFTER then BEFORE | 97.964→93.321 | 23.884→25.174 | 34.123→32.704 |
+| Firefox supplemental AFTER then BEFORE | 165.133→163.867 | 20.520→20.863 | 30.597→30.176 |
+
+Original gains3.586/4.402ms exceed larger paired ranges0.650/3.800ms. Electron
+original draw+2.55%/callback−1.89% stays within the unchanged absolute standing
+budgets but is a real measured tradeoff, not an across-the-board improvement.
+The supplemental draw+5.40% and smaller Firefox gain1.267ms support conservative
+discard under the uncertainty clause. One Firefox AFTER world/renderer maximum
+204/226ms is followed by178/198 and179/201; these sparse observations do not
+prove a recurring new tail or a robust population p99. Each window has14–15
+advances; telemetry's empirical world p99 equals its maximum, with no p50/p95.
+
+All12 raw reports remain retained in local `materialization-comparison-and-
+decision.json`, with full identities, durations, counts, hashes and original/
+supplemental comparisons kept separate. Original work counts are Electron
+149/14,149/14→150/15,149/14 and Firefox149/14,152/15→152/15,152/15; reverse
+pairs are respectively149/14 and152/15 on both sides. Identical scene/renderer
+counts, six zero pending counters, declared caps and attached DOM3747 pass.
+Larger unforced Electron heap/CDP-node points AFTER are not established retained
+memory, GC or leak causation. Save lengths and wall endpoints do not establish
+equal terminal authority; the separate30-step full-save digests above do.
+
+The11-line guard and its identity-specific assertions are removed. Production
+owner bytes again equal the test-only BEFORE parent; the census and independent
+batch byte-equivalence/revocation test remain, as does the earlier `7f48b48`
+encoding repair. Restored-owner focused3files/25tests, typecheck and critical
+6files/105tests pass. Candidate web/host packaging and static nested-path smoke
+passed before discard; no candidate normal desktop smoke, ZIP/install/signing,
+other OS, new cumulative, GPU/presented-FPS, travel/autosave or long-soak proof
+is claimed. Frozen full app/dist restoration matches all five served files and
+the runtime-only ASAR byte-exact; static web smoke passes5/5. Normal restored
+macOS arm64 desktop smoke passes, and its desktop/mobile Relief images were
+inspected. Its very large stdout result is truncated; the terminal successful
+process, images and byte identities are retained without pretending the entire
+raw result was captured. These checks certify the restored artifact, not the
+discarded candidate or another platform. Standing
+short-performance gates remain unresolved on the restored build; no waiver,
+gameplay/release/transition, dependency/upstream, schema/support, cadence,
+materialization-cap, security or full-Foliage Voice-soak policy changes.
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
