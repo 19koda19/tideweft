@@ -7918,6 +7918,70 @@ short-performance gates remain unresolved on the restored build; no waiver,
 gameplay/release/transition, dependency/upstream, schema/support, cadence,
 materialization-cap, security or full-Foliage Voice-soak policy changes.
 
+### Terrain record construction experiment — 2026-10-10
+
+**RETAIN the small local repair; Firefox standing gates remain unresolved.**
+Test-only `4af7ab5` characterizes the original terrain constructor before
+provisional executable `6e4572f` changes only that constructor. The earlier
+exact-source CPU capture attributes119.895ms/80samples to this mapper across
+19 advancing callbacks. This is whole-mapper sample weight, not proof of
+temporary-object allocation or a current unsampled speed measurement.
+
+Each existing native seed processes30 accepted steps/3 advances with30 original-
+once projections,3 first-seen terrain arrays/43,200 cells and27 fine-step cache
+reuses. All new arrays occur in advancing-correlated callbacks; setup and save
+are excluded. These are returned-array counts, not heap allocations. Complete
+current-save digests remain `922d9c80…`/`a7b713dd…`, also equal to independent
+uninstrumented work. The BEFORE complete14,400-tile ordered JSON digest
+`59cfe9fa30853e519d9b46090c15ef4c7b17434f3c19b054677fc312bfcabf5b`,
+own-key order, descriptors, freezing, climate identity and mutable-reference
+parity stay exact. The candidate removes a conditional biome-record spread,
+preserving absent-biome omission before publication. That fallback is retained
+structurally, not falsely claimed as normally reachable gameplay. No receipt,
+cache admission/invalidation, physical publication or perception rule changes.
+
+Fresh2 BEFORE/2 AFTER unsampled15s estuary Relief windows per platform use the
+unchanged native runners, AC M4/16GiB, Low Power Mode0, 1440×900/DPR1,30-frame
+warm-up and identical quality. No other game/tests/profiler compete. Frozen
+acceptance `1272f344…` and all8 raw reports remain local; historical controls are
+not pooled or substituted. BEFORE ASAR`92d235c9…`/JS`07ee6a33…` and AFTER
+ASAR`ca30899b…`/JS`37ba0db0…` are independently checked against the served files.
+
+| Platform | World mean BEFORE→AFTER, ms | Gain / larger two-run range, ms | Draw mean BEFORE→AFTER, ms | Renderer callbacks/s BEFORE→AFTER |
+| --- | --- | --- | --- | --- |
+| Electron44.1.0 | 96.514→90.325 | 6.189 /1.557 | 24.663→24.491 | 33.197→33.615 |
+| Firefox157.0.1 | 168.467→165.333 | 3.133 /0.667 | 21.507→21.032 | 29.330→29.952 |
+
+Independent read-only recalculation confirms the frozen both-platform gain
+condition. Electron passes its standing mean/draw/callback limits; Firefox
+still fails world163.8ms and callback30.545/s limits. No budget or waiver changed.
+Every Electron window processes149 steps/14 advances,420→434; Firefox152/15,
+420→435. Matching wall endpoints/counts do not replace the separate equal-work
+authority tests. Timed saves0; post-window sizes stay1,980,354/1,948,809B.
+Scene/renderer/resource endpoints agree, declared caps pass, six pending
+counters stay0 and DOM3747. Unforced Electron heap points fluctuate; Firefox
+heap is unavailable. This is not retained-growth, queue-peak or GC/soak proof.
+
+Tails do not uniformly improve: Firefox AFTER2 drawmax78ms versus BEFORE52/51ms
+is an isolated unassigned spike, despite improved paired mean/p99 and unchanged
+renderer worst210/208ms. Electron AFTER2 drawp9932.5ms versus BEFORE30.6/30ms
+also rises while world/callback maxima improve. Fourteen–fifteen world samples
+per window make empiricalp99=max; no robust tail, GPU/presented-FPS, autosave
+cost or hitch-removal claim follows. All observations remain included.
+
+Candidate validation passes6 projection/regional/water/runtime files/53 tests,
+37 selected Chart/Relief cases, the original late-interval rollback, typecheck
+and maintained critical6files/105tests. Production web compilation, nested
+static5-file smoke, macOS-arm64 packaging/runtime-only ASAR, actual Firefox
+production witnesses and packaged desktop smoke pass. Desktop/mobile Relief
+images were inspected. The first desktop control's completed report/log is
+retained without a direct exit-code claim because its observation handle was
+not retained. No new cumulative certificate, travel/long soak, hardware audio,
+physical mobile/other OS, ZIP/install/signing, CI/Pages or live-build validation
+is claimed. Dependency/configuration changes:NONE; upstream p5/Electron modified:NO.
+Save formats, security, simulation cadence/fidelity, completed directives and
+the full-Foliage Voice-soak deferral remain unchanged. WORLD0 is still incomplete.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
