@@ -655,12 +655,17 @@ function hasLineOfSight(
   blockOnObstruction: boolean,
   validateTraversedCells = false,
   validationState?: LineValidationState,
+  observerDistances?: Float64Array,
 ): boolean {
   const fromX = fromIndex % grid.columns;
   const fromY = Math.floor(fromIndex / grid.columns);
   const toX = toIndex % grid.columns;
   const toY = Math.floor(toIndex / grid.columns);
-  const totalDistance = Math.hypot(toX - fromX, toY - fromY);
+  let totalDistance = observerDistances?.[toIndex] ?? 0;
+  if (totalDistance === 0) {
+    totalDistance = Math.hypot(toX - fromX, toY - fromY);
+    if (observerDistances) observerDistances[toIndex] = totalDistance;
+  }
   if (totalDistance === 0) return true;
 
   const rawOrigin = grid.cells[fromIndex];
@@ -690,7 +695,12 @@ function hasLineOfSight(
       return true;
     }
     if (blockOnObstruction && cell.obstruction >= OBSTRUCTION_BLOCKING_THRESHOLD) return true;
-    const traveled = Math.hypot(cellX - fromX, cellY - fromY);
+    const cellIndex = cellY * grid.columns + cellX;
+    let traveled = observerDistances?.[cellIndex] ?? 0;
+    if (traveled === 0) {
+      traveled = Math.hypot(cellX - fromX, cellY - fromY);
+      if (observerDistances) observerDistances[cellIndex] = traveled;
+    }
     const rayHeight = originEye + (targetEye - originEye) * (traveled / totalDistance);
     return cell.elevation >= rayHeight - LINE_OF_SIGHT_EPSILON;
   };
@@ -928,6 +938,11 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
   detailVisibility[playerTileIndex] = VISIBILITY_DIRECT;
   const playerX = playerTileIndex % dimensions.columns;
   const playerY = Math.floor(playerTileIndex / dimensions.columns);
+  // Private to this fully validated snapshot and its one observer. A zero
+  // slot is a lazy miss (origin itself never needs a ray), not a distance to
+  // an unvisited cell. Float64 retains the exact original hypot result; point
+  // and light queries do not receive this scratch. Nothing is retained/saved.
+  const observerDistances = new Float64Array(dimensions.count);
   const maximumGridDistance = Math.hypot(dimensions.columns - 1, dimensions.rows - 1);
   const peripheralRange = Math.min(
     maximumGridDistance,
@@ -966,7 +981,8 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
     const y = Math.floor(index / dimensions.columns);
     const deltaX = x - playerX;
     const deltaY = y - playerY;
-    const distance = Math.hypot(deltaX, deltaY);
+    const distance = observerDistances[index] || Math.hypot(deltaX, deltaY);
+    observerDistances[index] = distance;
     const inPeripheralRange = distance <= peripheralRange;
     const inDirectRange = distance <= directRange;
     if (!inPeripheralRange && !inDirectRange) continue;
@@ -980,7 +996,7 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
     // built structures can conceal a person or parcel without erasing the larger ridge,
     // shoreline, or route shape behind it; elevation still creates a true
     // terrain horizon for both fields.
-    if (!hasLineOfSight(grid, playerTileIndex, index, false)) continue;
+    if (!hasLineOfSight(grid, playerTileIndex, index, false, false, undefined, observerDistances)) continue;
     const inSoftTerrainEdge = featherTerrainEdge
       && direct
       && (
@@ -1020,7 +1036,7 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
     if (
       terrainStrength > 0
       && (detailDirect || detailInPeripheralRange)
-      && hasLineOfSight(grid, playerTileIndex, index, true)
+      && hasLineOfSight(grid, playerTileIndex, index, true, false, undefined, observerDistances)
     ) {
       detailVisibility[index] = detailDirect
         || (rawInput.closeDetailIsDirect === true && detailInPeripheralRange)

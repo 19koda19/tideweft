@@ -8218,6 +8218,39 @@ typecheck and maintained critical105. The added narrow bottom-origin oracle
 retains distinct cover/ridge outcomes and exact restoration after changing
 the same input cells; it catches uncomputed-distance and stale-storage errors.
 
+### Private observer-distance scratch candidate — 2026-10-10
+
+Following test-only `4760cab`, the provisional application change adds one
+invocation-local Float64 distance table **after** complete snapshot validation.
+The outer scan and original independent terrain/detail rays reuse only exact
+observer-to-cell `Math.hypot` results. Explicit zero-slot misses handle cells
+not yet reached by row-major scanning. Diagonal flank order, opaque-detail
+early exit, endpoint faces, elevation/light/range/feather and disclosure seals
+are unchanged; point/light queries never receive scratch. Storage is115,200B
+for120×120, at most8MiB at the preexisting grid cap, and is never retained,
+published or saved. This is neither global memoization nor receipt/trust reuse.
+
+Native arithmetic falls323,681→113,376 and255,320→87,888 per evaluation;
+14,400 exact signed pairs, complete disclosure and full current-save digests
+remain unchanged. The initial two failures are deliberate BEFORE cost-oracle
+mismatches, with37 other tests passing; only cost expectations are updated.
+No behavior oracle is weakened. Read-only source review finds no semantic
+blocker; production gain and allocation impact remain unverified.
+
+Pre-edit plan `9e191ca7…` reuses **all four** same-day byte-authenticated
+`6e4572f` controls from the discarded shared-walk study, not its AFTERs. Normal
+restored package/dist match that source exactly; controls retain their own
+invocation HEAD and executable identities. Reuse requires identical host,
+AC/LowPower conditions, installed dependencies, runners, scenario, viewport,
+quality, warm-up and instrumentation. Exactly2 new AFTER windows per product
+must pass the unchanged2ms/2%/larger-range gain and no-material-regression
+criteria; no extra favorable repeats. Subsequent affected9files/146tests pass
+in214.96s, as do the original late-interval rollback1selected, typecheck and
+maintained critical105. Native complete disclosure/save digests stay exact.
+Artifact and performance evidence remain pending at this provisional checkpoint.
+No performance, directive closure, release, schema/support, dependency/upstream,
+security or full-Foliage Voice-soak-policy change is claimed.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

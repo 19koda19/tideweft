@@ -584,14 +584,14 @@ describe("runtime performance telemetry", () => {
           .toEqual([[10, 0], [20, 1], [30, 2]]);
         for (const call of perceptionCalls) {
           expect(call).toMatchObject(seed === "runtime baseline estuary" ? {
-            // The discarded shared-walk counts remain evidence, not current
-            // authority. Preserve the original two-path arithmetic oracle.
-            hypotCalls: 323_681, uniqueHypotPairs: 14_400,
+            // Distance reuse changes arithmetic only. BEFORE323681/255320
+            // remains retained; complete result/save oracles stay unchanged.
+            hypotCalls: 113_376, uniqueHypotPairs: 14_400,
             nonPairHypotCalls: 0, detailVisibleNonplayer: 1791,
             signature: "perception-v3:c3552d11",
             resultDigest: "3ad52fdaabf936e5c964be4dc03a12482196759fa8d13af630b542e0fcc97eac",
           } : {
-            hypotCalls: 255_320, uniqueHypotPairs: 14_400,
+            hypotCalls: 87_888, uniqueHypotPairs: 14_400,
             nonPairHypotCalls: 0, detailVisibleNonplayer: 1176,
             signature: "perception-v3:baaf234e",
             resultDigest: "c37a956207c4221541e02cae0bcbebfb53de8e238d0e64d4b868d128e0ddcfe5",
