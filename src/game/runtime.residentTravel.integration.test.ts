@@ -5,12 +5,15 @@ import { findAutonomousRoutePlan, routeIsActive } from "../sim/network";
 import {
   assertWorldInvariants,
   deserializeWorld,
+  FIXED_POINT,
   serializeWorld,
   type ContractState,
   type ResidentState,
   type WorldState,
 } from "../sim/public";
 import * as simulation from "../sim/public";
+import * as rationPulse from "../sim/residentRations";
+import { pressureMultiplier } from "../sim/world";
 import {
   RESIDENT_REST_APPROACH_STEP_UNITS,
   RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION,
@@ -395,7 +398,7 @@ async function continueNativeStormHold(record: SaveRecord): Promise<void> {
  * The standard-pressure survey is only a candidate: runtime's actual wild
  * world must independently contain this offer and demonstrate the whole loop.
  */
-async function nativeFixture() {
+async function nativeFixture(keepGeneratedNeeds = false) {
   const bootstrapRepository = new MemoryRepository();
   const bootstrap = await open(bootstrapRepository);
   bootstrap.dispatchUI({ type: "new-world", seed: "breathing room regional density 8",
@@ -440,11 +443,13 @@ async function nativeFixture() {
   }));
   const native = { terrain: structuredClone(world.terrain), routes: structuredClone(world.routes),
     stocks: world.settlements.map(({ id, inventory }) => ({ id, inventory: structuredClone(inventory) })),
-    ledger: structuredClone(world.ledger) };
+    ledger: structuredClone(world.ledger), needs: world.residents.map(({ id, needs }) => ({ id, needs: { ...needs } })) };
   const sourceStock = origin.inventory.food;
   expect(sourceStock).toBeGreaterThanOrEqual(commitment.quantity);
   world.weather = { kind: "clear", intensity: 0, windX: 0, windY: 0, nextChangeTick: 1_420 };
-  for (const human of world.residents) human.needs = { food: 100_000, rest: 100_000, belonging: 900_000 };
+  if (!keepGeneratedNeeds) {
+    for (const human of world.residents) human.needs = { food: 100_000, rest: 100_000, belonging: 900_000 };
+  } else expect(world.residents.map(({ id, needs }) => ({ id, needs }))).toEqual(native.needs);
   commitment.playerExclusiveUntilTick = world.meta.completedTick;
   expect(world.terrain).toEqual(native.terrain);
   expect(world.routes).toEqual(native.routes);
@@ -463,6 +468,258 @@ async function nativeFixture() {
 }
 
 describe("ordinary runtime conserved resident travel", () => {
+  it("releases a native food courier into actual ration use with generated needs and equal cold continuation", async () => {
+    // Weather/exclusivity retain the original fixture's declared controls;
+    // generated needs, body, tasks, terrain, stocks and results are not assigned.
+    const fixture = await nativeFixture(true);
+    const { runtime, repository } = fixture;
+    const originalStep = simulation.stepWorld;
+    let actorId: string | null = null;
+    let completedTick: number | null = null;
+    let primary = true;
+    let closingInput: WorldState | undefined;
+    let closingOutput: WorldState | undefined;
+    let observingRations = false;
+    const pulses: rationPulse.ResidentRationPulseInput[] = [];
+    const originalRationPulse = rationPulse.calculateResidentRationPulse;
+    const rationObserver = vi.spyOn(rationPulse, "calculateResidentRationPulse").mockImplementation((input) => {
+      if (observingRations) pulses.push(structuredClone(input));
+      return originalRationPulse(input);
+    });
+    const departures = new Set<number>();
+    const fulfillments = new Set<number>();
+    const checkpoints = new Map<number, ResidentState>();
+    const step = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+      if (primary && args[0].meta.completedTick === 719) closingInput = structuredClone(args[0]);
+      observingRations = primary && args[0].meta.completedTick === 719;
+      let result: WorldState;
+      try {
+        result = originalStep(...args);
+      } finally {
+        observingRations = false;
+      }
+      if (!primary) return result;
+      if (result.meta.completedTick === 720) closingOutput = structuredClone(result);
+      const commitment = contract(result, fixture.contractId);
+      if (commitment.assignedResidentId !== null) {
+        const human = result.residents.find(({ id }) => id === commitment.assignedResidentId)!;
+        actorId = human.identity.stableId;
+        if (commitment.status === "fulfilled" && completedTick === null) completedTick = result.meta.completedTick;
+        if ([497, 540, 541, 660, 661].includes(result.meta.completedTick)) {
+          checkpoints.set(result.meta.completedTick, structuredClone(human));
+        }
+      }
+      for (const event of result.events) {
+        if (event.subjectId !== fixture.contractId) continue;
+        if (event.type === "contract-departed") departures.add(event.sequence);
+        if (event.type === "contract-fulfilled") fulfillments.add(event.sequence);
+      }
+      assertWorldInvariants(result);
+      return result;
+    });
+    for (let interval = 0; interval < 180 && completedTick === null; interval += 1) advance(runtime, 10);
+    expect(completedTick).toBe(496);
+    if (actorId === null) throw new Error("Native delivery did not retain its actual courier");
+    advance(runtime, 10);
+    await runtime.save();
+    const releasedRecord = repository.snapshot();
+    const released = decode(releasedRecord);
+    const assertReleased = (world: WorldState): void => {
+      expect(contract(world, fixture.contractId)).toMatchObject({ status: "fulfilled", cargoQuantity: 0,
+        completedTick, assignedResidentId: actor(world, actorId!).id });
+      const human = actor(world, actorId!);
+      expect(human.activeContractId).toBeNull();
+      expect(human.location).toEqual({ kind: "settlement", settlementId: fixture.destinationId });
+      expect(human.activity?.travelTask).toBeNull();
+      expect(human.activity?.pickupTask).toBeNull();
+      expect(human.activity?.poses.at(-1)?.position).toEqual(fixture.destinationPosition);
+      assertWorldInvariants(world);
+    };
+    expect(deserializeWorld(released.world).meta.completedTick).toBe(497);
+    assertReleased(deserializeWorld(released.world));
+    expect(checkpoints.get(497)?.activity?.materialTask).toMatchObject({ phase: "arrived",
+      projectId: 21, selectedAtTick: 496, usedAtTick: null });
+
+    // Four observed hourly pulses are a finite seed-specific bound, not
+    // assigned eligibility. Ordinary reassessment must remain free to abandon
+    // the pending civic action before any contribution, then seek a ration.
+    advance(runtime, (719 - 497) * 10 + 9);
+    await runtime.save();
+    const pendingRecord = repository.snapshot();
+    const pending = decode(pendingRecord);
+    expect(deserializeWorld(pending.world).meta.completedTick).toBe(719);
+    expect(pending.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    assertReleased(deserializeWorld(pending.world));
+    expect(checkpoints.get(540)).toMatchObject({ intention: "rest",
+      activity: { materialTask: { phase: "arrived", usedAtTick: null } } });
+    expect(checkpoints.get(541)?.activity?.materialTask).toBeNull();
+    expect(checkpoints.get(660)).toMatchObject({ intention: "eat", needs: { food: 484_963, rest: 483_659 } });
+    expect(checkpoints.get(661)?.activity?.rationTask).toMatchObject({ phase: "arrived",
+      settlementId: fixture.destinationId, target: fixture.destinationPosition, selectedAtTick: 660,
+      usedAtTick: null, foodUsed: false, waterUsed: false });
+    advance(runtime, 1);
+    await runtime.save();
+    const usedRecord = repository.snapshot();
+    const used = decode(usedRecord);
+    const usedWorld = deserializeWorld(used.world);
+    expect(usedWorld.meta.completedTick).toBe(720);
+    expect(used.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    assertReleased(usedWorld);
+    const user = actor(usedWorld, actorId);
+    expect(user.activity?.rationTask).toMatchObject({ phase: "used", usedAtTick: 720,
+      selectedAtTick: 660, target: fixture.destinationPosition, foodUsed: true, waterUsed: true });
+    expect(user.needs.food).toBe(453_163);
+    expect(closingInput).toBeDefined();
+    expect(closingOutput).toBeDefined();
+    const source = closingInput!;
+    const committed = closingOutput!;
+    expect(source.meta.completedTick).toBe(719);
+    expect(committed.meta.completedTick).toBe(720);
+    const priorUser = actor(source, actorId);
+    expect(priorUser.activity?.rationTask).toMatchObject({ phase: "arrived", usedAtTick: null,
+      foodUsed: false, waterUsed: false, selectedAtTick: 660, target: fixture.destinationPosition });
+    expect(priorUser.activity?.poses.at(-1)?.position).toEqual(fixture.destinationPosition);
+    expect(residentRestTargetHasDrySupport(committed, fixture.destinationPosition)).toBe(true);
+
+    // The delivered food joins the existing aggregate pool, not a personal
+    // parcel or independently identified meal. Keep every scheduled recipe
+    // and other consumer enabled; independently account the complete cohort.
+    const consumed = { food: 0, freshWater: 0 };
+    const produced = { food: 0, freshWater: 0 };
+    const growth = Math.trunc(34_000 * pressureMultiplier(source.meta.pressureMode) / FIXED_POINT);
+    expect(pulses).toHaveLength(source.settlements.length);
+    expect(committed.events.filter((event) => event.tick === 720 && event.type === "contract-fulfilled"
+      && (event.data.resource === "food" || event.data.resource === "freshWater"))).toEqual([]);
+    for (const [siteIndex, site] of source.settlements.entries()) {
+      const next = committed.settlements.find(({ id }) => id === site.id)!;
+      const stock = { ...site.inventory };
+      for (const recipe of site.recipes) {
+        if (recipe.nextRunTick > 720) continue;
+        if (recipe.inputs.every(({ resource, amount }) => stock[resource] >= amount)) {
+          for (const { resource, amount } of recipe.inputs) {
+            stock[resource] -= amount;
+            if (resource === "food" || resource === "freshWater") consumed[resource] += amount;
+          }
+          for (const { resource, amount } of recipe.outputs) {
+            stock[resource] += amount;
+            if (resource === "food" || resource === "freshWater") produced[resource] += amount;
+          }
+        }
+        expect(next.recipes.find(({ id }) => id === recipe.id)?.nextRunTick)
+          .toBe(recipe.nextRunTick + recipe.intervalTicks);
+      }
+      const present = source.residents.filter(({ location }) => location.kind === "settlement"
+        && location.settlementId === site.id).sort((left, right) => left.identity.stableId < right.identity.stableId
+          ? -1 : left.identity.stableId > right.identity.stableId ? 1 : 0);
+      // Observe the real closing admission without replacing its calculation.
+      // Later acceptance may lawfully clear another user's transient marker;
+      // counting only surviving output labels would miss its committed debit.
+      const pulse = pulses[siteIndex]!;
+      expect(pulse).toMatchObject({ foodStock: stock.food, freshWaterStock: stock.freshWater, hungerGrowth: growth });
+      expect(pulse.foodNeeds).toEqual(present.map(({ needs }) => needs.food));
+      expect(pulse.uses).toHaveLength(present.length);
+      const users = new Set(present.filter((_human, index) => pulse.uses[index])
+        .map(({ identity }) => identity.stableId));
+      const budget = Math.ceil(present.length / 3);
+      const food = budget > 0 && stock.food >= budget;
+      const water = budget > 0 && stock.freshWater >= budget;
+      let groups = 0;
+      for (let start = 0; start < present.length; start += 3) {
+        if (present.slice(start, start + 3).some(({ identity }) => users.has(identity.stableId))) groups += 1;
+      }
+      const foodDebit = food ? groups : 0;
+      const waterDebit = water ? groups : 0;
+      consumed.food += foodDebit;
+      consumed.freshWater += waterDebit;
+      for (const prior of present) {
+        const nextHuman = actor(committed, prior.identity.stableId);
+        const relief = users.has(prior.identity.stableId) ? (food ? 68_000 : 0) + (water ? 8_000 : 0) : 0;
+        expect(nextHuman.needs.food).toBe(Math.max(0, Math.min(FIXED_POINT, prior.needs.food + growth - relief)));
+        if (relief > 0) {
+          expect(prior.activity?.rationTask).toMatchObject({ phase: "arrived", usedAtTick: null,
+            settlementId: site.id, foodUsed: false, waterUsed: false });
+          expect(prior.activity!.rationTask!.selectedAtTick).toBeLessThan(720);
+          expect(prior.activity?.poses.at(-1)?.position).toEqual(prior.activity!.rationTask!.target);
+          if (nextHuman.activity?.rationTask === null) {
+            expect(nextHuman.activeContractId).not.toBeNull();
+            expect(contract(committed, nextHuman.activeContractId!)).toMatchObject({ status: "accepted", acceptedTick: 720 });
+          } else expect(nextHuman.activity?.rationTask).toMatchObject({ phase: "used", usedAtTick: 720,
+            foodUsed: food, waterUsed: water });
+        }
+      }
+      expect(["food", "freshWater"]).not.toContain(site.project.resource);
+      if (site.id === fixture.destinationId) {
+        expect(users.has(actorId)).toBe(true);
+        expect(foodDebit).toBeGreaterThan(0);
+        expect(waterDebit).toBeGreaterThan(0);
+        const transfers = committed.events.filter((event) => event.tick === 720
+          && (event.type === "contract-departed" || event.type === "contract-fulfilled"))
+          .map(({ subjectId }) => {
+            if (subjectId === null) throw new Error("Native contract transfer lacks its conserved owner");
+            return contract(committed, subjectId);
+          })
+          .filter((entry) => (entry.originSettlementId === site.id || entry.destinationSettlementId === site.id)
+            && (entry.resource === "food" || entry.resource === "freshWater"));
+        expect(transfers).toEqual([]);
+        expect(next.inventory.food).toBe(stock.food - foodDebit);
+        expect(next.inventory.freshWater).toBe(stock.freshWater - waterDebit);
+      }
+    }
+    for (const resource of ["food", "freshWater"] as const) {
+      expect(committed.ledger.consumed[resource] - source.ledger.consumed[resource]).toBe(consumed[resource]);
+      expect(committed.ledger.produced[resource] - source.ledger.produced[resource]).toBe(produced[resource]);
+    }
+    expect(usedWorld.ledger).toEqual(committed.ledger);
+    expect(usedWorld.settlements).toEqual(committed.settlements);
+    expect(departures.size).toBe(1);
+    expect(fulfillments.size).toBe(1);
+
+    advance(runtime, 10);
+    await runtime.save();
+    const continued = decode(repository.snapshot());
+    expect(deserializeWorld(continued.world).meta.completedTick).toBe(721);
+    assertReleased(deserializeWorld(continued.world));
+    expect(actor(deserializeWorld(continued.world), actorId).activity?.rationTask).toBeNull();
+    expect(departures.size).toBe(1);
+    expect(fulfillments.size).toBe(1);
+    close(runtime);
+    primary = false;
+
+    // Same accepted work from a detached post-release save must reach the
+    // complete phase9 roots, then the same committed consumer and next state.
+    const releasedRepository = new MemoryRepository(releasedRecord);
+    const coldReleased = await open(releasedRepository);
+    await coldReleased.save();
+    expect(authoritativeRoots(decode(releasedRepository.snapshot()))).toEqual(authoritativeRoots(released));
+    advance(coldReleased, (719 - 497) * 10 + 9);
+    await coldReleased.save();
+    expect(authoritativeRoots(decode(releasedRepository.snapshot()))).toEqual(authoritativeRoots(pending));
+    advance(coldReleased, 1);
+    await coldReleased.save();
+    expect(authoritativeRoots(decode(releasedRepository.snapshot()))).toEqual(authoritativeRoots(used));
+    advance(coldReleased, 10);
+    await coldReleased.save();
+    expect(authoritativeRoots(decode(releasedRepository.snapshot()))).toEqual(authoritativeRoots(continued));
+    close(coldReleased);
+
+    for (const [record, before, count, after] of [
+      [pendingRecord, pending, 1, used], [usedRecord, used, 10, continued],
+    ] as const) {
+      soundscapePlay.mockClear();
+      const coldRepository = new MemoryRepository(record);
+      const cold = await open(coldRepository);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(before));
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      advance(cold, count);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(after));
+      close(cold);
+    }
+    step.mockRestore();
+    rationObserver.mockRestore();
+  }, 480_000);
+
   it("automatically picks up a native offer, walks its local route, continues outside the window and hands off once with equal cold work", async () => {
     const fixture = await nativeFixture();
     const { runtime, repository } = fixture;

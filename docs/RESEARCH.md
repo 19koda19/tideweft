@@ -6758,6 +6758,52 @@ is not a complete authoritative trace, hearing/audio measurement, all-human
 fairness, FPS/soak, hardware assistive/mobile or other-OS certification. No ZIP,
 installation, signing, CI/Pages, deployment or directive closure is claimed.
 
+### Native courier release and subsequent ration use — 2026-10-10
+
+The additive `runtime.residentTravel.integration.test.ts` case extends the
+existing generated density-eight food journey at local parent `f9ba08a`.
+It retains original generated needs instead of the older fixture's explicit
+need controls; clear weather and early player-exclusivity expiry remain declared
+fixture controls. Terrain, identities, stocks, bodies, tasks and successful
+results are not assigned. The native food14 offer133 selects its actual carrier,
+hands off at496 and retains that same body at destination7 through release497.
+This is controlled native runtime evidence, not untouched or rendered normal play.
+
+The released carrier selects an actual civic task at497, but hourly needs make
+it ineligible at540 and it clears541 without a fabricated work result. Ordinary
+food pressure then selects an arrived ration at661; at720 real food/water use
+reduces food need from484963 plus44200 growth to453163. The delivered quantity
+joins the existing aggregate stock pool, not an individually identified meal or
+second personal parcel. All scheduled production and other consumers stay live.
+Independent arithmetic accounts due recipes, the complete stable-ID cohorts,
+qualifying groups of three, destination stock and global food/water ledgers.
+Another resident can legitimately eat and then accept a new commitment in the
+same closing update. The first oracle missed that use after its temporary service
+marker cleared; its failed result is retained. The final observer records actual
+ration admission inputs without replacing the calculation and checks each
+physical prerequisite, benefit and subsequent marker/commitment independently.
+
+Detached current-save continuation497→719/phase9→720→721 agrees with the
+uninterrupted complete roots. Separate pending and consumed reloads agree too;
+only the established session-recap/envelope-integrity exclusions apply. Load
+emits no audio, the old Promise remains fulfilled with zero cargo and released
+travel/pickup, and no second departure/handoff or ration replay appears.
+Focused command `npx vitest run src/game/runtime.residentTravel.integration.test.ts
+-t 'releases a native food courier' --maxWorkers=1` passes one selected/four
+unselected cases in239.832s. Typecheck and maintained critical smoke6/105 pass;
+the ignored `post-handoff-current-save-final.json` retains the exact result.
+The original four travel case bodies and default fixture controls are unchanged.
+Their separate regression command uses the same file and worker limit with
+`-t 'automatically picks up a native offer|holds the same native cargo|physically
+completes one native reverse|retains native multi-leg storm cargo'`: four pass,
+one deliberately unselected case,447.533s of tests/449.34s total. Together the
+two selections cover all five cases at the same test bytes
+`02a27ee2248e47e4e77e5aa735c2466734ac889f98d33d2cab921458bf07358e`;
+the second ignored report is `post-handoff-existing-travel.json`.
+This is test/evidence work, not a production/schema/support/dependency change,
+performance measurement, population fairness, full lifecycle/normal-play
+acceptance, public release or directive closure.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
