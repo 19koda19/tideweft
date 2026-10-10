@@ -8247,9 +8247,62 @@ must pass the unchanged2ms/2%/larger-range gain and no-material-regression
 criteria; no extra favorable repeats. Subsequent affected9files/146tests pass
 in214.96s, as do the original late-interval rollback1selected, typecheck and
 maintained critical105. Native complete disclosure/save digests stay exact.
-Artifact and performance evidence remain pending at this provisional checkpoint.
+At that provisional checkpoint, artifact and performance evidence remained
+pending. The completed comparison below supersedes its disposition.
 No performance, directive closure, release, schema/support, dependency/upstream,
 security or full-Foliage Voice-soak-policy change is claimed.
+
+### Observer-distance scratch experiment discarded — 2026-10-10
+
+**DISCARD: arithmetic reuse does not satisfy the frozen production criteria.**
+The pre-edit plan `9e191ca7…` and all four exact `6e4572f` controls remain
+unchanged; candidate `3680c04` uses ASAR`92911a59…`/JS`0d8b81ff…`. Exactly2
+AFTER windows per product use the same existing unsampled15s estuary Relief
+runners, AC M4/16GiB/LowPower0,1440×900/DPR1, quality and30-frame warm-up.
+No competing game/test/sampler or additional favorable repeats. All8 reports
+and their hashes remain in the local comparison `aae8b95a…`; earlier rejected
+shared-walk AFTERs remain separate, not pooled or substituted.
+
+| Product | World mean BEFORE→AFTER, ms | Gain / larger paired range, ms | Draw mean BEFORE→AFTER, ms | Renderer callbacks/s BEFORE→AFTER |
+| --- | --- | --- | --- | --- |
+| Electron44.1.0 | 90.054→88.961 | 1.093 /0.693 | 24.044→25.314 | 34.097→32.591 |
+| Firefox157.0.1 | 165.867→166.167 | −0.300 /1.933 | 20.615→20.552 | 30.329→30.218 |
+
+Electron's1.21% world gain fails2ms/2%; its draw increase1.270ms and callback
+loss1.505/s also exceed corresponding paired ranges0.413ms/0.536/s. Firefox's
+world mean is slightly worse and its world/callback standing limits still
+fail. Passing Electron scalar ceilings cannot override the retention rule.
+No causal allocation/GC explanation is established for the draw regression.
+
+Scene/resource endpoints, caps, six pending counters and DOM3747 agree. All
+Electron windows process149 steps/14 advances420→434. Firefox controls and
+AFTER1 process152/15; AFTER2 processes150/15,420→435 and saves1,939,431B
+instead of1,948,809B. These wall endpoints are **not** equal-state proof;
+separate30-step exact full-result/save witnesses remain the behavior evidence.
+World empiricalp99=max with14–15 observations/window. Firefox AFTER2's
+worldmax211ms and worst callback240ms exceed controls194–195/217ms; retain
+them without inferring a population tail. Unforced desktop heap points do
+not prove retention/GC convergence; Firefox heap is unavailable. Timed saves0
+do not exercise autosave. No GPU/presented-FPS, input-latency, visual saturation
+or long-session/soak certification follows.
+
+Only the owned scratch and arithmetic-count expectations are removed;
+production perception bytes again match `4760cab`/accepted `6e4572f`.
+Signed-pair census, narrow bottom-origin/changed-input oracle, complete result
+and save assertions remain, as do the earlier accepted V1/terrain repairs.
+Candidate9files/146tests, original rollback1selected, typecheck, critical105,
+production web/host packaging, runtime-only ASAR and static5-file smoke pass
+within their scopes; all5 shipped web bytes match the package. Guarded Firefox
+witnesses are not a normal packaged desktop smoke, visual QA, installation,
+signing, other-OS, cumulative, travel/autosave/long-soak, CI/Pages or live proof.
+Restored two-file39-test validation passes in18.28s, typecheck and maintained
+critical six-file105-test smoke pass in4.16s. Complete native result/save
+oracles and original arithmetic counts are restored; artifact rebuilding
+retains its own receipt. No dependency,
+upstream, schema/support, security, cadence, fidelity, completed-directive or
+full-Foliage Voice-soak-policy changes. WORLD0 remains incomplete; restored
+Firefox standing gates remain unresolved. No further perception arithmetic
+candidate is justified by these two rejected experiments alone.
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
