@@ -1,4 +1,4 @@
-import type { TerrainKind } from "../sim/types";
+import { FIXED_POINT, type TerrainKind } from "../sim/types";
 import {
   isRegionCoord,
   regionKey,
@@ -663,6 +663,20 @@ export function queryWayknotEffects(
     influences: Object.freeze(influences),
   };
   return Object.freeze(result);
+}
+
+/** Existing player footing support, without civic ground or inferred gear. */
+export function wayknotFootingSupport(effects: WayknotEffects): number {
+  let support = 0;
+  for (const influence of effects.influences) {
+    if (influence.kind === "reed-mat" && influence.distance === 0) {
+      support = Math.max(support, Math.trunc(influence.effectStrength * 0.58));
+    }
+    if (influence.kind === "tide-anchor") {
+      support = Math.max(support, (1_000 - influence.sweepRiskPermille) * 1_000);
+    }
+  }
+  return Math.max(0, Math.min(FIXED_POINT, support));
 }
 
 /**

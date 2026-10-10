@@ -146,6 +146,12 @@ physical benefit and qualified wear share the same finite aid identity and
 atomic body/aid transaction. This narrow dry-travel consumer grants no NPC
 equipment/deployment, wet capability or other staged service channel.
 
+Current unladen source escape additionally joins
+[source-qualified tide-anchor service](./ARCHITECTURE.md#source-qualified-resident-tide-anchor-service):
+actual regional support may mitigate contact, not the independent depth limit;
+newly helped source-distance wear and body publication share one transaction.
+This local partial consumer grants no water entry, boat or NPC deployment.
+
 ## Mandatory feature inheritance audit
 
 Before implementing any substantial new actor, species, human role,

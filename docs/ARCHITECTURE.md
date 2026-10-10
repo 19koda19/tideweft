@@ -2705,7 +2705,7 @@ Current local construction additionally consumes actual persisted swimming
 aptitude and condition for a **source-only** escape above that unchanged foot
 band. This is a bounded resident action policy, not general swimming or a
 catalog-wide water locomotion capability. Reserve is `1-max(rest,exhaustion)`;
-the extra depth and unmitigated contact-pressure ceiling are both
+the extra depth and bare contact-pressure ceiling are both
 `floor(35000*floor(aptitude*reserve/1000000)/1000000)`, bounded to35,000.
 Missing or invalid capability supplies no extra reserve. Depth must fit its
 independent ceiling, and every prospective polyline segment while touching the
@@ -2714,8 +2714,9 @@ quote preserves the player's exact current/rough-bed arithmetic and uses the
 same `deriveWaterFlowProfile` and `surfaceCurrentDirection`. The actual solver
 trajectory, not a goal bearing or terminal chord, supplies movement direction.
 Failed contact publishes no pose, progress, wear or sounding; it retains the
-existing bounded waiting/reassessment. No aid benefit, rated capacity, visible
-kit or ADRIFT permission is inferred. Wet destinations, all other wet cells,
+existing bounded waiting/reassessment. Only the source-qualified anchor channel
+below may mitigate contact; rated capacity, visible kit or ADRIFT permission is
+not inferred. Wet destinations, all other wet cells,
 deep-water terrain, cargo commitments and frozen protocols remain closed.
 
 The existing v8/current58 protocol remains unchanged. Only future accepted
@@ -2726,13 +2727,52 @@ dry arrival, with exact phase4/9 cold continuation and late-closure rollback.
 Adapter counterfactuals change movement to waiting by removing aptitude or
 reserve, exceeding the depth ceiling, or changing only the wind's transverse
 current at equal depth. These are bounded source-escape proofs, not complete
-current knowledge, turbulence/support policy, ordinary crowd/visual proof,
+current knowledge, general turbulence/support policy, ordinary crowd/visual proof,
 general wading/crossing or animal evacuation. Shared flow is zero in the
 unchanged35k band; that older band alone is not a current-resistance test.
 Water contact sound remains outside the narrow dry-contact producer rather
-than being fabricated from this access; applicable wet contact/support and
-broader observed-current responses remain with the existing-human integration
+than being fabricated from this access; applicable wet contact, broader support
+and observed-current responses remain with the existing-human integration
 owner. Research owns commands, exact native inputs and evidence limits.
+
+#### Source-qualified resident tide-anchor service
+
+The local, unpublished current-v8 unladen source-escape consumer can use an
+already deployed tide anchor's actual occupied-source influence. It shares
+`wayknots.ts:wayknotFootingSupport` and `footing.ts:fixtureSupportMitigation`
+with the unchanged player footing calculation. The existing regional query,
+six-piece bound, wet40k threshold, Manhattan radius and setup scale remain
+authoritative. Reed mats keep their separate dry-motion service; no carried,
+broken, reclaimed, wrong-region or out-of-radius anchor supplies this benefit.
+
+One strongest anchor mitigates the raw water-contact pressure once. It does
+not additionally scale the current vector, stack supports, extend the independent
+aptitude/depth ceiling or open another wet cell. Exact strongest ties use the
+lowest aid ID. Support is re-queried from the staged successor before each actor,
+so a broken aid cannot continue helping later actors in that same transaction.
+
+This water channel prices **new, actually aid-necessary source-contact work**,
+not dry-mat tile entry. A committed segment qualifies only when the same bare
+quote would fail and the actual anchor-supported quote passes. Its conservative
+ceil distance is clipped at first exit from the source cell, excluding the dry
+tail. Requested benefit is `floor(contactUnits*1000000/1000)` through the existing
+`applyWayknotServiceWear` fractional remainder. The kernel applies setup once;
+full tide-anchor service is16,000 condition per1,000 assisted contact units,
+setting service8,000. Zero-distance contact, queries, waiting, bare-safe motion
+and retained historical poses spend nothing. Charging each newly helped segment
+avoids losing earlier aid use if conditions become bare-safe before tile exit.
+
+The existing atomic body/aid result and runtime checkpoint publish or roll back
+both roots together. No additional receipt, schema, clock or save reader is
+created. Saved prefixes and their actual condition/remainder remain exact; load
+does not reprice or replay past service. Authenticated dry arrival and existing
+stock/use/rest/inspection consumers still own every subsequent result.
+Arranged aid placement is a foundation, not proof of ordinary acquisition,
+deployment or assisted native play. The retained first native water encounter
+occurs before the ordinary player can reach its legal anchor site; no relocation
+or altered speed substitutes for that missing normal-control witness. Wider
+wet crossings, NPC deployment and other equipment/support channels retain their
+existing owners. Research owns current validation and evidence limits.
 
 ### Observed settlement-rest support
 

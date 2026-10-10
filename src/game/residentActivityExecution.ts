@@ -54,11 +54,11 @@ import {
   residentTravelSegmentPose, residentTravelWindowInterval,
 } from "../sim/residentTravelRoute";
 import { residentTravelIntervalWorkUsed, residentTravelStepUnits } from "../sim/residentTravelAdvance";
-import { ORDINARY_FOOT_MAX_WATER_DEPTH, TERRAIN_DRAG_PERMILLE, waterContactPressure } from "./footing";
+import { fixtureSupportMitigation, ORDINARY_FOOT_MAX_WATER_DEPTH, TERRAIN_DRAG_PERMILLE, waterContactPressure } from "./footing";
 import { surfaceCurrentDirection } from "./currentDirection";
 import { deriveWaterFlowProfile } from "./waterFlow";
 import {
-  applyWayknotServiceWear, queryWayknotEffects, MAX_WAYKNOT_CAPACITY,
+  applyWayknotServiceWear, queryWayknotEffects, wayknotFootingSupport, MAX_WAYKNOT_CAPACITY,
   WAYKNOT_FULL_STRENGTH, WAYKNOT_PERMILLE, WAYKNOT_STATE_VERSION,
   type WayknotState,
 } from "./wayknots";
@@ -588,11 +588,25 @@ export function advanceResidentRestActivities(
               // Quote the solver's actual contact segments, not the goal
               // bearing or terminal chord: a single step can turn at a knot.
               // No pose, wear or progress is committed until contact passes.
-              if (sourceCapacity !== null && !occupiedSourceWaterSupportsStep(
-                world, pose.position, resolution.trajectory, sourceCapacity,
-              )) {
+              const sourceContact = sourceCapacity === null ? null : occupiedSourceWaterStep(
+                world, pose.position, resolution.trajectory, sourceCapacity, nextWayknots,
+              );
+              if (sourceContact !== null && !sourceContact.supported) {
                 task = waitForRest(task, tick, "no-traversable-route");
               } else {
+                if (sourceContact?.winningAnchorId != null && sourceContact.assistedDistanceUnits > 0
+                  && nextWayknots !== undefined) {
+                  // Only new, actually anchor-dependent wet contact work.
+                  // Price its clipped source distance; no historical reappraisal
+                  // or deferred entry receipt is needed. Setup scales once in
+                  // the existing service kernel, not again in this request.
+                  const benefit = Math.floor(sourceContact.assistedDistanceUnits
+                    * WAYKNOT_FULL_STRENGTH / WORLD_POSITION_UNITS_PER_TILE);
+                  const service = applyWayknotServiceWear(nextWayknots, sourceContact.winningAnchorId,
+                    tick, benefit, pose.position.region);
+                  if (!service.ok) return null;
+                  nextWayknots = service.state;
+                }
                 if (contact !== null && contact.winningMatId !== null && nextWayknots !== undefined
                   && enteredContactTile(contact, resolution.actor.position)
                   && resolution.distanceUnits > contact.bareStepUnits) {
@@ -758,22 +772,48 @@ function occupiedSourceWaterCapacity(resident: ResidentState): number {
   return Math.floor(ORDINARY_FOOT_MAX_WATER_DEPTH * aptitudeWithReserve / FIXED_POINT);
 }
 
+interface OccupiedSourceWaterStep {
+  readonly supported: boolean;
+  readonly winningAnchorId: number | null;
+  readonly assistedDistanceUnits: number;
+}
+
 /** A prospective contact check cannot create a sounding or historical pose. */
-function occupiedSourceWaterSupportsStep(
+function occupiedSourceWaterStep(
   world: WorldState, source: WorldPosition, trajectory: readonly WorldPosition[], capacity: number,
-): boolean {
+  wayknots: WayknotState | undefined,
+): OccupiedSourceWaterStep {
+  const unassisted = (supported: boolean): OccupiedSourceWaterStep => ({
+    supported, winningAnchorId: null, assistedDistanceUnits: 0,
+  });
   const x = Math.floor(source.localX / WORLD_POSITION_UNITS_PER_TILE);
   const y = Math.floor(source.localY / WORLD_POSITION_UNITS_PER_TILE);
   const tile = world.terrain.tiles[y * world.terrain.width + x];
-  if (tile === undefined || tile.x !== x || tile.y !== y || tile.terrain === "deep-water") return false;
+  if (tile === undefined || tile.x !== x || tile.y !== y || tile.terrain === "deep-water") return unassisted(false);
   const depth = waterDepthAt(tile, world.tide);
-  if (depth <= ORDINARY_FOOT_MAX_WATER_DEPTH) return true; // Preserve the existing foot band exactly.
-  if (depth > ORDINARY_FOOT_MAX_WATER_DEPTH + capacity) return false;
+  if (depth <= ORDINARY_FOOT_MAX_WATER_DEPTH) return unassisted(true); // Preserve the existing foot band exactly.
+  if (depth > ORDINARY_FOOT_MAX_WATER_DEPTH + capacity) return unassisted(false);
+  let mitigation = 0;
+  let winningAnchorId: number | null = null;
+  if (wayknots !== undefined) {
+    const effects = queryWayknotEffects(wayknots, {
+      tileIndex: y * WORLD_WIDTH + x, terrain: tile.terrain, waterDepth: depth, windExposed: false,
+    }, TRAVEL_WAYKNOT_GRID, world.meta.completedTick, source.region);
+    // Reed mats retain their dry-motion channel; this wet contact consumer
+    // uses actual tide-anchor support, not an unrelated movement multiplier.
+    const anchors = effects.influences.filter((influence) => influence.kind === "tide-anchor");
+    mitigation = fixtureSupportMitigation(wayknotFootingSupport({ ...effects, influences: anchors }));
+    for (const anchor of anchors) {
+      if (anchor.sweepRiskPermille === effects.sweepRiskPermille
+        && (winningAnchorId === null || anchor.id < winningAnchorId)) winningAnchorId = anchor.id;
+    }
+  }
   const profile = deriveWaterFlowProfile({ waterDepth: depth, bedRoughness: tile.roughness,
     tideLevel: world.tide.level, weatherIntensity: world.weather.intensity });
   const direction = surfaceCurrentDirection(world.tide.direction, world.weather.windY);
   const current = { x: Math.trunc(direction.x * profile.strength / FIXED_POINT),
     y: Math.trunc(direction.y * profile.strength / FIXED_POINT) };
+  let assistedDistanceUnits = 0;
   for (let index = 1; index < trajectory.length; index += 1) {
     const from = trajectory[index - 1]!;
     // The shared route admits no other wet cell. Once the actual polyline
@@ -782,10 +822,42 @@ function occupiedSourceWaterSupportsStep(
       || Math.floor(from.localX / WORLD_POSITION_UNITS_PER_TILE) !== x
       || Math.floor(from.localY / WORLD_POSITION_UNITS_PER_TILE) !== y) break;
     const movement = worldPositionDelta(from, trajectory[index]!);
-    if (waterContactPressure({ moving: true, movement, waterDepth: depth,
-      roughness: tile.roughness, surface: "water", current }) > capacity) return false;
+    const pressure = waterContactPressure({ moving: true, movement, waterDepth: depth,
+      roughness: tile.roughness, surface: "water", current });
+    if (pressure > capacity) {
+      if (Math.trunc(pressure * (FIXED_POINT - mitigation) / FIXED_POINT) > capacity) return unassisted(false);
+      assistedDistanceUnits += sourceContactDistance(from, movement, x, y);
+    }
   }
-  return true;
+  return { supported: true, winningAnchorId: assistedDistanceUnits > 0 ? winningAnchorId : null, assistedDistanceUnits };
+}
+
+/** Conservative ceil work up to first source-cell exit, never the dry tail. */
+function sourceContactDistance(from: WorldPosition, movement: { readonly x: number; readonly y: number }, x: number, y: number): number {
+  let numerator = 1;
+  let denominator = 1;
+  const axes: readonly (readonly [number, number, number])[] = [
+    [from.localX, movement.x, x], [from.localY, movement.y, y],
+  ];
+  for (const [offset, delta, cell] of axes) {
+    if (delta === 0) continue;
+    const distance = delta > 0 ? (cell + 1) * WORLD_POSITION_UNITS_PER_TILE - offset
+      : offset - cell * WORLD_POSITION_UNITS_PER_TILE;
+    const magnitude = Math.abs(delta);
+    if (distance * denominator < numerator * magnitude) {
+      numerator = distance;
+      denominator = magnitude;
+    }
+  }
+  const squaredLength = movement.x * movement.x + movement.y * movement.y;
+  const squaredNumerator = squaredLength * numerator * numerator;
+  const squaredDenominator = denominator * denominator;
+  let units = Math.ceil(Math.sqrt(squaredLength) * numerator / denominator);
+  // All segments are bounded by105 units. Exact integer comparisons avoid a
+  // floating boundary rounding an otherwise exact contact unit upward.
+  while (units > 0 && (units - 1) * (units - 1) * squaredDenominator >= squaredNumerator) units -= 1;
+  while (units * units * squaredDenominator < squaredNumerator) units += 1;
+  return units;
 }
 
 function restApproachSurface(

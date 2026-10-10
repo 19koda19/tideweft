@@ -6535,6 +6535,76 @@ and zero guarded browser errors. This is bounded interaction/production-artifact
 evidence, not full task fairness, hardware mobile/audio, measured performance,
 soak, other-OS/signing/install, deployment or cumulative certification.
 
+### Source-qualified tide-anchor contact service — 2026-10-09
+
+Local construction from parent159a2dd connects one existing physical aid to
+current-v8 unladen source escape. The
+[Architecture owner](./ARCHITECTURE.md#source-qualified-resident-tide-anchor-service)
+defines support, independent capability/depth gates, exact clipped-distance
+wear and atomic publication. Two small extracts preserve the player's existing
+fixture support and560000 mitigation; no second current scaling, actor gear,
+new movement mode, receipt, schema, reader or dependency is introduced.
+
+Foundations retain generated human84, its real selected medicine service and
+native445 source(88.5,47.5), depth41474/capacity8023. Explicit transverse wind
+433430 yields raw pressure8024;433429 remains within reserve. A legal arranged
+anchor at(88,45) has radius2 support; full mitigation gives7349 and setting7686.
+Removing the aid or making it carried, broken, foreign or out-of-radius restores
+waiting. Bare-safe movement spends no aid condition. Ordinary player travel
+cannot reach this initial site in time, so this is not normal F deployment or
+an observed player-assisted crossing. No task, body, capability or result is
+assigned by the contrast.
+
+Actual east105 accepted steps charge only wet source contact105×4+80, not the
+25-unit dry tail or subsequent dry approach. Full wear totals8000 condition,
+setting4000; existing fractional remainder123456 survives detached cold4/9
+continuation exactly. The independent depth/capability limit still blocks
+exhausted reserve. Cold reclaim and newly broken condition remove future
+support without changing saved prefixes. Strongest/lowest-ID arbitration and
+later-invalid-roster rejection preserve input state and atomic publication;
+constructed overlapping aid addresses remain explicit foundations.
+
+The additive outer-runtime case first produces genuine ordinary442/445 body
+and selected service history, then declares the placement/wind fixtures. It
+compares carried-aid waiting with actual helped motion, saves phases4/9, and
+joins complete saved roots across cold work (excluding only established session
+recap/envelope integrity). A forced post-body/aid publication failure at phase5
+restores every phase4 root, releases only the integrity warning, and cold retry
+joins the actual uninterrupted phase5. Arrival is not hourly stock use. The
+original twenty rest cases remain unchanged; all21 pass in241.86s.
+
+Focused commands include:
+
+```sh
+npx vitest run src/game/fixtureFootingSupport.test.ts \
+  src/game/residentWaterSupport.test.ts --maxWorkers=1
+npx vitest run src/game/runtime.residentRest.integration.test.ts \
+  -t 'commits only newly helped contact wear' --maxWorkers=1
+```
+
+The helper's7 cases and source-service18 cases pass; shared footing/player/
+Wayknot/shallow domain7files146, activity12files434, runtime compatibility/
+publication/circadian/sound4files55, critical `npm run test:smoke`6files105,
+typecheck, context28 and documentation-reuse45 pass. The selected runtime case
+passes1/20unselected in19.15s, before the complete21-case run above. An initial
+new foundation failure was a reclaim-API typo, corrected to the actual stable-ID
+signature without changing production or old tests. Current report scope,
+not combined totals or historical cumulative results, owns each claim.
+The existing runtime reed-mat transaction regression also passes1/14unselected
+in73.94s; it preserves its original movement, finite wear, cold restore and
+later-publication rollback assertions. The final combined support run passes
+2files25tests in2.21s. The unchanged core introduction/save/vocal-audio
+late-closure rollback also passes1/97unselected in7.04s on this candidate.
+
+Shared physical support, finite aid identity/condition, fixed-step body
+transactions and current persistence are INTEGRATED. NPC aid acquisition,
+deployment, broad equipment/crossings, wet contact sound and fuller observed
+current response remain DEFERRED to their actual owners; new boats/cargo/health
+are NOT APPLICABLE. The partial bridge has a real local consumer, but no normal
+assisted-play, whole-population fairness, measured performance, new production
+artifact, deployment or complete cumulative certificate is implied here.
+Completed directives and upstream source are unchanged; dependency changes: NONE.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

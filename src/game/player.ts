@@ -12,6 +12,7 @@ import {
   applyWayknotPermille,
   createWayknotState,
   tideHarpEffectStrength,
+  wayknotFootingSupport,
   type WayknotEffects,
   type WayknotState,
   type WayknotTileContext,
@@ -1088,18 +1089,10 @@ function footingFixtureSupport(
   tileIndex: number,
   effects: WayknotEffects,
 ): number {
-  let support = world.settlements.some((settlement) => settlement.tileIndex === tileIndex)
+  const civicSupport = world.settlements.some((settlement) => settlement.tileIndex === tileIndex)
     ? 850_000
     : 0;
-  for (const influence of effects.influences) {
-    if (influence.kind === "reed-mat" && influence.distance === 0) {
-      support = Math.max(support, Math.trunc(influence.effectStrength * 0.58));
-    }
-    if (influence.kind === "tide-anchor") {
-      support = Math.max(support, (1_000 - influence.sweepRiskPermille) * 1_000);
-    }
-  }
-  return clamp(support, 0, FIXED_POINT);
+  return Math.max(civicSupport, wayknotFootingSupport(effects));
 }
 
 function footingFootwearGrip(

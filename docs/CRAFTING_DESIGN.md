@@ -313,7 +313,19 @@ Placement subtracts `80_000` condition. Reclaim subtracts `40_000`, preserves ID
 
 Placement sets `readyTick = currentTick + 3`. Before that tick the field displays `SETTING` and supplies 50% of its ordinary benefit; at and after that tick it supplies the full benefit. Reclaiming and placing again creates a new three-tick setting period. A broken deployed knot remains visible and reclaimable but supplies no effect.
 
-Wayknot service wear is charged only to the lowest-ID knot whose effect actually wins a channel on a qualifying entered tile. The first local/unpublished consumer is [source-qualified resident reed-mat service](./ARCHITECTURE.md#source-qualified-resident-reed-mat-service), for dry travel and pickup approach: actual tile entry must receive greater committed path work from the source mat than the same clipped, same-budget bare step. Charge after resolution, never per fine sample, query, or destination mat before contact. Full service costs12,000 and setting service6,000; the existing kernel scales setup once. Player and other-channel consumers below remain staged:
+Wayknot service wear selects the lowest-ID knot whose effect actually wins the
+applicable channel. The local/unpublished
+[source-qualified resident reed-mat service](./ARCHITECTURE.md#source-qualified-resident-reed-mat-service)
+retains dry travel/pickup entered-tile qualification: greater committed work
+than the same clipped, same-budget bare step, never queries, repeated fine
+samples or destination aids before contact. Full service costs12,000 and
+setting service6,000. The narrow
+[resident tide-anchor channel](./ARCHITECTURE.md#source-qualified-resident-tide-anchor-service)
+instead prices each new aid-necessary wet contact segment by clipped distance,
+through the same exact fractional remainder; full service costs16,000 per tile
+of assisted contact, setting8,000. This prevents unpaid earlier assistance and
+does not change dry-mat entry law. Setup scales once in the existing kernel.
+Player and other-channel consumers below remain staged:
 
 - Reed mat: `12_000` when it reduces flat/marsh movement or stability cost.
 - Tide anchor: `16_000` when it reduces water stamina, current force, or sweep distance.

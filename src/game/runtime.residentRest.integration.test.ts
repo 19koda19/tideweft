@@ -2324,3 +2324,168 @@ describe("native skill-qualified occupied-source water egress", () => {
     // long-session liveness or performance claim is implied.
   }, 180_000);
 });
+
+describe("runtime source-anchor transaction foundation", () => {
+  it("commits only newly helped contact wear, cold restores it and rolls body plus aid back after publication failure", async () => {
+    const { ORDINARY_FOOT_MAX_WATER_DEPTH, waterContactPressure } = await import("./footing");
+    const { deriveWaterFlowProfile } = await import("./waterFlow");
+    const { surfaceCurrentDirection } = await import("./currentDirection");
+    const { wayknotContextAt } = await import("./player");
+    const { placeWayknot } = await import("./wayknots");
+    const regionalWorldView = await import("./regionalWorldView");
+    const actorId = "H-v1-p0p0-1d9rhmy-2-1kt45xu";
+    const repository = new MemoryRepository();
+    const runtime = await open(repository);
+    runtime.dispatchUI({ type: "new-world", seed: "settlement keeper home night continuity", posture: "gale", sessionShape: "wander" });
+    // Genuine ordinary task/body history. The later placement and wind
+    // contrast are explicitly arranged foundations, NOT player deployment.
+    advanceOrdinaryFixedSteps(runtime, 220);
+    await runtime.save();
+    const placementEnvelope = decode(repository.snapshot());
+    const placementWorld = deserializeWorld(placementEnvelope.world);
+    expect(placementWorld.meta.completedTick).toBe(442);
+    const context = wayknotContextAt(createWorldView(placementWorld), 45 * placementWorld.terrain.width + 88)!;
+    expect(context).toMatchObject({ occupied: false });
+    expect(context.waterDepth).toBeGreaterThanOrEqual(120_000);
+    const placement = placeWayknot(placementEnvelope.player.wayknots, "tide-anchor", context, 442);
+    expect(placement.ok).toBe(true);
+    expect(placement.wayknot).toMatchObject({ id: 3, condition: 920_000, readyTick: 445 });
+    advanceOrdinaryFixedSteps(runtime, 30);
+    await runtime.save();
+    const originalRecord = repository.snapshot();
+    const before = decode(originalRecord);
+    close(runtime);
+    const world = deserializeWorld(before.world);
+    expect(world.meta.completedTick).toBe(445);
+    expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    const human = world.residents.find(({ identity }) => identity.stableId === actorId)!;
+    const source = human.activity!.poses[0]!.position;
+    expect(source).toMatchObject({ localX: 88_500, localY: 47_500 });
+    expect(human.activity!.materialTask).toMatchObject({ kind: "settlement-material", phase: "approaching", usedAtTick: null });
+    const capacity = Math.floor(ORDINARY_FOOT_MAX_WATER_DEPTH * Math.floor(
+      human.identity.skills.find(({ kind }) => kind === "swimming")!.aptitude
+      * (FIXED_POINT - Math.max(human.needs.rest, human.condition.exhaustion)) / FIXED_POINT,
+    ) / FIXED_POINT);
+    expect(capacity).toBe(8_023);
+    const tile = world.terrain.tiles[47 * world.terrain.width + 88]!;
+    const depth = waterDepthAt(tile, world.tide);
+    expect(depth).toBe(41_474);
+    const flow = deriveWaterFlowProfile({ waterDepth: depth, bedRoughness: tile.roughness,
+      tideLevel: world.tide.level, weatherIntensity: world.weather.intensity });
+    const pressureAt = (windY: number) => {
+      const direction = surfaceCurrentDirection(world.tide.direction, windY);
+      return waterContactPressure({ moving: true, movement: { x: 105, y: 0 }, waterDepth: depth,
+        roughness: tile.roughness, surface: "water", current: {
+          x: Math.trunc(direction.x * flow.strength / FIXED_POINT),
+          y: Math.trunc(direction.y * flow.strength / FIXED_POINT),
+        } });
+    };
+    let low = 0;
+    let high = FIXED_POINT;
+    expect(pressureAt(low)).toBeLessThanOrEqual(capacity);
+    expect(pressureAt(high)).toBeGreaterThan(capacity);
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (pressureAt(middle) > capacity) high = middle;
+      else low = middle + 1;
+    }
+    world.weather.windY = low; // Physical counterfactual, not a task or belief.
+    assertWorldInvariants(world);
+    before.world = serializeWorld(world);
+    const bareRecord = recordWith(originalRecord, structuredClone(before));
+    const bareRepository = new MemoryRepository(bareRecord);
+    const bare = await open(bareRepository);
+    advanceOrdinaryFixedSteps(bare, 1);
+    await bare.save();
+    const blocked = decode(bareRepository.snapshot());
+    expect(resident(blocked, actorId).activity!.poses[1]!.position).toEqual(source);
+    expect(resident(blocked, actorId).activity!.materialTask).toMatchObject({ phase: "waiting", usedAtTick: null });
+    expect(blocked.player.wayknots).toEqual(before.player.wayknots);
+    close(bare);
+
+    const staged = structuredClone(before);
+    staged.player.wayknots = placement.state;
+    const stagedRecord = recordWith(originalRecord, staged);
+    const aidedRepository = new MemoryRepository(stagedRecord);
+    const aided = await open(aidedRepository);
+    await aided.save();
+    expect(authoritativeRoots(decode(aidedRepository.snapshot()))).toEqual(authoritativeRoots(staged));
+    const piece = (envelope: Envelope) => envelope.player.wayknots.wayknots.find(({ id }) => id === 3)!;
+    advanceOrdinaryFixedSteps(aided, 4);
+    await aided.save();
+    const phase4Record = aidedRepository.snapshot();
+    const phase4 = decode(phase4Record);
+    expect(resident(phase4, actorId).activity!.poses[4]!.position).toEqual({ ...source, localX: 88_920 });
+    expect(piece(phase4)).toMatchObject({ condition: 913_280, serviceWearRemainder: 0 });
+    advanceOrdinaryFixedSteps(aided, 1);
+    await aided.save();
+    const phase5 = decode(aidedRepository.snapshot());
+    expect(resident(phase5, actorId).activity!.poses[5]!.position).toEqual({ ...source, localX: 89_025 });
+    //105×4+80 wet units; the25-unit dry tail is not another aid service.
+    expect(piece(phase5)).toMatchObject({ condition: 912_000, serviceWearRemainder: 0 });
+    advanceOrdinaryFixedSteps(aided, 4);
+    await aided.save();
+    const phase9Record = aidedRepository.snapshot();
+    const phase9 = decode(phase9Record);
+    expect(piece(phase9)).toEqual(piece(phase5));
+    advanceOrdinaryFixedSteps(aided, 1);
+    await aided.save();
+    const closed = decode(aidedRepository.snapshot());
+    expect(resident(closed, actorId).activity!.materialTask).toMatchObject({ phase: "arrived", usedAtTick: null });
+    expect(piece(closed)).toEqual(piece(phase5));
+    close(aided);
+
+    for (const [record, prefix, count, expected] of [
+      [phase4Record, phase4, 5, phase9], [phase9Record, phase9, 1, closed],
+    ] as const) {
+      soundscapePlay.mockClear();
+      const coldRepository = new MemoryRepository(record);
+      const cold = await open(coldRepository);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(prefix));
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      advanceOrdinaryFixedSteps(cold, count);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(expected));
+      close(cold);
+    }
+
+    const failedRepository = new MemoryRepository(phase4Record);
+    const failed = await open(failedRepository);
+    const originalAdvance = residentActivityExecution.advanceResidentRestActivities;
+    let attempted: unknown;
+    const motion = vi.spyOn(residentActivityExecution, "advanceResidentRestActivities").mockImplementation((...args) => {
+      const result = originalAdvance(...args);
+      if (result !== null && args[1] === 5) attempted = {
+        pose: structuredClone(args[0].residents.find(({ identity }) => identity.stableId === actorId)!.activity!.poses[5]),
+        wayknots: structuredClone(result.wayknots),
+      };
+      return result;
+    });
+    const originalPublication = regionalWorldView.replaceRegionalWorldViewResidents;
+    const publication = vi.spyOn(regionalWorldView, "replaceRegionalWorldViewResidents").mockImplementationOnce((...args) => {
+      originalPublication(...args);
+      throw new Error("controlled post-water-support publication failure");
+    });
+    soundscapePlay.mockClear();
+    advanceOrdinaryFixedStepsForExpectedFailure(failed, 1);
+    expect(attempted).toEqual({ pose: resident(phase5, actorId).activity!.poses[5], wayknots: phase5.player.wayknots });
+    expect(publication).toHaveBeenCalledTimes(1);
+    expect(failed.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+    expect(soundscapePlay.mock.calls).toEqual([["warning", 1]]);
+    await failed.save();
+    const rollback = failedRepository.snapshot();
+    expect(authoritativeRoots(decode(rollback))).toEqual(authoritativeRoots(phase4));
+    publication.mockRestore();
+    motion.mockRestore();
+    close(failed);
+    soundscapePlay.mockClear();
+    const retryRepository = new MemoryRepository(rollback);
+    const retry = await open(retryRepository);
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advanceOrdinaryFixedSteps(retry, 1);
+    await retry.save();
+    expect(authoritativeRoots(decode(retryRepository.snapshot()))).toEqual(authoritativeRoots(phase5));
+    close(retry);
+  }, 180_000);
+});

@@ -135,6 +135,11 @@ function multiplyFixed(left: number, right: number): number {
   return Math.trunc((clampUnit(left) * clampUnit(right)) / FIXED_POINT);
 }
 
+/** Exact existing fixture channel; callers own the actual support and use. */
+export function fixtureSupportMitigation(support: number): number {
+  return multiplyFixed(clampUnit(support), 560_000);
+}
+
 function unionFixed(left: number, right: number): number {
   return FIXED_POINT - multiplyFixed(FIXED_POINT - clampUnit(left), FIXED_POINT - clampUnit(right));
 }
@@ -317,7 +322,7 @@ export function evaluateFooting(input: FootingInput): FootingEvaluation {
   // plants the porter against the remaining physical forces.
   const braceMitigation = input.brace ? 620_000 : 0;
   const footwearMitigation = multiplyFixed(footwearGrip, 180_000);
-  const fixtureMitigation = multiplyFixed(clampUnit(input.fixtureSupport), 560_000);
+  const fixtureMitigation = fixtureSupportMitigation(input.fixtureSupport);
   const mitigationTotal = unionFixed(
     braceMitigation,
     unionFixed(footwearMitigation, fixtureMitigation),
