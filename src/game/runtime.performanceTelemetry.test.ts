@@ -455,7 +455,9 @@ describe("runtime performance telemetry", () => {
         const digest = createHash("sha256").update(worldJson).digest("hex");
         expect(worldBindings.length).toBeGreaterThan(0);
         expect(worldBindings.every(({ frame, accepted }) => frameBuckets.has(frame) && accepted)).toBe(true);
-        expect(worldBindings.every(({ inputs }) => inputs.length === 2 && inputs[0] === inputs[1])).toBe(true);
+        // The BEFORE scoped census authenticated180/126 identical pairs. The
+        // current shortcut removes only their two redundant whole encodings.
+        expect(worldBindings.every(({ inputs }) => inputs.length === 0)).toBe(true);
         expect(materializationCalls.length).toBeGreaterThan(0);
         expect(materializationCalls.every(({ frame }) => frameBuckets.has(frame))).toBe(true);
         expect(terrainProjections.length).toBeGreaterThan(0);
