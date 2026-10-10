@@ -6947,6 +6947,39 @@ not certification of these later changed bytes. This is a local presentation
 correction, not natural visual play evidence, new cognition, performance,
 public release or WORLD0 closure.
 
+### Native water-egress work eligibility and nonreplayed priority change — 2026-10-10
+
+At local parent `55aced1`, only the suffix of the existing untouched native
+source-egress runtime case is extended. Original selection420, wet hold,
+skill/current-qualified movement445, dry arrival446, partial cold continuations
+and late-failure rollback remain unchanged. From the actual retry's446 closure,
+339 accepted steps reach479/phase9; one more closes480. The same medicine
+task is arrived and unspent, but the real hourly needs update changes its
+resident's intention from work to rest. Post-needs selection finds no eligible
+worker at that clinic. Medicine110 and project progress0 remain intact; arrival
+does not manufacture work or spend stock.
+
+Five other actual project users are independently captured through the real
+selector. Declared due recipes, exact stocks, project increments and every
+produced/consumed ledger delta reconcile; medicine consumption is zero. Existing
+cargo quantities are unchanged and the real shortage pulse adds only zero-cargo
+offers. The first new oracle wrongly required an unchanged contract ID set;
+its failed report is retained, and the corrected oracle checks old custody and
+new offers separately. No production algorithm or old assertion is changed.
+
+Pending479/phase9→480 and closed480→481 cold chains match every authoritative
+saved root apart from the established session/integrity exclusions. Loads are
+silent;481 neither replays stock/project benefit nor restores the stale task.
+Selected final case passes in33.195s. Full rest runtime passes its22 cases in
+284.69s; the two nonexistent simulation integration filters supplied no coverage.
+The actual game material-integration and simulation activity owners separately
+pass two files/34 tests in20.41s. Critical smoke6/105 in4.26s, typecheck, diff
+and documentation checks pass. Ignored `native-medicine-{observation,
+continuation,continuation-final,domain,material-domain}.json` retain exact scopes.
+This is test/evidence only: a genuine priority reassessment and no-unearned-work
+proof, not positive medicine payoff, restorative rest, eventual service,
+whole-population liveness, normal visual play, performance or directive closure.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

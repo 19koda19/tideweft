@@ -2496,7 +2496,168 @@ describe("native skill-qualified occupied-source water egress", () => {
     advanceOrdinaryFixedSteps(retry, 1);
     await retry.save();
     expect(authoritativeRoots(decode(retryRepository.snapshot()))).toEqual(authoritativeRoots(closed));
+
+    // Follow the unchanged native result to its next real service opportunity.
+    // Observe the production selector; neither arrival nor a surviving "used"
+    // label is itself proof that this particular actor contributed material.
+    advanceOrdinaryFixedSteps(retry, 339);
+    await retry.save();
+    const servicePendingRecord = retryRepository.snapshot();
+    const servicePending = decode(servicePendingRecord);
+    const servicePendingWorld = deserializeWorld(servicePending.world);
+    expect(servicePendingWorld.meta.completedTick).toBe(479);
+    expect(servicePending.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    let serviceInput: NativeWorld | undefined;
+    let serviceOutput: NativeWorld | undefined;
+    const serviceSelections: Array<{
+      settlementId: number; selected: ResidentState | null; eligible: ResidentState[];
+      subject: ResidentState | undefined; subjectOnDuty: boolean | undefined;
+    }> = [];
+    const originalMaterialSelection = residentMaterialUse.selectResidentMaterialUser;
+    const selectionObserver = vi.spyOn(residentMaterialUse, "selectResidentMaterialUser").mockImplementation((...args) => {
+      const [world, settlementId, duties, tick] = args;
+      const selected = originalMaterialSelection(...args);
+      if (tick === 480) serviceSelections.push(structuredClone({ settlementId, selected,
+        subject: world.residents.find(({ identity }) => identity.stableId === action.actorId),
+        subjectOnDuty: duties?.get(action.actorId),
+        eligible: world.residents.filter((human) => human.location.kind === "settlement"
+          && human.location.settlementId === settlementId
+          && residentMaterialUse.residentMaterialUseEligible(world, human, duties, tick)),
+      }));
+      return selected;
+    });
+    const originalStep = simulation.stepWorld;
+    const serviceObserver = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+      expect(serviceInput).toBeUndefined();
+      serviceInput = structuredClone(args[0]);
+      const result = originalStep(...args);
+      serviceOutput = structuredClone(result);
+      return result;
+    });
+    try {
+      advanceOrdinaryFixedSteps(retry, 1);
+    } finally {
+      serviceObserver.mockRestore();
+      selectionObserver.mockRestore();
+    }
+    await retry.save();
+    const serviceUsedRecord = retryRepository.snapshot();
+    const serviceUsed = decode(serviceUsedRecord);
+    expect(deserializeWorld(serviceUsed.world).meta.completedTick).toBe(480);
+    expect(serviceUsed.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expect(serviceInput).toBeDefined();
+    expect(serviceOutput).toBeDefined();
+    const source = serviceInput!;
+    const committed = serviceOutput!;
+    expect(source.meta.completedTick).toBe(479);
+    expect(committed.meta.completedTick).toBe(480);
+    const pendingHuman = resident(servicePending, action.actorId);
+    const pendingTask = pendingHuman.activity!.materialTask!;
+    expect(pendingTask).toMatchObject({ kind: "settlement-material", phase: "arrived",
+      resource: "medicine", selectedAtTick: 420, usedAtTick: null, target: action.target });
+    expect(pendingHuman.activity!.poses.at(-1)!.position).toEqual(action.target);
+    expect(pendingHuman.intention).toBe("work");
+    const clinicSelection = serviceSelections.find(({ settlementId }) => settlementId === pendingTask.settlementId);
+    expect(clinicSelection).toBeDefined();
+    expect(clinicSelection!.subjectOnDuty).toBe(false);
+    expect(clinicSelection!.subject?.intention).toBe("rest");
+    expect(clinicSelection!.subject?.activity?.materialTask).toMatchObject({ phase: "arrived", usedAtTick: null });
+    expect(clinicSelection!.subject!.needs.rest).toBeGreaterThan(clinicSelection!.subject!.needs.food);
+    expect(clinicSelection!.subject!.needs.rest).toBeGreaterThan(clinicSelection!.subject!.needs.belonging);
+    expect(residentMaterialUse.residentMaterialPriorityEligible(
+      clinicSelection!.subject!, committed.weather, false, 480,
+    )).toBe(false);
+    expect(clinicSelection!.selected).toBeNull();
+    expect(clinicSelection!.eligible).toEqual([]);
+    expect(resident(serviceUsed, action.actorId).activity!.materialTask).toBeNull();
+
+    const produced = Object.fromEntries(simulation.RESOURCE_KINDS.map((resource) => [resource, 0])) as typeof source.ledger.produced;
+    const consumed = { ...produced };
+    // Account all real due recipes and independently observed work selection.
+    // This native first pulse has no ration/cargo transfer; prove that rather
+    // than assuming a surviving task label tells the complete transaction.
+    expect(committed.residents.some(({ activity }) => activity?.rationTask?.usedAtTick === 480)).toBe(false);
+    for (const contract of source.contracts) {
+      expect(committed.contracts.find(({ id }) => id === contract.id)?.cargoQuantity).toBe(contract.cargoQuantity);
+    }
+    const previousContractIds = new Set(source.contracts.map(({ id }) => id));
+    for (const contract of committed.contracts.filter(({ id }) => !previousContractIds.has(id))) {
+      // The real hourly shortage pulse may add offers, not physical cargo.
+      expect(contract).toMatchObject({ status: "offered", createdTick: 480, cargoQuantity: 0 });
+    }
+    for (const site of source.settlements) {
+      const next = committed.settlements.find(({ id }) => id === site.id)!;
+      const stock = { ...site.inventory };
+      for (const recipe of site.recipes) {
+        if (recipe.nextRunTick > 480) continue;
+        if (recipe.inputs.every(({ resource, amount }) => stock[resource] >= amount)) {
+          for (const { resource, amount } of recipe.inputs) { stock[resource] -= amount; consumed[resource] += amount; }
+          for (const { resource, amount } of recipe.outputs) { stock[resource] += amount; produced[resource] += amount; }
+        }
+        expect(next.recipes.find(({ id }) => id === recipe.id)?.nextRunTick).toBe(recipe.nextRunTick + recipe.intervalTicks);
+      }
+      const selection = serviceSelections.find(({ settlementId }) => settlementId === site.id);
+      expect(selection).toBeDefined();
+      const ordered = [...selection!.eligible].sort((left, right) => (
+        left.activity!.materialTask!.selectedAtTick - right.activity!.materialTask!.selectedAtTick
+        || (left.identity.stableId < right.identity.stableId ? -1 : left.identity.stableId > right.identity.stableId ? 1 : 0)
+      ));
+      expect(selection!.selected?.identity.stableId ?? null).toBe(ordered[0]?.identity.stableId ?? null);
+      const contribution = selection!.selected === null ? 0 : 1;
+      if (contribution === 1) {
+        expect(selection!.selected!.activity!.materialTask).toMatchObject({ phase: "arrived", usedAtTick: null,
+          projectId: site.project.id, resource: site.project.resource, settlementId: site.id });
+        expect(stock[site.project.resource]).toBeGreaterThanOrEqual(1);
+        stock[site.project.resource] -= 1;
+        consumed[site.project.resource] += 1;
+      }
+      expect(next.project).toEqual({ ...site.project, progress: site.project.progress + contribution });
+      expect(next.inventory).toEqual(stock);
+    }
+    for (const resource of simulation.RESOURCE_KINDS) {
+      expect(committed.ledger.produced[resource] - source.ledger.produced[resource]).toBe(produced[resource]);
+      expect(committed.ledger.consumed[resource] - source.ledger.consumed[resource]).toBe(consumed[resource]);
+    }
+    expect(consumed.medicine).toBe(0);
+    const savedUsedWorld = deserializeWorld(serviceUsed.world);
+    expect(savedUsedWorld.settlements).toEqual(committed.settlements);
+    expect(savedUsedWorld.ledger).toEqual(committed.ledger);
+    assertWorldInvariants(savedUsedWorld);
+    advanceOrdinaryFixedSteps(retry, 10);
+    await retry.save();
+    const serviceContinued = decode(retryRepository.snapshot());
+    const continuedWorld = deserializeWorld(serviceContinued.world);
+    expect(continuedWorld.meta.completedTick).toBe(481);
+    expect(continuedWorld.ledger).toEqual(committed.ledger);
+    expect(continuedWorld.settlements.map(({ id, inventory, project }) => ({ id, inventory, project })))
+      .toEqual(committed.settlements.map(({ id, inventory, project }) => ({ id, inventory, project })));
+    expect(resident(serviceContinued, action.actorId).activity!.materialTask).toBeNull();
+    assertWorldInvariants(continuedWorld);
     close(retry);
+    for (const [record, pending, steps, expected] of [
+      [servicePendingRecord, servicePending, 1, serviceUsed], [serviceUsedRecord, serviceUsed, 10, serviceContinued],
+    ] as const) {
+      soundscapePlay.mockClear();
+      const coldRepository = new MemoryRepository(record);
+      const cold = await open(coldRepository);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(pending));
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      advanceOrdinaryFixedSteps(cold, steps);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(expected));
+      close(cold);
+    }
+    console.info("Native water-egress service-consumer evidence", JSON.stringify({
+      actorId: action.actorId,
+      pending: pendingTask, intentionAfterNeeds: clinicSelection!.subject!.intention,
+      needsAfter: clinicSelection!.subject!.needs, medicineConsumed: consumed.medicine,
+      clinicProgress: committed.settlements.find(({ id }) => id === pendingTask.settlementId)!.project.progress,
+      selections: serviceSelections.map(({ settlementId, selected, eligible }) => ({ settlementId,
+        selected: selected?.identity.stableId ?? null,
+        eligible: eligible.map(({ identity }) => identity.stableId),
+      })),
+    }));
     // Bounded native action/cold/rollback evidence only. No wet destination,
     // general crossing, loaded transit, gear, injury, manual visual acceptance,
     // long-session liveness or performance claim is implied.
