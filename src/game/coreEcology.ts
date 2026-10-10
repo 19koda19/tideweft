@@ -2343,6 +2343,17 @@ export function setCoreEcologyAggregatePatchMaterializedActors(
   if ([...desired].some((actorId) => !known.has(actorId))) {
     throw new RangeError("Core ecology cannot materialize an actor outside its aggregate patch");
   }
+  // Only an already-validated, fully coarse, current patch can be unchanged.
+  // An equal root tick alone does not exclude due groups or trailing clocks.
+  if (
+    desired.size === 0
+    && input.atTick === patch.updatedAtTick
+    && patch.populations.every(({ members }) => (
+      members.every(({ materialization }) => materialization === "coarse")
+    ))
+    && patch.groups.groups.every(({ nextCoarseTick }) => nextCoarseTick > input.atTick)
+    && patch.aggregatePopulations.every(({ updatedAtTick }) => updatedAtTick === input.atTick)
+  ) return patch;
   const advancedGroups = advanceGroupsThroughTick(patch, input.atTick);
   if (advancedGroups === null) {
     throw new RangeError("Core ecology groups could not reach the aggregate materialization tick");

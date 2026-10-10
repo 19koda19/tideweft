@@ -290,4 +290,30 @@ describe("regional ecology global materialization", () => {
       0,
     )).toBe(false);
   });
+
+  it("keeps independent revocable batch receipts when a canonical source is unchanged", () => {
+    const source = resident("source:unchanged", "marsh-rabbit", 1, REGIONAL_TRAVEL_ROWS + 8);
+    const sources = [source];
+    const window = runtimeWindow();
+    const first = setRegionalEcologyMaterializationForWindow(sources, window, 0);
+    const second = setRegionalEcologyMaterializationForWindow(sources, window, 0);
+    if (first === null || second === null) throw new Error("Expected unchanged source batches");
+    expect(first).not.toBe(second);
+    expect(first[0]?.patch).toBe(source.patch);
+    expect(second[0]?.patch).toBe(source.patch);
+    expect(isRegionalEcologyMaterializationBatchReceipt(first, sources, window, 0)).toBe(true);
+    expect(isRegionalEcologyMaterializationBatchReceipt(structuredClone(first), sources, window, 0))
+      .toBe(false);
+    expect(regionalEcologyMaterializationBatchOwnsTransition(
+      first, source.sourceKey, source.patch, source.patch, 0,
+    )).toBe(true);
+    releaseRegionalEcologyMaterializationBatchReceipt(first);
+    expect(isRegionalEcologyMaterializationBatchReceipt(first, sources, window, 0)).toBe(false);
+    expect(regionalEcologyMaterializationBatchOwnsTransition(
+      first, source.sourceKey, source.patch, source.patch, 0,
+    )).toBe(false);
+    expect(isRegionalEcologyMaterializationBatchReceipt(second, sources, window, 0)).toBe(true);
+    releaseRegionalEcologyMaterializationBatchReceipt(second);
+    expect(isRegionalEcologyMaterializationBatchReceipt(second, sources, window, 0)).toBe(false);
+  });
 });

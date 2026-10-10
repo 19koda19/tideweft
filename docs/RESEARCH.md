@@ -7780,6 +7780,20 @@ The final characterization passes2 files/18 tests in20.52s; typecheck, the
 maintained6-file/105-test critical smoke and45 documentation-reuse checks pass.
 Local raw log `7a0548fe…` and report `ba0d2dae…` bind the exact test inputs.
 
+**Provisional application candidate, not yet a measured retained repair.**
+The aggregate materialization owner now returns its canonical patch only after
+the existing complete patch/input/ID validation and the strict eligibility
+checks above. It introduces no cache or trust grant. Due-group, trailing-clock,
+changed-selection and cold inputs retain their original boundaries. Canonical
+versus cold identity and two independently revocable batches sharing one
+unchanged source are tested. The14-file/142-test group/mortality/receipt/V1–V6
+domain passes; typecheck, critical105 and the original selected late-interval
+rollback pass. Both30-step full-save digests remain exact; native calls are
+unchanged180/150 while165/111 outputs now retain their canonical input identity.
+The complete perception integration, runtime census and batch receipt set
+passes3 files/40 tests in230.87s. Unsampled platform comparisons remain pending;
+no production performance result or directive transition is claimed.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
