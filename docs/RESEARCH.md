@@ -7720,6 +7720,33 @@ Local raw reports retain eight identities, exact commands, frozen acceptance
 and comparison. Dependency/configuration changes:NONE; upstream p5/Electron
 modified:NO. No gameplay, save schema/support or security boundary changes.
 
+### Exact-input cumulative recovery after host sleep — 2026-10-10
+
+Clean `f2214f585beeda37a08e7836b080f858503f9954`, executable `7f48b48`,
+retains the preceding repair. Its `npm run test:ci` command exits1 after
+13,721.09s with394 passed/24 failed files,5417 passed/25 failed/4 hook-skipped
+cases and one missing worker. The host entered repeated battery/clamshell
+sleep during this run. Failures comprise22 timeout errors,3 elapsed-budget
+assertions, a setup timeout and a worker-start timeout; no state/hash difference
+is recorded. This original report remains **FAIL**, not a performance baseline.
+
+After AC/lid-open resumption, the complete24 affected files plus the missing
+worker's file pass under their unchanged limits and `--maxWorkers=2`:
+25files/369tests in69.26s. All750 frozen tracked-input fingerprints, membership
+and clean HEAD still match. Selecting whole successful files across both reports
+covers all419 public Vitest files/5457 cases, with no missing, extra, renamed,
+failed or skipped cases. Independent inspection verifies the union. This is
+**composite exact-input recovery**, not a fabricated uninterrupted cumulative
+PASS or justification to rerun every already-passed file for ceremony.
+
+Local `f2214f5-coverage-recovery.json` binds the original raw report SHA256
+`2b63b0d2…`, focused report `4360ebb4…`, frozen inputs `2e9954d3…`, method and
+limits. Earlier context-index28, player-facing-sync40 and documentation-reuse45
+checks remain separate passing prerequisites. No code, test expectations,
+timeouts, dependencies, schema/support, fidelity or release policy changed.
+Short production performance gates remain unresolved; no publication, normal-
+play expansion, long-soak or whole-directive closure is certified.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
