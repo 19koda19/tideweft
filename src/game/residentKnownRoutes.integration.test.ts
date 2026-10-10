@@ -110,6 +110,59 @@ function closing(world: WorldState, actorId: string) {
 }
 
 describe("source-bound familiar predeparture adapter integration", () => {
+  it("characterizes genuinely completed coarse history and paid native alternative topology", () => {
+    // Supported coarse fulfillment is topology history only, not physical
+    // walking, a normal survey/button witness or an earned current reroute.
+    const world = createWorld("runtime baseline estuary", "standard");
+    const initialTick = world.meta.completedTick;
+    world.weather = { kind: "clear", intensity: 0, windX: 0, windY: 0,
+      nextChangeTick: initialTick + 1_441 };
+    const history = world.contracts.find(({ id }) => id === 128)!;
+    expect(history).toMatchObject({ status: "offered", originSettlementId: 5, destinationSettlementId: 2 });
+    for (let step = 0; step < 1_440 && history.status !== "fulfilled"
+      && history.status !== "expired" && history.status !== "cancelled"; step += 1) {
+      stepWorld(world, []);
+      if (step % 60 === 0) assertWorldInvariants(world);
+    }
+    assertWorldInvariants(world);
+    expect(history.status, "NOT OBSERVED: native128 genuine fulfillment within the bounded coarse source").toBe("fulfilled");
+    expect(history).toMatchObject({ carrierKind: "resident", cargoQuantity: 0,
+      porterRouteIds: [121, 117, 112], porterSettlementIds: [5, 4, 3, 2] });
+    expect(history.completedTick!).toBeGreaterThan(history.departedTick!);
+    const resident = world.residents.find(({ id }) => id === history.assignedResidentId)!;
+    expect(resident).toMatchObject({ location: { kind: "settlement", settlementId: 2 }, activeContractId: null });
+    const historyBytes = stableStringify(history);
+    const routePaths = world.routes.map(({ id, path }) => ({ id, path: [...path] }));
+    const before = findAutonomousRoutePlan(world, 2, 5);
+    expect(before?.routeIds).toEqual([...history.porterRouteIds].reverse());
+    const cold = deserializeWorld(serializeWorld(world));
+    const control = deserializeWorld(serializeWorld(world));
+    const command = { id: "earned-route-source:paid", type: "reinforce-route" as const,
+      routeId: 109, settlementId: 5, parts: 2 };
+    stepWorld(world, [command]);
+    stepWorld(cold, [command]);
+    stepWorld(control, []);
+    assertWorldInvariants(world);
+    const paid = world.events.find(({ type, data }) => type === "route-reinforced"
+      && data.commandId === command.id);
+    expect(paid).toMatchObject({ subjectId: 109, data: { parts: 2, settlementId: 5 } });
+    expect(stableStringify(history)).toBe(historyBytes);
+    expect(world.routes.map(({ id, path }) => ({ id, path }))).toEqual(routePaths);
+    // The unpaid sibling includes the same ordinary recipes, rations,
+    // projects and couriers; do not count their debits as reinforcement.
+    expect(world.settlements.find(({ id }) => id === 5)!.inventory.parts)
+      .toBe(control.settlements.find(({ id }) => id === 5)!.inventory.parts - 2);
+    expect(world.ledger.consumed.parts).toBe(control.ledger.consumed.parts + 2);
+    const after = findAutonomousRoutePlan(world, 2, 5);
+    expect(after).toMatchObject({ routeIds: [106, 109], settlementIds: [2, 1, 5] });
+    expect(findAutonomousRoutePlan(control, 2, 5)?.routeIds).toEqual(before?.routeIds);
+    expect(serializeWorld(cold)).toBe(serializeWorld(world));
+    // No reverse offer exists here. Do not inject acceptance/arrival or call
+    // this source/paid-topology proof an alternative departure demonstration.
+    expect(world.contracts.filter(({ status, originSettlementId, destinationSettlementId }) =>
+      status === "offered" && originSettlementId === 2 && destinationSettlementId === 5)).toHaveLength(0);
+  });
+
   it.each(["wrong-settlement", "pre-acceptance-selection"] as const)("rejects %s pickup facts without source correction", (cause) => {
     const current = fixture();
     current.world.residents = current.world.residents.map((resident) => {

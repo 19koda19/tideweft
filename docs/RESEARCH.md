@@ -7419,6 +7419,36 @@ ordinary-play proof remain open; arranged admission fixtures do not become
 native gameplay merely because the cumulative suite passes. Extended Voice
 profiling and longitudinal evidence remain deferred to full Living Foliage.
 
+### Genuine coarse courier history and paid alternative topology — 2026-10-10
+
+**Source/topology foundation, not ordinary physical rerouting.** An additive
+case in `residentKnownRoutes.integration.test.ts` starts native standard
+estuary with explicitly controlled quiet weather. No contract, carrier, body,
+arrival, completed history, route geometry or stock result is assigned. Actual
+coarse acceptance/departure/fulfillment produces contract128's retained5→4→3→2
+history, completed1282 by resident92 after departure721. This deliberately
+supported coarse source proves topology only, not walking, current safety or
+new world knowledge.
+
+The existing paid reinforcement command spends two actual parts on native
+1↔5 route109. Its unchanged geometry then changes the real2→5 planner from
+the reverse historical chain112/117/121 to106/109. An unpaid sibling retains
+the original plan and isolates the exact two-unit stock/consumed-ledger delta
+from ordinary concurrent production/service/logistics. The historical contract
+remains byte-identical. Full inner-world cold continuation through the same
+command matches continuous serialization and conservation; no new save reader,
+schema, route-memory root or runtime mechanic is introduced.
+
+No actual reverse2→5 offer exists at this witness. Current physical adoption,
+pickup approach, lawful wet/dry perception and informed departure remain
+unproved by this source case; the earlier arranged admission tests retain
+their foundation label. At parent `3cfd711`, final test SHA256 `b5a2cd67…`,
+affected3files50PASS (all8integration cases), actual critical6files105PASS,
+typecheck and diff checks PASS. Reports `4846dd15…` and `be2a9072…` remain local
+under `artifacts/validation/world0-liveness-plan/`. The earlier complete
+6f05591 certificate does not certify these new test bytes. No production,
+performance, normal-controls, release or complete-directive claim is made.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
