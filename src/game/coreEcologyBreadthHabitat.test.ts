@@ -122,9 +122,11 @@ describe(`${ALPHA37_ESTUARY_BREADTH_HABITAT_SHARED_INVARIANTS_OWNER_INTENT} appe
     )).map(([value]) => value);
     try {
       expect(canonicalCoreEcologyBreadthHabitatForWorld(habitat, SEED, region)).toBe(habitat);
-      // Exact owner identity is checked only after complete world derivation.
-      // Distinct canonical copies below must retain both full encodings.
-      expect(habitatEncodeInputs()).toHaveLength(0);
+      // The measured shortcut was discarded under its no-regression rule.
+      // Both native identity and distinct canonical copies retain full encoding.
+      expect(habitatEncodeInputs()).toEqual([habitat, habitat]);
+      expect(habitatEncodeInputs()[0]).toBe(habitat);
+      expect(habitatEncodeInputs()[1]).toBe(habitat);
       encoder.mockClear();
       expect(canonicalCoreEcologyBreadthHabitatForWorld(clone, SEED, region)).toBe(clone);
       expect(habitatEncodeInputs()).toEqual([clone, habitat]);

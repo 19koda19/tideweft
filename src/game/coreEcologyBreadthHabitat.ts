@@ -1466,9 +1466,6 @@ export function canonicalCoreEcologyBreadthHabitatForWorld(
       region,
       cohortId: habitat.cohortId,
     });
-    // All validation and derivation above still run. Only the exact immutable
-    // owner output can make this byte comparison redundant; cold copies cannot.
-    if (habitat === expected) return habitat;
     return stableStringify(habitat) === stableStringify(expected) ? habitat : null;
   } catch {
     return null;
