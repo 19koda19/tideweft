@@ -11,6 +11,7 @@ import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import * as canonicalUtil from "../sim/util";
 import * as coreEcology from "./coreEcology";
 import * as projectionOwner from "./projection";
+import * as breadthHabitatOwner from "./coreEcologyBreadthHabitat";
 import type { CoreEcologyAggregatePatchState } from "./coreEcology";
 import { CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID } from "./coreEcologyBreadthHabitat";
 import { deserializeBio0Ecology } from "./bio0Ecology";
@@ -318,6 +319,23 @@ describe("runtime performance telemetry", () => {
         let durableSignalCodeUnits = 0;
         let durableDerivationCodeUnits = 0;
         const durableHabitats = new Map<object, number>();
+        const worldBindings: Array<{ frame: number; inputs: object[]; codeUnits: number; accepted: boolean }> = [];
+        let activeWorldBinding: (typeof worldBindings)[number] | null = null;
+        const originalWorldBinding = breadthHabitatOwner.canonicalCoreEcologyBreadthHabitatForWorld;
+        const worldBinder = vi.spyOn(breadthHabitatOwner, "canonicalCoreEcologyBreadthHabitatForWorld")
+          .mockImplementation((...args) => {
+            const prior = activeWorldBinding;
+            const observation = { frame: currentFrame, inputs: [] as object[], codeUnits: 0, accepted: false };
+            activeWorldBinding = observation;
+            try {
+              const result = originalWorldBinding(...args);
+              observation.accepted = result !== null;
+              worldBindings.push(observation);
+              return result;
+            } finally {
+              activeWorldBinding = prior;
+            }
+          });
         const originalMaterializer = coreEcology.setCoreEcologyAggregatePatchMaterializedActors;
         const inputIds = new WeakMap<object, number>();
         const materializationCalls: Array<{
@@ -385,6 +403,13 @@ describe("runtime performance telemetry", () => {
             && value.ownerId === CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID) {
             inputs.set(value, (inputs.get(value) ?? 0) + 1);
             encodedCodeUnits += encoded.length;
+            // Observe the two complete habitat encodings inside THIS actual
+            // exported binding call, not adjacent global encoder invocations.
+            // Cold no-hash validation inputs are not the final comparison.
+            if (activeWorldBinding !== null && "derivationHash" in value) {
+              activeWorldBinding.inputs.push(value);
+              activeWorldBinding.codeUnits += encoded.length;
+            }
           }
           if (typeof value === "object" && value !== null && "patchKey" in value
             && "derivation" in value && "groups" in value && Array.isArray(value.groups)) {
@@ -417,6 +442,7 @@ describe("runtime performance telemetry", () => {
           encoder.mockRestore();
           materializer.mockRestore();
           projector.mockRestore();
+          worldBinder.mockRestore();
         }
         const telemetry = runtime.getPerformanceTelemetry();
         expect(telemetry.fixedStep.totalCount).toBe(30);
@@ -427,6 +453,9 @@ describe("runtime performance telemetry", () => {
         // cannot change any world, custody, knowledge, session or integrity byte.
         await assertEqualUninstrumentedWork(seed, worldJson);
         const digest = createHash("sha256").update(worldJson).digest("hex");
+        expect(worldBindings.length).toBeGreaterThan(0);
+        expect(worldBindings.every(({ frame, accepted }) => frameBuckets.has(frame) && accepted)).toBe(true);
+        expect(worldBindings.every(({ inputs }) => inputs.length === 2 && inputs[0] === inputs[1])).toBe(true);
         expect(materializationCalls.length).toBeGreaterThan(0);
         expect(materializationCalls.every(({ frame }) => frameBuckets.has(frame))).toBe(true);
         expect(terrainProjections.length).toBeGreaterThan(0);
@@ -465,6 +494,13 @@ describe("runtime performance telemetry", () => {
           durableSignalEncodes, durableSignalCodeUnits, durableDerivationCodeUnits,
           uniqueDurableHabitats: durableHabitats.size,
           perDurableHabitatEncodes: [...durableHabitats.values()].sort((left, right) => left - right),
+          worldBinding: {
+            scope: "original-once exported habitat world-binding calls inside31callbacks; setup/save excluded; not a timed profile",
+            calls: worldBindings.length,
+            sameObjectPairs: worldBindings.filter(({ inputs }) => inputs.length === 2 && inputs[0] === inputs[1]).length,
+            completeHabitatEncodes: worldBindings.reduce((sum, { inputs }) => sum + inputs.length, 0),
+            encodedCodeUnits: worldBindings.reduce((sum, { codeUnits }) => sum + codeUnits, 0),
+          },
           terrainProjection: {
             scope: "successful original-once projections; first-seen arrays exclude setup/save; not CPU or heap allocation counts",
             calls: terrainProjections.length,

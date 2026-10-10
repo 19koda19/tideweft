@@ -116,17 +116,19 @@ describe(`${ALPHA37_ESTUARY_BREADTH_HABITAT_SHARED_INVARIANTS_OWNER_INTENT} appe
     expect(clone).not.toBeNull();
     expect(clone).not.toBe(habitat);
     const encoder = vi.spyOn(canonicalUtil, "stableStringify");
-    const habitatEncodes = () => encoder.mock.calls.filter(([value]) => (
+    const habitatEncodeInputs = () => encoder.mock.calls.filter(([value]) => (
       typeof value === "object" && value !== null
       && "ownerId" in value && value.ownerId === CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID
-    )).length;
+    )).map(([value]) => value);
     try {
       expect(canonicalCoreEcologyBreadthHabitatForWorld(habitat, SEED, region)).toBe(habitat);
       // The measured shortcut was not retained: both paths keep exact encoding.
-      expect(habitatEncodes()).toBe(2);
+      expect(habitatEncodeInputs()).toEqual([habitat, habitat]);
+      expect(habitatEncodeInputs()[0]).toBe(habitatEncodeInputs()[1]);
       encoder.mockClear();
       expect(canonicalCoreEcologyBreadthHabitatForWorld(clone, SEED, region)).toBe(clone);
-      expect(habitatEncodes()).toBe(2);
+      expect(habitatEncodeInputs()).toEqual([clone, habitat]);
+      expect(habitatEncodeInputs()[0]).not.toBe(habitatEncodeInputs()[1]);
       expect(stableStringify(clone)).toBe(stableStringify(habitat));
     } finally {
       encoder.mockRestore();
