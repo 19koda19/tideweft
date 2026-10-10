@@ -1870,7 +1870,8 @@ function projectTerrainTiles(
     const currentTerrainVisibility = perception.terrainVisibilityStrengths[index] ?? 0;
     const projected = {
       kind: renderTerrain(tile, settlementTiles.has(index)),
-      ...(biome ? { biome: biome.id, climate: biome.climate } : {}),
+      biome: biome?.id,
+      climate: biome?.climate,
       elevation: tile.elevation / FIXED_POINT,
       moisture: tile.moisture / FIXED_POINT,
       roughness: tile.roughness / FIXED_POINT,
@@ -1894,9 +1895,17 @@ function projectTerrainTiles(
       trace: tile.traceStrength / FIXED_POINT,
       shelter: tile.terrain === "ridge" ? 0.25 : tile.terrain === "marsh" ? 0.5 : 0.1,
       blocked: false,
-    } satisfies RenderTerrainTileView;
-    if (!eligible || settlementTileIndices === null) return projected;
-    return Object.freeze(projected);
+    };
+    if (biome === undefined) {
+      // Preserve the optional wire shape without a temporary biome record on
+      // every ordinary tile. Missing profiles still omit both own properties.
+      const { biome: _biome, climate: _climate, ...withoutBiome } = projected;
+      return !eligible || settlementTileIndices === null
+        ? withoutBiome : Object.freeze(withoutBiome);
+    }
+    const withBiome = projected as RenderTerrainTileView;
+    if (!eligible || settlementTileIndices === null) return withBiome;
+    return Object.freeze(withBiome);
   });
   if (!eligible || settlementTileIndices === null || outdoorIllumination === null) return tiles;
 
