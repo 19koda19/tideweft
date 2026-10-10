@@ -6605,6 +6605,25 @@ assisted-play, whole-population fairness, measured performance, new production
 artifact, deployment or complete cumulative certificate is implied here.
 Completed directives and upstream source are unchanged; dependency changes: NONE.
 
+The same executable840d499 then passes `npm run package:desktop`, its web
+typecheck/build, `npm run smoke:web` and the existing disposable-profile
+`npm run smoke:desktop`. ASAR3742460d… contains10 whitelist entries/7exact
+current files,5,108,346bytes; independent extraction/file-integrity comparison
+matches current package/main/dist. Static `/tideweft/` serves5files/4,878,079bytes.
+Desktop current-save/Harp/ADRIFT/backup, greetings, both views and mobile-sized
+layout gates pass; three screenshots inspected. Terminal output is truncated,
+not a full retained event trace; the existing wrapper parsed the full result.
+
+The retained ordinary Firefox adapter passes140.293s/267public samples and
+18moving visible human IDs on157.0.1, reaches exact civic480/ration540 labels,
+and physically selects88/GREET/Acquainted/close with unchanged source/dist.
+The greeting screenshot is inspected and the disposable profile removed.
+Guarded runtime errors are zero; one expected pre-guard CSP-blocked eval probe
+is logged, not falsely reported as zero total errors. These are bounded available-
+artifact/interaction checks, not normal assisted-anchor deployment, complete
+tasks/fairness, hardware mobile/audio, performance, soak, ZIP/install/signing,
+other-platform, CI/Pages/deployment or cumulative certification.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
