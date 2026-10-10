@@ -6278,6 +6278,100 @@ These are correctness timings under concurrent local regression load, not a
 matched production speed comparison. No build, platform, performance,
 publication or major-directive closure is claimed.
 
+### Coincident resident access and production save-frontier checks — 2026-10-09
+
+The local renderer repair `2174a6e01f32b7ef2ce09461799cc402b45b4839`
+addresses an observed ordinary-control defect: exact coincident harbor/human
+targets made the human inaccessible. Both views now share stable exact-nearest
+tie cycling; current perception, distances and release validation are unchanged.
+Its seven-file/332-test affected set and maintained105-test smoke pass.
+The [shared pointer contract](./ARCHITECTURE.md#player-visibility-envelope)
+owns the durable policy, not this experiment record.
+
+At clean `3462f5af7349dd544533676fcb64718625c4878d`, production web/static
+subpath checks pass over five files/4,875,735bytes. The newly packaged macOS
+arm64 ASAR is5,104,171bytes, SHA256
+`de2679c549506aeb32176a7e88503fc256dd5c0d3a6389f3c4fac4c929e4c515`.
+Its embedded integrity matches; packaged main, package metadata and all five
+dist files match the current files exactly. The ten-entry runtime whitelist
+contains no source, tests, private planning or development cache. This identity
+check alone does not establish functional packaged correctness.
+
+The separate ordinary Firefox157.0.1 production witness serves the actual dist
+at `/tideweft/`,1440×900 CSS/DPR1, through the existing static server and isolated
+profile. Over140.195s it samples265 public projections, ticks420→560, with18
+moving visible human IDs. Actual boundary480 shows civic activity;540 shows
+ration activity. A physical Chart canvas click selects resident88 as unfamiliar;
+the native GREET control changes that same public person to Acquainted and
+discloses the introduction, then the native close control clears ABOUT. The
+greeting screenshot was inspected. Source/artifact identity stays unchanged,
+the browser exits normally and its disposable profile is removed. One known
+startup CSP eval denial occurs before the guarded run; no guarded runtime error
+is recorded. The ignored adapter waits for the actual enabled, unobstructed
+DOM control rather than assuming selection and panel paint are simultaneous.
+
+```sh
+npm run smoke:web
+node artifacts/validation/world0-normal-native/estuary-play.cjs \
+  --run-name estuary-3462f5a-01
+```
+
+These public labels and sampled positions are not complete task, stock,
+fairness, attention-expiry, performance, assistive-hardware or conservation
+evidence. No source/task/need/weather/position/cargo/save is authored in that
+browser witness. Existing camera focus uses an already disclosed human.
+
+The actual346 desktop smoke passes both resident greeting gates but FAILS the
+later relocation capture: repeated native saves observe phases1–9, never a
+closed quiet phase0. This differs from the previous cdfe3a2 failure, where the
+older installer fabricated empty phase0 carry and the real loader rejected it.
+The current helper preserves all body, recency and pending-cause roots; its31
+synthetic helper and40 existing body/save-boundary tests pass, but this package
+run demonstrates that timer polling does not reliably reach the required native
+boundary. Ordinary frames can accept multiple fixed steps before an external
+callback; save preparation adds synchronous work. The log does not establish
+which contribution dominates, and no loader rule is relaxed to conceal it.
+
+The subsequent smoke-only capture uses the established ordinary WAIT control,
+whose driver accepts one fixed step per RAF. It observes the public completed
+tick, synchronously captures through native `save()`, and immediately cancels
+only its own WAIT before awaiting storage. It still requires a genuinely empty
+closed carry and a saved tick matching the retained immutable public view.
+ADRIFT uses that matching captured view, not a later tide projection. It neither
+assigns phase0 nor deletes resident histories, recency or pending acoustic facts.
+At most80 observed RAF callbacks and a15s retry-admission budget are allowed;
+the existing external smoke watchdog remains the hung-callback boundary.
+This is controlled package-fixture preparation, not normal physical-input proof.
+
+The existing WAIT and resident save-boundary domain passes45 tests32.41s,
+including100 native accepted steps versus ordinary work, render-cadence equality,
+partial cancellation/reload and failure-safe audio. Maintained smoke passes105
+tests4.72s; typecheck,40 release-checker selftests and45 documentation-reuse
+checks pass. The focused VM helper passes44 tests105ms, retaining the original31
+preservation/error cases and adding ordinary-WAIT callback cadence,
+save-before-cancel-before-storage ordering, ownership-safe cancellation, clock
+validation, bounded no-change retries, matching saved/view ticks and a later
+public projection arriving while storage is pending. Its
+synthetic public snapshots are not a native loader or cadence proof. These are
+correctness timings, not a speed comparison.
+
+```sh
+npx vitest run electron/smokeSaveFrontier.test.ts --maxWorkers=1 \
+  --reporter=default --reporter=json \
+  --outputFile=artifacts/validation/world0-platform-current/wait-frontier-helper.json
+npx vitest run src/game/runtime.wait.integration.test.ts \
+  src/game/residentActivitySaveBoundary.test.ts --maxWorkers=1 \
+  --reporter=default --reporter=json \
+  --outputFile=artifacts/validation/world0-platform-current/wait-frontier-domain.json
+npm run test:smoke -- --reporter=default --reporter=json \
+  --outputFile=artifacts/validation/world0-platform-current/wait-frontier-smoke.json
+```
+
+Desktop correctness remains unverified at this checkpoint. There is no new
+save schema, reader/support retirement, dependency change, world-hitch result,
+longitudinal-soak result, distribution/signing claim, deployment or directive
+closure. The earlier exact c06124a cumulative pass does not certify later bytes.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

@@ -2117,45 +2117,81 @@ async function bindSmokeWayknot(contents) {
 /** Capture a real closed, quiet interval before a smoke-only player relocation.
  * Partial body histories and pending sounds belong to their original listener
  * pose; a fabricated empty carry cannot make them a valid phase-zero save.
- * This only waits/saves through the existing runtime, never advances it itself.
+ * Ordinary WAIT exposes each accepted fixed step separately. Cancel it in the
+ * same callback as the synchronous save capture, before storage can yield;
+ * never assign a phase, advance a private tick, or erase pending sound facts.
  */
 async function captureSmokeRelocationSave(runtime, readRecord, expectedSaveVersion, timeoutMs) {
   const startedAt = Date.now();
   const observedPhases = new Set();
   const empty = (value) => Array.isArray(value) && value.length === 0;
-  for (let attempts = 1; attempts <= 80 && Date.now() - startedAt < timeoutMs; attempts += 1) {
-    await runtime.save();
-    const record = await readRecord();
-    if (!record || typeof record.worldJson !== 'string') {
-      throw new Error('smoke relocation did not capture a persisted save');
+  let previousTick = runtime.getRenderView().tick;
+  let ownsWait = false;
+  let attempts = 0;
+  try {
+    if (!Number.isSafeInteger(previousTick) || previousTick < 0) {
+      throw new Error('smoke relocation encountered an invalid world clock');
     }
-    const envelope = JSON.parse(record.worldJson);
-    if (envelope?.format !== 'tideweft-session' || envelope.version !== expectedSaveVersion ||
-        record.payloadVersion !== expectedSaveVersion) {
-      throw new Error('smoke relocation requires the current save format');
+    if (runtime.getUIView()?.controls?.waitActive === true) {
+      throw new Error('smoke relocation cannot replace an existing wait');
     }
-    const carry = envelope.perceptionCarry;
-    const phase = carry?.playerStepsSinceWorldTick;
-    if (!Number.isSafeInteger(phase) || phase < 0 || phase >= 10) {
-      throw new Error('smoke relocation captured an invalid interval phase');
+    for (let frames = 1; frames <= 80 && Date.now() - startedAt < timeoutMs; frames += 1) {
+      if (!ownsWait) {
+        if (runtime.getUIView()?.controls?.canWait !== true) {
+          throw new Error('smoke relocation requires an available ordinary wait');
+        }
+        runtime.dispatchUI({ type: 'wait', action: 'begin' });
+        ownsWait = runtime.getUIView()?.controls?.waitActive === true;
+        if (!ownsWait) throw new Error('smoke relocation could not begin ordinary wait');
+      }
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const capturedView = runtime.getRenderView();
+      if (!Number.isSafeInteger(capturedView.tick) || capturedView.tick < previousTick) {
+        throw new Error('smoke relocation encountered an invalid world clock');
+      }
+      if (capturedView.tick === previousTick) continue;
+      previousTick = capturedView.tick;
+      attempts += 1;
+      // save() captures its complete record synchronously. Cancel our ordinary
+      // WAIT before awaiting the asynchronous write, not after another frame.
+      const saving = runtime.save();
+      runtime.dispatchUI({ type: 'wait', action: 'cancel' });
+      ownsWait = false;
+      await saving;
+      const record = await readRecord();
+      if (!record || typeof record.worldJson !== 'string') {
+        throw new Error('smoke relocation did not capture a persisted save');
+      }
+      const envelope = JSON.parse(record.worldJson);
+      if (envelope?.format !== 'tideweft-session' || envelope.version !== expectedSaveVersion ||
+          record.payloadVersion !== expectedSaveVersion) {
+        throw new Error('smoke relocation requires the current save format');
+      }
+      const carry = envelope.perceptionCarry;
+      const phase = carry?.playerStepsSinceWorldTick;
+      if (!Number.isSafeInteger(phase) || phase < 0 || phase >= 10) {
+        throw new Error('smoke relocation captured an invalid interval phase');
+      }
+      observedPhases.add(phase);
+      if (record.playTicks === capturedView.tick && phase === 0 &&
+          envelope.player?.timeAction === null && carry.intervalStartWasSleeping === false &&
+          carry.nextPlayerSenseSampleOrdinal === 0 &&
+          empty(carry.playerSenseSamples) && empty(carry.playerStepStateSamples) &&
+          empty(carry.actorVocalizationSamples) && empty(carry.animalContactAcousticCarry?.records) &&
+          empty(carry.situatedExpressionChannels?.channels) &&
+          empty(carry.situatedExpressionAdmissions?.records) &&
+          empty(carry.situatedExpressionCausalAuthority?.records)) {
+        return { record, envelope, view: capturedView, capture: {
+          attempts, observedPhases: [...observedPhases].sort((left, right) => left - right),
+          frames, elapsedMs: Date.now() - startedAt, strategy: 'ordinary-wait-boundary',
+        } };
+      }
     }
-    observedPhases.add(phase);
-    if (phase === 0 && envelope.player?.timeAction === null && carry.intervalStartWasSleeping === false &&
-        carry.nextPlayerSenseSampleOrdinal === 0 &&
-        empty(carry.playerSenseSamples) && empty(carry.playerStepStateSamples) &&
-        empty(carry.actorVocalizationSamples) && empty(carry.animalContactAcousticCarry?.records) &&
-        empty(carry.situatedExpressionChannels?.channels) &&
-        empty(carry.situatedExpressionAdmissions?.records) &&
-        empty(carry.situatedExpressionCausalAuthority?.records)) {
-      return { record, envelope, capture: {
-        attempts, observedPhases: [...observedPhases].sort((left, right) => left - right),
-        elapsedMs: Date.now() - startedAt,
-      } };
-    }
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    throw new Error('smoke relocation found no closed quiet interval: ' +
+      JSON.stringify({ attempts, observedPhases: [...observedPhases].sort((left, right) => left - right) }));
+  } finally {
+    if (ownsWait) runtime.dispatchUI({ type: 'wait', action: 'cancel' });
   }
-  throw new Error('smoke relocation found no closed quiet interval: ' +
-    JSON.stringify({ observedPhases: [...observedPhases].sort((left, right) => left - right) }));
 }
 
 /**
@@ -2499,8 +2535,7 @@ async function installSmokeAdriftFixture(contents) {
       database.close();
       throw error;
     }
-    const { record, envelope, capture } = captured;
-    const view = runtime.getRenderView();
+    const { record, envelope, capture, view } = captured;
     if (!view?.terrain || !view?.player?.position || view.tick !== record.playTicks) {
       database.close();
       throw new Error('smoke ADRIFT terrain no longer matches its captured world tick');
