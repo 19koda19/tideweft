@@ -7295,6 +7295,70 @@ This is not a timing benchmark, hardware-audio proof, all-roster fairness,
 longitudinal resource soak, new cumulative certificate or directive closure.
 Dependency changes: NONE. Upstream p5/Electron source modified: NO.
 
+### Ordinary traveler saved-state attribution — 2026-10-10
+
+**Local attribution of physical obstruction and subsequent progress, not an
+informed-water, complete crossing or handoff certification.** Clean
+`64a7a1804b4fe82efb6ef591bb37ee3d6352f2ff` retains executable `7f48b48` and
+production JS `07ee6a33244807adbf2a36426ff814ab40252969550ffcb787f5366a10e63c2a`.
+The existing ignored estuary observer adds default-off
+`--attribute-synthetic-save`: exactly three supported `runtime.save()` calls,
+then readonly autosave inspection in its disposable profile. There is no task,
+body, weather, needs, stock, custody or saved-input injection. This is diagnostic
+save capture, not a physical Save-control witness or a new persistence reader.
+
+Command: `caffeinate -i node artifacts/validation/world0-normal-native/estuary-play.cjs
+--native-traveler-preflight --attribute-synthetic-save --wait-to-tick 1150
+--observe-until-tick 1235 --max-wall-ms 600000 --watch-resident 89
+--run-name traveler-attribution-64a7a18-reviewed`. Firefox157.0.1, actual static
+`/tideweft/`,1440×900/DPR1, AC power;536.299s,836 public samples,420→1235,
+69 physical ten-minute Wait clicks and one Cancel at1150. No workload extension
+or manufactured successful result is used.
+
+All three current58/world4/rules6 saved records bind public resident89 to
+`H-v1-p0p0-uu7mwy-1-1gpnkpu`, existing resident-carried contract127, parts8,
+origin5→destination1. Accepted720/departed721/due1140, it remains in-transit
+with that same quantity throughout; overdue status does not discard custody.
+
+| Saved tick / phase | Actual body in compatibility region0 | Physical task | Relevant surface |
+| --- | --- | --- | --- |
+| 1156 / 3 | 38.5,55.5 | approaching, leg0/waypoint2 | Earlier route progress |
+| 1174 / 9 | 43.5,47.5 | waiting, leg0/waypoint15, `no-traversable-route` | Bank dry; next endpoint43.5,46.5 wet |
+| 1226 / 3 | 43.5,47.254 | approaching, same leg/waypoint, renewed progress | Bank and endpoint dry |
+
+The saved tide levels473833→426166 cross the endpoint's426535 elevation;
+route121 remains active. Shared `travelApproachSurface` excludes wet cells and
+the locomotion owner records unsupported progress as `no-traversable-route`.
+No fresh matching endpoint belief establishes an `observed-water` hold or
+knowledge-led dry release in this run. Public listening/investigating labels
+must not become a private water explanation. The evidence supports an actual
+courier's physical-blockage/resumption sequence, not a controlled counterfactual
+or the separately tested informed-water consumer.
+
+Each capture matches public stable identity, tick and visible pose, with an
+internally consistent saved carry phase. **Capture-time phase remains
+UNVERIFIED**, including stationary same-tick coalescing. Chart/Relief stationary
+and post-motion images were inspected; their1175–1177/1226–1227 brackets are
+not simultaneous with each other or the saves. No hidden task/cargo information
+is added to player presentation. Eight local-only decoder checks pass, covering
+coalescing, phase/pose mismatch, identity, region0 scope and malformed/oversize
+records; they do not independently validate arbitrary game saves.
+
+Report SHA256 `eac6e7d82da32b7f67fde1f5174d41ed78f52fbbef03af21e4e4aba8a46a3648`;
+synthetic-save hashes `f0fdc247…` / `2dd2af35…` / `9dda3aa4…`, sizes
+2799690/2928161/2779192B. All16 source/driver and five artifact fingerprints match
+before/after. Guarded errors/navigation/prompts/context losses0; one expected
+startup CSP eval-probe denial is retained. Firefox exits0 and its disposable
+profile is removed; user browser/save is untouched. The initial22.797s attempt
+was deliberately interrupted before capture to correct an exact-moment claim;
+it remains incomplete evidence, not a gameplay failure.
+
+No arrival, handoff, cold continuation, earned alternative, general water
+capability, all-roster liveness, performance gain, resource soak, cumulative
+certificate or release is claimed. Diagnostic saves affect timing. Runtime,
+schemas, supported formats, rules, security and cadence are unchanged.
+Dependency changes: NONE. Upstream p5/Electron source modified: NO.
+
 ### Native periodic save and lifecycle continuity — 2026-10-10
 
 **Local whole-runtime correctness, not a rendering or resource-soak result.**
