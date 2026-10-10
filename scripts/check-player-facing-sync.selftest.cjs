@@ -225,6 +225,17 @@ test("unsafe or missing gameplay schema fails closed", () => {
   assert.match(validateGameplayContract(missing)[0], /exactly the supported/u);
 });
 
+test("repository packaged smoke tracks the current writer independently of release metadata", () => {
+  assert.deepEqual(
+    validateElectronSmokeSaveVersion(
+      fs.readFileSync(path.join(root, "electron/main.cjs"), "utf8"),
+      fs.readFileSync(path.join(root, "src/game/runtime.ts"), "utf8"),
+      fs.readFileSync(path.join(root, "src/game/saveCompatibilityPolicy.ts"), "utf8"),
+    ),
+    [],
+  );
+});
+
 test("gameplay manifest exclusions cannot weaken the production-source safety net", () => {
   const excludedGameplay = structuredClone(manifest);
   excludedGameplay.authoritativeExcludedPaths.push("src/game/player.ts");
