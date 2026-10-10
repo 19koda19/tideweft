@@ -1,21 +1,28 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { TideweftSoundscape } from "../audio/soundscape";
 import type { SaveRecord, SaveRepository } from "../platform/persistence";
 import { createWorld, createWorldView, deserializeWorld, serializeWorld, type WorldState } from "../sim/public";
+import * as simulation from "../sim/public";
+import { RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION } from "../sim/residentActivity";
 import type { WorldView } from "../sim/types";
 import { stableStringify } from "../sim/util";
 import { residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
 import { deserializeBio0Ecology, type Bio0EcologyState } from "./bio0Ecology";
 import { livingActorAddressForResident } from "./livingActor";
+import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { createRegionalCartography, projectRegionalCartographyWindow } from "./regionalCartography";
 import { createTerrainRegionStreamingState } from "./regionStreaming";
 import { createRegionalTerrainWindow } from "./regionalTravel";
 import { createRegionalWorldView, isImmutableRegionalWorldView, regionalCompatibilityWorldForWorld, regionalWindowForWorld, regionalWorldViewPhysicalPublication } from "./regionalWorldView";
+import * as regionalViews from "./regionalWorldView";
 import { adoptResidentActivities, advanceResidentRestActivities, prepareResidentRestActivities } from "./residentActivityExecution";
 import { resolveResidentWorldPlacement } from "./residentSpatial";
-import { createTideweftRuntime, prepareRuntimeResidentActivityPublication } from "./runtime";
+import { createTideweftRuntime, prepareRuntimeResidentActivityPublication, type TideweftRuntime } from "./runtime";
+import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 
-vi.mock("../audio/soundscape", () => ({
+vi.mock("../audio/soundscape", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../audio/soundscape")>()),
   TideweftSoundscape: class {
     async unlock(): Promise<void> {}
     play(): void {}
@@ -245,4 +252,171 @@ describe("runtime resident-only physical publication staging", () => {
     }
     expect(stableStringify({ world, bio0, spatial })).toBe(before);
   });
+});
+
+// Ordinary accepted runtime work, with publication alone counterfactually
+// rebuilt through the original full owners. This is not rendered-play or
+// performance evidence; every oracle runs outside a timed measurement.
+describe("completed runtime publication preserves exact native work", () => {
+  it.each(["runtime baseline estuary", "breathing room regional density 8"])(
+    "matches an independent full publication after thirty accepted steps: %s",
+    async (seed) => {
+      const priorRequestFrame = globalThis.requestAnimationFrame;
+      const priorCancelFrame = globalThis.cancelAnimationFrame;
+      const wallNow = Date.now();
+      const wallClock = vi.spyOn(Date, "now").mockReturnValue(wallNow);
+      let monotonicNow = 0;
+      const monotonicClock = vi.spyOn(performance, "now").mockImplementation(() => {
+        monotonicNow += 0.25;
+        return monotonicNow;
+      });
+
+      const run = async (mode: "sibling" | "full-reference") => {
+        monotonicNow = 0;
+        let scheduledFrame: ((now: number) => void) | undefined;
+        let nextFrameTime = 100;
+        vi.stubGlobal("requestAnimationFrame", vi.fn((callback: (now: number) => void) => {
+          scheduledFrame = callback;
+          return 1;
+        }));
+        vi.stubGlobal("cancelAnimationFrame", vi.fn());
+
+        const repository = new MemoryRepository();
+        const fullInputs = new WeakMap<WorldView, Parameters<typeof createRegionalWorldView>>();
+        const originalFullPublication = regionalViews.createRegionalWorldView;
+        const originalResidentPublication = regionalViews.replaceRegionalWorldViewResidents;
+        const originalStep = simulation.stepWorld;
+        let completedWorld: WorldState | undefined;
+        let comparisonFailure: unknown;
+        const closingTicks: number[] = [];
+        const fullPublication = vi.spyOn(regionalViews, "createRegionalWorldView").mockImplementation((...args) => {
+          const view = originalFullPublication(...args);
+          fullInputs.set(view, args);
+          return view;
+        });
+        const worldStep = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+          completedWorld = originalStep(...args);
+          return completedWorld;
+        });
+        const residentPublication = vi.spyOn(regionalViews, "replaceRegionalWorldViewResidents").mockImplementation((prior, residents) => {
+          // Initial adoption and ordinary fine publications are not the final
+          // closing publication. Capture the actual engine root, not a save
+          // reconstruction or a world assembled from the view under test.
+          if (completedWorld === undefined || completedWorld.residents !== residents
+            || prior.completedTick !== completedWorld.meta.completedTick
+            || !residents.every(({ activity }) => activity?.poses.length === 1)) {
+            return originalResidentPublication(prior, residents);
+          }
+          try {
+            const inputs = fullInputs.get(prior);
+            if (inputs === undefined) throw new Error("closure lost its exact completed physical publication");
+            const priorBytes = stableStringify(prior);
+            const sourceBytes = serializeWorld(completedWorld);
+            const sibling = originalResidentPublication(prior, residents);
+            const reference = originalFullPublication(createWorldView(completedWorld), inputs[1], inputs[2], inputs[3]);
+            expect(stableStringify(sibling)).toBe(stableStringify(reference));
+            expect(stableStringify(regionalCompatibilityWorldForWorld(sibling)))
+              .toBe(stableStringify(regionalCompatibilityWorldForWorld(reference)));
+            expectPhysicalPublicationUnchanged(prior, sibling);
+            expect(sibling.residents).not.toBe(residents);
+            expect(Object.isFrozen(sibling.residents)).toBe(true);
+            expect(sibling.residents).toEqual(reference.residents);
+            for (const [index, published] of sibling.residents.entries()) {
+              const source = residents[index]!;
+              expect(published.identity.stableId).toBe(source.identity.stableId);
+              expect(published.perception).toEqual(source.perception);
+              expect(published.perception).not.toBe(source.perception);
+              expect(published.activity).toEqual(source.activity);
+              expect(published.activity).not.toBe(source.activity);
+              expect(published.circadian).toEqual(source.circadian);
+              expect(published.circadian).not.toBe(source.circadian);
+              expect(Object.isFrozen(published.activity)).toBe(true);
+              expect(Object.isFrozen(published.perception)).toBe(true);
+              expect(Object.isFrozen(published.circadian)).toBe(true);
+            }
+            expect(stableStringify(prior)).toBe(priorBytes);
+            expect(serializeWorld(completedWorld)).toBe(sourceBytes);
+            closingTicks.push(completedWorld.meta.completedTick);
+            return mode === "full-reference" ? reference : sibling;
+          } catch (error) {
+            comparisonFailure = error;
+            throw error;
+          }
+        });
+        const audio = vi.spyOn(TideweftSoundscape.prototype, "play");
+        let runtime: TideweftRuntime | undefined;
+        try {
+          runtime = await createTideweftRuntime(repository);
+          runtime.dispatchUI({ type: "new-world", seed, posture: "journey", sessionShape: "wander" });
+          expect(runtime.getRenderView().tick).toBe(420);
+          expect(runtime.getUIView().saveWarning).toBeUndefined();
+          await runtime.save();
+          audio.mockClear();
+          const publicViews: Array<Readonly<{ render: unknown; ui: unknown }>> = [];
+          for (let interval = 1; interval <= 3; interval += 1) {
+            runtime.start();
+            // The first RAF establishes the clock; the next ten each accept
+            // exactly one 100 ms fixed step. No WAIT or synthetic engine loop.
+            for (let frame = 0; frame <= 10; frame += 1) {
+              const callback = scheduledFrame;
+              if (callback === undefined) throw new Error("native publication fixture stopped scheduling ordinary play");
+              scheduledFrame = undefined;
+              callback(nextFrameTime);
+              nextFrameTime += 100;
+              if (comparisonFailure !== undefined) throw comparisonFailure;
+            }
+            runtime.stop();
+            expect(runtime.getUIView().announcement?.message).not.toContain("INTEGRITY HALT");
+            expect(runtime.getRenderView().tick).toBe(420 + interval);
+            publicViews.push(structuredClone({ render: runtime.getRenderView(), ui: runtime.getUIView() }));
+          }
+          await runtime.save();
+          if (repository.record === undefined) throw new Error("native publication fixture omitted its final save");
+          const saved = JSON.parse(repository.record.worldJson) as Record<string, unknown>;
+          expect(saved.version).toBe(CURRENT_GAME_SAVE_VERSION);
+          expect(repository.record.payloadVersion).toBe(CURRENT_GAME_SAVE_VERSION);
+          expect(saved.integrity).toBe(gameSaveEnvelopeIntegrity(saved));
+          const world = deserializeWorld(String(saved.world));
+          expect(serializeWorld(world)).toBe(saved.world);
+          expect(world.meta.completedTick).toBe(423);
+          expect(world.residents.every(({ activity, perception }) => (
+            activity?.version === RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION
+            && activity.tick === 423 && activity.poses.length === 1 && perception.tick === 423
+          ))).toBe(true);
+          expect(saved.perceptionCarry).toMatchObject({ playerStepsSinceWorldTick: 0 });
+          expect(closingTicks).toEqual([421, 422, 423]);
+          return {
+            worldJson: repository.record.worldJson,
+            events: world.events,
+            publicViews,
+            audio: structuredClone(audio.mock.calls),
+          };
+        } finally {
+          runtime?.destroy();
+          residentPublication.mockRestore();
+          worldStep.mockRestore();
+          fullPublication.mockRestore();
+          audio.mockRestore();
+        }
+      };
+
+      try {
+        const sibling = await run("sibling");
+        const reference = await run("full-reference");
+        // No root exclusions: this is identical new-world/input history, not
+        // a cold session recap. Authenticate both seals above, then compare
+        // the complete current envelope including world/body/events/carry.
+        expect(sibling.worldJson).toBe(reference.worldJson);
+        expect(sibling.events).toEqual(reference.events);
+        expect(sibling.publicViews).toEqual(reference.publicViews);
+        expect(sibling.audio).toEqual(reference.audio);
+      } finally {
+        wallClock.mockRestore();
+        monotonicClock.mockRestore();
+        vi.stubGlobal("requestAnimationFrame", priorRequestFrame);
+        vi.stubGlobal("cancelAnimationFrame", priorCancelFrame);
+      }
+    },
+    120_000,
+  );
 });

@@ -7158,6 +7158,58 @@ This is ordinary public control/presentation proof, not an injected task, full
 transaction conservation, traveler wet-hold loop, audible hardware, performance,
 global fairness or long-session certification.
 
+### Same-epoch closure publication experiment — 2026-10-10
+
+**Correctness candidate; production benefit not yet verified.** Starting clean
+local `d1b0b752b2c4f0b9c53ed6b71ac9c31064ab2b87` retains the preceding terrain
+receipt repair. The exact shipped ASAR is
+`0094448def5d5a44105a43b8a9a72cd08feb02468c4742e5bfbec0d2a7c280cb`, JS
+`6fd6b282289a9c0393d1331c79b4798984f2a82a565d8d3f34da734ee1e00056`.
+A separate matched sourcemap and opt-in20s CPU diagnostic retain paired page/
+profiler clock bookends and unchanged source/artifact identity. The actual
+20.024s window accepts199 fixed steps/19 advances, ticks420→439, with no save
+preparation. Inclusive world mean100.495ms/max139.2ms remains regressed;
+sampling is not normal performance or a gain measurement.
+
+Source-mapped13,589 samples assign46.442ms inclusive to the final full regional
+rebuild. Disjoint geometry preparation charges49.318ms to completed aggregate
+perception and42.917ms to subsequent player perception. No geometry-preparation
+samples are inside final `refreshRuntimePresentation`; the current epoch is
+warmed earlier. These are sampled ancestry weights, not exact durations,
+calls or promised removable cost; parent and child weights cannot be added.
+Most resident canonicalization belongs to fine-step work. The small current-v8
+no-op parser is not selected as an explanation of the added world hitch.
+
+An independent source/callee audit finds only resident-root and separate
+ecology/cargo/resource/interval changes between the first completed physical
+publication and closure. The candidate therefore replaces just the second full
+rebuild with the existing registered resident sibling, its compatibility
+sibling, and fresh field-resource projection. All42 current people still
+receive detached validated snapshots. The first full physical publication,
+world order, sidecars, knowledge, hearing, events, audio, fail-closed rollback,
+current-save format and supported readers remain unchanged. Time, weather,
+economy, physical geography, cartography or window changes still require a new
+physical epoch; tick/seed equality alone is not sufficient.
+
+Two additive native estuary/density8 tests first fail at the intended absent
+closing-sibling assertion, then pass exactly30 accepted steps/420→423 after
+the change. At each of three actual closures, independent `createWorldView`
+and `createRegionalWorldView` owners reproduce all sibling values; all physical
+references remain unchanged and every current resident is detached/frozen.
+Whole envelopes, seals, ordered events, audio calls, render and UI snapshots
+match with no root exclusions. Complete publication28 tests and affected
+publication/light/perception/circadian/telemetry domain7 files/91 tests pass;
+typecheck and actual critical smoke6/105 pass. This is exact-work behavior
+proof, not actual rendered-play, production gain, global liveness or closure.
+Six selected cold/rest/legacy/benefit-wear cases pass (16 unselected), alongside
+the original late introduction/save/audio rollback case (97 unselected).
+Context28 and documentation-reuse45 self-tests pass. Acoustic/save summaries
+are reopened and unchanged; only their owner fingerprints follow the new
+publication paragraph. No summary replaces its canonical law.
+The original short scenario budgets remain frozen; confirmation follows with
+the existing production runners, without a sampler or competing workloads.
+Dependency changes: NONE. Upstream p5/Electron source modified: NO.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

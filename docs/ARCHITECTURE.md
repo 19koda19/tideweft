@@ -2597,6 +2597,18 @@ physical changes require full publication. Each accepted resident-only step
 publishes the staged tuple before hearing/presentation; it is not a measured
 performance improvement.
 
+The completed world step first publishes its fresh physical frame for local
+actors and aggregate perception. Its later closure now uses the registered
+resident sibling of that frame after resident adoption, circadian and keeper
+reconciliation. Those intervening operations change only residents or separate
+ecology/cargo/resource/interval roots; field-resource addresses and the outer
+actor/perception presentation are still refreshed. This reuses existing
+physical geometry/light custody, not the earlier resident roster or an entire
+stale game view. Any intervening physical, economy, discovery, time or window
+change requires full publication instead. Independent full-owner publication
+and equal accepted-work tests guard that exact caller boundary; Research owns
+measured outcomes and limitations.
+
 The existing `humanPerception.ts` reception bridge now supports those retained
 body poses. Player sample ordinal n uses accepted pose n+1; other supplied
 sounds require a complete, bounded `soundSamplePhases` map from their actual

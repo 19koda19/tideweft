@@ -16306,7 +16306,18 @@ export async function createTideweftRuntime(
         1,
         elapsedWeather,
       );
-      rebuildRegionalWorldView();
+      // Since completedRegionalView, only residents and separate ecology,
+      // cargo, resource and interval roots changed. Publish fresh detached
+      // residents against that exact physical epoch, not a second terrain
+      // copy. Any intervening physical/economy/window change requires a full
+      // rebuild instead; matching tick/seed alone would not authorize reuse.
+      const closingWorldView = replaceRegionalWorldViewResidents(completedRegionalView, world.residents);
+      const closingEconomyView = regionalCompatibilityWorldForWorld(closingWorldView);
+      if (closingEconomyView === null) throw new Error("Resident closure lost its compatibility publication");
+      const closingFieldResourceProjection = projectCompatibilityFieldResources(fieldResourceCatalog, closingWorldView);
+      worldView = closingWorldView;
+      economyView = closingEconomyView;
+      fieldResourceProjection = closingFieldResourceProjection;
       // A prepared GREET owns sample ordinal zero in the fresh interval. This
       // commits its already-proven cross-root transaction before unrelated
       // warnings or animal calls can consume the bounded voice budget.
