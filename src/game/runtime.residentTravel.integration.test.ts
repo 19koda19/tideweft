@@ -206,6 +206,187 @@ function localTravelStepBound(world: WorldState, path: readonly number[], cargoA
 }
 
 /**
+ * Continue the native held record produced by ordinary travel below. Forecasts,
+ * needs, routes, custody and bodies stay untouched. The first paid edge, not a
+ * resumed event or ETA alone, is the bounded completion witness. This remains
+ * headless runtime evidence, not physical shelter or a full four-leg delivery.
+ */
+async function continueNativeStormHold(record: SaveRecord): Promise<void> {
+  const start = decode(record);
+  const startWorld = deserializeWorld(start.world);
+  const commitment = contract(startWorld, 127);
+  const human = startWorld.residents.find(({ id }) => id === commitment.assignedResidentId)!;
+  const actorId = human.identity.stableId;
+  const firstForecast = startWorld.weather.nextChangeTick;
+  // Existing keyed forecasts780/960 remain storms. The first naturally
+  // clear forecast is1140; do not force the weather merely to obtain motion.
+  const q = firstForecast + 2 * 180;
+  expect(startWorld.meta.completedTick).toBe(724);
+  expect(start.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+  expect(commitment).toMatchObject({ status: "in-transit", quantity: 8, cargoQuantity: 8,
+    acceptedTick: 720, departedTick: 721, dueTick: 1_140 });
+  expect(human.condition.sheltering).toBe(true);
+  expect(human.activity?.travelTask).toMatchObject({ mode: "physical", phase: "waiting", waitReason: "weather-hold" });
+  expect(routeDistance(startWorld, commitment, human)).toBe(0);
+  expect(firstForecast).toBe(780);
+  expect(q).toBe(1_140);
+  const repository = new MemoryRepository(record);
+  const runtime = await open(repository);
+  await runtime.save();
+  expect(authoritativeRoots(decode(repository.snapshot()))).toEqual(authoritativeRoots(start));
+  const actualFrame = () => {
+    const terrain = runtime.getRenderView().terrain;
+    const origin = terrain.worldTileOrigin!;
+    const frame = residentTravelInteractionFrame({ origin,
+      terrain: { width: terrain.columns, height: terrain.rows } });
+    if (frame === null) throw new Error("Current actual player window disappeared");
+    return frame;
+  };
+  const outside = (world: WorldState) => commitment.porterRouteIds.every((id) => {
+    const route = world.routes.find((candidate) => candidate.id === id)!;
+    return route.path.every((index) => {
+      const tile = world.terrain.tiles[index]!;
+      return !residentTravelBodyIsLocal(actualFrame(),
+        createWorldPosition({ x: 0, y: 0 }, tile.x * 1_000 + 500, tile.y * 1_000 + 500));
+    });
+  });
+  expect(outside(startWorld)).toBe(true);
+  const endTick = q + 45; // Max condition decay plus phase-zero preparation and closing work.
+  const observationLimit = endTick - startWorld.meta.completedTick;
+  const observations: {
+    tick: number;
+    weather: WorldState["weather"];
+    condition: ResidentState["condition"];
+    task: NonNullable<ResidentState["activity"]>["travelTask"];
+    body: ReturnType<typeof worldPositionToGlobalFixed>;
+    distance: number;
+    paidUnits: number;
+    allowance: number;
+    events: WorldState["events"];
+  }[] = [];
+  let primary = true;
+  let terminalDistance = 0;
+  let resumedAtTick: number | null = null;
+  const originalStep = simulation.stepWorld;
+  const step = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+    const before = args[0];
+    const beforeContract = contract(before, commitment.id);
+    const beforeHuman = actor(before, actorId);
+    const beforeDistance = routeDistance(before, beforeContract, beforeHuman);
+    const result = originalStep(...args);
+    if (primary) {
+      if (observations.length >= observationLimit) throw new Error("Native continuation exceeded finite bound");
+      const nextContract = contract(result, commitment.id);
+      const nextHuman = actor(result, actorId);
+      const distance = routeDistance(result, nextContract, nextHuman);
+      const paidUnits = distance - beforeDistance;
+      const allowance = residentTravelStepUnits(nextHuman.activity!, nextContract)! * 10;
+      expect(paidUnits).toBeGreaterThanOrEqual(0);
+      expect(paidUnits).toBeLessThanOrEqual(allowance);
+      expect(nextContract).toMatchObject({ status: "in-transit", quantity: 8, cargoQuantity: 8,
+        assignedResidentId: human.id, acceptedTick: 720, departedTick: 721, dueTick: 1_140 });
+      expect(nextHuman.activeContractId).toBe(commitment.id);
+      expect(outside(result)).toBe(true);
+      const newEvents = result.events.filter(({ tick }) => tick === result.meta.completedTick);
+      expect(newEvents.filter(({ type, subjectId }) =>
+        (type === "contract-departed" || type === "contract-fulfilled") && subjectId === commitment.id)).toHaveLength(0);
+      const resume = newEvents.filter(({ type, subjectId }) => type === "resident-resumed" && subjectId === human.id);
+      if (resume.length > 0) {
+        expect(resume).toHaveLength(1);
+        expect(resumedAtTick).toBeNull();
+        expect(resume[0]!.data).toMatchObject({ contractId: commitment.id });
+        resumedAtTick = result.meta.completedTick;
+      }
+      if (result.meta.completedTick < q) {
+        if (result.meta.completedTick < firstForecast) expect(result.weather).toEqual(startWorld.weather);
+        else expect(result.weather.kind).toBe("storm");
+        expect(nextHuman.condition.sheltering).toBe(true);
+        expect(distance).toBe(0);
+        expect(nextContract.arrivalTick).toBe(commitment.arrivalTick! + result.meta.completedTick - 724);
+        expect(nextHuman.condition.routeDelayTicks).toBe(human.condition.routeDelayTicks + result.meta.completedTick - 724);
+      }
+      observations.push({ tick: result.meta.completedTick, weather: { ...result.weather },
+        condition: { ...nextHuman.condition }, task: nextHuman.activity!.travelTask,
+        body: worldPositionToGlobalFixed(nextHuman.activity!.poses.at(-1)!.position),
+        distance, paidUnits, allowance,
+        events: newEvents.filter(({ type, subjectId }) => type === "weather-changed"
+          || subjectId === human.id || subjectId === commitment.id) });
+      terminalDistance = distance;
+      assertWorldInvariants(result);
+    }
+    return result;
+  });
+  const prefixSteps = (q - 724) * 10 - 1;
+  advance(runtime, prefixSteps);
+  await runtime.save();
+  const prefixRecord = repository.snapshot();
+  const prefix = decode(prefixRecord);
+  const prefixWorld = deserializeWorld(prefix.world);
+  expect(prefixWorld.meta.completedTick).toBe(q - 1);
+  expect(prefix.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+  expect(actor(prefixWorld, actorId).condition.sheltering).toBe(true);
+  expect(routeDistance(prefixWorld, contract(prefixWorld, commitment.id), actor(prefixWorld, actorId))).toBe(0);
+  advance(runtime, 1);
+  let closingSteps = 1;
+  while (terminalDistance === 0 && runtime.getRenderView().tick < endTick) {
+    advance(runtime, 10);
+    closingSteps += 10;
+  }
+  await runtime.save();
+  const terminalRecord = repository.snapshot();
+  const terminal = decode(terminalRecord);
+  const terminalWorld = deserializeWorld(terminal.world);
+  const terminalHuman = actor(terminalWorld, actorId);
+  const terminalContract = contract(terminalWorld, commitment.id);
+  // A changed forecast is not recovery: both later storms retain the hold,
+  // and real clear weather still waits for the existing cold threshold.
+  expect(observations.filter(({ tick }) => [firstForecast, firstForecast + 180, q].includes(tick)))
+    .toMatchObject([
+      { tick: 780, weather: { kind: "storm", intensity: 341_013 }, distance: 0,
+        condition: { sheltering: true } },
+      { tick: 960, weather: { kind: "storm", intensity: 232_906 }, distance: 0,
+        condition: { sheltering: true } },
+      { tick: 1_140, weather: { kind: "clear", intensity: 122_375 }, distance: 0,
+        condition: { sheltering: true, coldStress: 575_345 } },
+    ]);
+  expect(observations.find(({ tick }) => tick === q + 15)).toMatchObject({
+    distance: 0, condition: { sheltering: true, coldStress: 335_345 },
+    task: { phase: "waiting", waitReason: "weather-hold" },
+  });
+  expect(observations.find(({ tick }) => tick === q + 16)).toMatchObject({
+    distance: 0, condition: { sheltering: false, coldStress: 319_345 },
+    task: { phase: "waiting", waitReason: "weather-hold" },
+  });
+  expect(resumedAtTick).toBe(q + 16);
+  expect(terminalWorld.meta.completedTick).toBe(q + 17);
+  expect(terminalDistance).toBe(residentTravelStepUnits(terminalHuman.activity!, terminalContract)! * 10);
+  expect(worldPositionDelta(human.activity!.poses.at(-1)!.position,
+    terminalHuman.activity!.poses.at(-1)!.position)).toEqual({ x: 890, y: 0 });
+  expect(terminalHuman.condition.sheltering).toBe(false);
+  expect(terminalDistance).toBeGreaterThan(0);
+  expect(terminalDistance).toBeLessThanOrEqual(residentTravelStepUnits(terminalHuman.activity!, terminalContract)! * 10);
+  expect(terminalWorld.meta.completedTick).toBeGreaterThanOrEqual(q);
+  expect(terminalWorld.meta.completedTick).toBeLessThanOrEqual(endTick);
+  expect(terminalHuman.activity!.poses.at(-1)).not.toEqual(human.activity!.poses.at(-1));
+  expect(terminalHuman.activity!.travelTask).toMatchObject({ mode: "physical", phase: "approaching", waitReason: null });
+  expect(terminalContract).toMatchObject({ status: "in-transit", cargoQuantity: 8, quantity: 8, assignedResidentId: human.id });
+  assertWorldInvariants(terminalWorld);
+  close(runtime);
+  primary = false;
+  soundscapePlay.mockClear();
+  const coldRepository = new MemoryRepository(prefixRecord);
+  const cold = await open(coldRepository);
+  await cold.save();
+  expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(prefix));
+  expect(soundscapePlay).not.toHaveBeenCalled();
+  advance(cold, closingSteps);
+  await cold.save();
+  expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(terminal));
+  close(cold);
+  step.mockRestore();
+}
+
+/**
  * Native seed/offer/stock/routes and ordinary automatic selection. Only this
  * offer's exclusivity, quiet weather and declared need pressure are controlled.
  * Belonging urgency prevents unrelated service centering before acceptance;
@@ -1179,7 +1360,7 @@ describe("ordinary runtime conserved resident travel", () => {
     step.mockRestore();
   }, 180_000);
 
-  it("retains native multi-leg pickup and storm-held cargo after ordinary window exit with equal cold work", async () => {
+  it("retains native multi-leg storm cargo outside the window and resumes after actual recovery with equal cold work", async () => {
     // The native opportunity is storm-held, not a completed coarse journey.
     // Every initial need, weather, stock, deadline and physical source stays
     // native. Only ordinary renderer movement and accepted RAF steps are used.
@@ -1423,5 +1604,6 @@ describe("ordinary runtime conserved resident travel", () => {
     expect(authoritativeRoots(decode(heldRepository.snapshot()))).toEqual(authoritativeRoots(terminal));
     close(coldHeld);
     step.mockRestore();
+    await continueNativeStormHold(repository.snapshot());
   }, 600_000);
 });

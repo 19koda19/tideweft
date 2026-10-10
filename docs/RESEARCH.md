@@ -6214,6 +6214,70 @@ production performance comparison, platform artifact, new cumulative
 certificate or release. The correction changes only this test and evidence;
 current executable behavior stays with its accepted production owners.
 
+### Native storm-held travel resumes after actual recovery — 2026-10-09
+
+This unpublished test-only checkpoint extends the existing native multi-leg
+storm-cargo case at parent
+`c06124a162a6f8aaf191d6f50bb8db8dc5e9ac15`. It preserves the original
+304-observation pickup/hold bound, ordinary controls, conservation assertions
+and held-record cold comparison. Only afterward does
+`continueNativeStormHold` open the actual tick724 current outer58 record.
+No forecast, need, task, body, route, stock or cargo is assigned to force
+resumption; production code, save schema and supported readers are unchanged.
+
+The same resident89 and contract127 retain eight parts outside the actual
+player interaction window. Existing keyed forecasts780 and960 remain storms;
+both keep distance zero and extend the real arrival estimate/route delay.
+The actual clear forecast1140 still leaves cold stress575,345 and no motion.
+Tick1155 remains sheltered at335,345. Tick1156 recovers to319,345 and emits
+exactly one resident-resumed event, but the body has not yet moved. Genuine
+phase-zero preparation and closing work then pay890 fixed units east at1157.
+The task becomes approaching without a second departure, handoff, invented
+stock or ETA-only success. Identity, itinerary, commitment and custody remain
+coherent throughout.
+
+The separate continuation has a finite1185 stop and at most461 world
+observations; it completes after433. Its tick1139/phase9 saved prefix follows
+4,159 accepted steps from724. A separately loaded prefix processes the same
+171-step suffix and matches every authoritative saved root, using only the
+existing integrity/session-recap exclusions. Loading releases no audio.
+This is native headless first-edge continuation, not physical shelter
+construction, complete four-leg delivery, general wading/current resistance,
+normal Chart/Relief play, performance or long-session certification.
+
+Local validation passes the selected native case in491.14s, the affected
+travel/activity domain5 files/158 tests in21.12s, maintained critical smoke
+6 files/105 tests in10.51s, typecheck and documentation-reuse. The other three
+cases in the runtime file are explicitly unselected by this focused command;
+their separate parent cumulative result is not inferred here.
+
+```sh
+npx vitest run src/game/runtime.residentTravel.integration.test.ts --maxWorkers=1 \
+  -t 'retains native multi-leg storm cargo outside' --reporter=default --reporter=json \
+  --outputFile=artifacts/validation/world0-native-resumption/native-runtime.json
+npx vitest run src/sim/residentTravelAdvance.test.ts src/sim/residentTravelRoute.test.ts \
+  src/sim/residentCircadianPhysiology.test.ts src/game/residentActivityExecution.test.ts \
+  src/game/residentTravelEnvironmentExecution.test.ts --maxWorkers=1 \
+  --reporter=default --reporter=json \
+  --outputFile=artifacts/validation/world0-native-resumption/travel-domain.json
+npm run test:smoke -- --reporter=default --reporter=json \
+  --outputFile=artifacts/validation/world0-native-resumption/smoke.json
+npm run typecheck
+npm run test:documentation-reuse
+```
+
+All738 public non-Markdown inputs retain before/after digest
+`82fd807e95dc64a9051d1e871a3b3055ac37c7240baf06a675b390b93b317d8e`.
+Retained local report SHA256 values are native
+`584d924ae99501f5fc47eb70a353975defad950088e83e77f8739ba8866ab963`,
+domain
+`76c86b5b6839a8558f555df1e4fd4f464e14b7dcb3533ac396a408c1e8f69df6`
+and smoke
+`439f15e123e4c8a8cbad770ba85de2981d84d03d25a264d25bb1d33ac4010af3`.
+These are correctness timings under concurrent local regression load, not a
+matched production speed comparison. No build, platform, performance,
+publication or major-directive closure is claimed.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
