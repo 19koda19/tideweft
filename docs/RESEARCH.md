@@ -7496,6 +7496,35 @@ producer. Supported interrupted completion remains the real logistics path;
 unsupported resident abandonment is not a missing mechanic to invent. No
 production, schema, reader, dependency, performance or release change is made.
 
+### Ordinary public settlement consequences — 2026-10-10
+
+Clean `706589a` retains executable `908cead` and production JS `6f54f98b…`.
+The existing ignored native estuary driver adds only an opt-in public settlement
+inspection mode. Command: `caffeinate -i node
+artifacts/validation/world0-normal-native/estuary-play.cjs
+--settlement-consumers --run-name estuary-706589a-public-consumers-01`.
+Disposable Firefox157, actual static `/tideweft/` artifact,1440×900/DPR1;
+140.584s,266 public samples,420→560. Only physical START, view controls and
+canvas selection of the already-visible starting harbor are used. No task,
+need, stock, weather, body, save or successful result is assigned.
+
+The painted inspector actually selects North Loom5 at422. All262 selected
+readings expose numeric current stocks and its Ferry metric. At479→480,
+Project0→0.025 (rounded3% in ordinary copy), parts119→118 and resident91's
+actual “tending the project” label are observed. Project0.025 remains through
+560. At540, four public ration labels accompany food22→20/fresh water16→14;
+concurrent recipes and other consumers prevent unique stock-delta attribution.
+Both480 and540 Chart/Relief screenshots were inspected: public inspector
+identity, rounded progress and displayed stocks agree with their projections.
+This fills the ordinary inspector-consequence witness, not complete logistics,
+causal-water, transaction conservation, fairness or simultaneous-pixel proof.
+
+Report SHA256 `6e96b91f…`, driver `d338faaf…`, source/artifact identities unchanged
+throughout. Guarded errors/navigation/prompts/context losses0; one expected
+startup CSP eval-probe denial remains recorded. Browser exits0 and disposable
+profile is removed; user browser/save untouched. No hardware-audio, timing,
+soak, new cumulative, desktop rerun, dependency or release result is claimed.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
