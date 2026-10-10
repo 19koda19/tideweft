@@ -6916,6 +6916,37 @@ not a schema, supported-reader, dependency, performance, visual, public-release
 or directive-closure change. Receded-water dry arrival does not prove loaded
 water traversal, current-force appraisal, alternatives or a complete journey.
 
+### Target-neutral visible attention copy — 2026-10-10
+
+At local parent `5fb8ea6`, shared human visual receipt and resident appraisal
+already retain identified nonplayer wildlife attention. The quick-label and
+ABOUT projections nevertheless described that state as "watching you". Two
+new sensory/projection fixtures, for a large predator and a heron, reproduce
+that misleading claim. After correcting only the two strings to "watching
+nearby", both projections remain target-neutral without exposing the subject
+identity, species or hidden point. Attention, body, hearing, expression, timing,
+physical transactions and current-save schemas are unchanged.
+
+The complete presentation fixture state remains equal before and after
+projection; this deliberately abbreviated-route fixture is not a valid save
+or an autonomous player-accessible wildlife scene. The first test attempt
+incorrectly called world serialization on that fixture and failed the route
+invariant before reaching the copy oracle. Its corrected red characterization
+fails exactly the two misleading labels; the existing thirteen cases pass.
+Both reports are retained locally, not concealed by weakening an old oracle.
+
+Affected presentation, ABOUT, human perception, resident attention and core
+ecology receipt checks pass ten actual files/152 tests in26.88s. The command
+also named nonexistent `projection.test.ts`; that filter supplied no coverage.
+The real projection perception, situated-expression and resident-pickup owners
+separately pass three files/59 tests in7.55s. Maintained critical smoke passes
+six files/105 tests in4.54s; typecheck passes. Ignored
+`nonplayer-watch-{red,red-final,domain,projection}.json` preserve these scopes.
+The exact-parent419-file/5,441-test cumulative certificate remains parent-only,
+not certification of these later changed bytes. This is a local presentation
+correction, not natural visual play evidence, new cognition, performance,
+public release or WORLD0 closure.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

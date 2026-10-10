@@ -681,7 +681,7 @@ function porterPerceptionLabel(suspicion: ResidentAttentionState | null): string
   switch (suspicion) {
     case "noticed": return "listening";
     case "suspicious": return "investigating";
-    case "identified": return "watching you";
+    case "identified": return "watching nearby";
     case "glance": return "glancing nearby";
     case "alert": return "alert";
     case "searching": return "searching nearby";

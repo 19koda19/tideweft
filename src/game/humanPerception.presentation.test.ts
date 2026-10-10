@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createActorObservation,
+  queryActorAttention,
   queryActorSearch,
   type ActorObservation,
 } from "../sim/actorPerception";
@@ -218,6 +219,41 @@ describe("existing-human perception presentation", () => {
       expect(disclosedCopy).not.toContain("watching you");
       expect(disclosedCopy).not.toContain("I see you");
     }
+  });
+
+  it.each([
+    { perceivedClass: "large-predator", subjectId: "animal:observed-large-predator" },
+    { perceivedClass: "great-blue-heron", subjectId: "animal:observed-heron" },
+  ])("describes identified $perceivedClass attention without claiming the player is its target", (subject) => {
+    // A sensory/projection fixture, not an injected autonomous wildlife scene.
+    // Production wildlife observations use this same identified nonplayer law.
+    const fixture = presentationFixture("identified", 1, subject);
+    expect(queryResidentAttentionState(fixture.resident.perception)).toBe("identified");
+    expect(queryActorAttention(fixture.resident.perception)[0]).toMatchObject(subject);
+    // This projection-only fixture has a deliberately abbreviated route;
+    // compare its complete state without claiming it is a valid saved world.
+    const before = structuredClone(fixture.state);
+    const perception = projectPerception(fixture.world, fixture.player);
+    const rendered = projectGameView(fixture.world, fixture.player, {
+      selectedResidentId: fixture.resident.id, perception,
+    });
+    const porter = rendered.porters.find(({ id }) => id === String(fixture.resident.id));
+    const about = projectUIView(fixture.world, fixture.player, createSessionState(fixture.world.seedText), {
+      selectedResidentId: fixture.resident.id, perception,
+    }).selectedResident;
+    expect(porter).toMatchObject({
+      state: "watching", quickLabel: "Unknown porter · watching nearby", emotionMark: ":|",
+    });
+    expect(about?.observed).toContainEqual({ label: "Behavior", value: "Watching nearby" });
+    expect(porter).not.toHaveProperty("speech");
+    expect(rendered.acousticText).toEqual([]);
+    const copy = JSON.stringify({ quickLabel: porter?.quickLabel, observed: about?.observed, known: about?.known });
+    expect(copy).not.toMatch(/watching you/iu);
+    expect(copy).not.toContain(subject.subjectId);
+    expect(copy).not.toContain(subject.perceivedClass);
+    expect(copy).not.toContain(`"localX":${fixture.observedPoint.localX}`);
+    expect(copy).not.toContain(`"localY":${fixture.observedPoint.localY}`);
+    expect(fixture.state).toEqual(before);
   });
 
   it("preserves the saved neutral search without turning a traveling body toward it", () => {
@@ -471,6 +507,7 @@ function restMovementFixture() {
 function presentationFixture(
   cognition: PresentedCognition,
   finalTickOffset = cognition === "searching" ? 2 : 1,
+  identifiedSubject?: Pick<ActorObservation, "perceivedClass" | "subjectId">,
 ): PresentationFixture {
   const state = createWorld(
     `presentation ${cognition} ${finalTickOffset}`,
@@ -494,7 +531,7 @@ function presentationFixture(
   if (!placement) throw new Error("fixture needs a resident placement");
   const observedPoint = translateWorldPosition(placement.position, 4_000, 0);
   const observation = cognition === "identified" || cognition === "searching"
-    ? identifiedObservation(resident, observedPoint, observationTick)
+    ? identifiedObservation(resident, observedPoint, observationTick, identifiedSubject)
     : heardObservation(resident, observedPoint, cognition, observationTick);
   stepWorld(
     state,
@@ -514,14 +551,17 @@ function identifiedObservation(
   resident: ResidentState,
   point: WorldPosition,
   tick: number,
+  subject: Pick<ActorObservation, "perceivedClass" | "subjectId"> = {
+    perceivedClass: "human", subjectId: "player:local",
+  },
 ): ActorObservation {
   const observation = createActorObservation({
     id: `presentation-sight-${resident.id}-${tick}`,
     observerId: resident.identity.stableId,
     observedAtTick: tick,
     channel: "vision",
-    perceivedClass: "human",
-    subjectId: "player:local",
+    perceivedClass: subject.perceivedClass,
+    subjectId: subject.subjectId,
     area: { center: point, radiusUnits: 0 },
     confidence: 900_000,
     salience: 850_000,

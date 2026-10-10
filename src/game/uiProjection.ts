@@ -241,7 +241,7 @@ function observableResidentBehavior(resident: ResidentState): string {
   switch (queryResidentAttentionState(resident.perception)) {
     case "noticed": return "Listening toward a nearby sound";
     case "suspicious": return "Investigating something nearby";
-    case "identified": return "Watching you";
+    case "identified": return "Watching nearby";
     case "glance": return "Glancing nearby";
     case "alert": return "Alert and scanning nearby";
     case "searching": return "Searching the nearby area";
