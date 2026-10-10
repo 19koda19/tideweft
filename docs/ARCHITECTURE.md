@@ -4574,7 +4574,8 @@ boundary.
 
 The released Alpha64 Living Voice lineage advances the outer
 session through version 50 and the bounded perception carry through version 14;
-the current local source writer emits outer version 54. The preceding v43/carry-v11
+the current local/unpublished source writer emits outer version 58, independently
+of that frozen release boundary. The preceding v43/carry-v11
 boundary introduced authenticated first-resident speech; v44/carry-v12 added
 event-owned resident weather-hold speech and retained the phase-zero listener
 sleep state beside pose for exact reception reauthentication. Current
