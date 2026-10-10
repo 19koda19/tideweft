@@ -6518,6 +6518,23 @@ never becomes belief. No cat-water, whole-population liveness, normal visual,
 performance, new release or full cumulative certificate follows from these
 bounded checks. Dependencies/upstream source/schema/support set are unchanged.
 
+The exact01b2479 source candidate also passes host darwin-arm64 packaging and
+the normal disposable-profile desktop smoke: both greeting controls, current
+Harp/save/reload and ADRIFT/recovery/backup boundaries, both views, pause and
+mobile layouts. Its runtime-only ASAR has10entries/5,107,206bytes and SHA256
+`f7960cf543d18e30e2c610ac0357356303b2495660504488b6355b4176ebb634`;
+all7 packaged files match current main/package/dist exactly. A first Forge
+ENOTEMPTY was only the generated directory's6,148-byte Finder metadata; moving
+that leftover recoverably allowed the unchanged retry to pass. Static
+`/tideweft/` smoke passes. The desktop wrapper validated the full result, but
+retained terminal output is truncated, not a complete structured event trace.
+Screenshots were inspected. The retained ordinary Firefox adapter then passes
+140.269s/264public samples,17moving IDs, exact civic480/ration540 and physical
+canvas selection/GREET/Acquainted/close, with unchanged source/artifact identity
+and zero guarded browser errors. This is bounded interaction/production-artifact
+evidence, not full task fairness, hardware mobile/audio, measured performance,
+soak, other-OS/signing/install, deployment or cumulative certification.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
