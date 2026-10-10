@@ -95,6 +95,7 @@
         "src/game/coreWildlifePursuitExpression.ts",
         "src/game/situatedExpressionAcoustics.ts",
         "src/game/worldAcoustics.ts",
+        "src/game/residentContactAcoustics.ts",
         "src/game/humanPerception.ts",
         "src/game/physicalAcousticPerception.ts",
         "src/game/worldAcousticPresentation.ts",
@@ -114,6 +115,8 @@
         "src/game/coreWildlifePursuitExpression.test.ts",
         "src/game/situatedExpressionAcoustics.test.ts",
         "src/game/worldAcoustics.test.ts",
+        "src/game/residentContactAcoustics.test.ts",
+        "src/game/runtime.residentRest.integration.test.ts",
         "src/game/humanPerception.test.ts",
         "src/game/physicalAcousticPerception.test.ts",
         "src/game/worldAcousticPresentation.test.ts",
@@ -194,7 +197,7 @@
         "locatorType": "heading",
         "locator": "Embodied acoustic event and receipt pipeline"
       },
-      "reviewedSourceFingerprint": "8b74f640e4660d4bb09b31f13b645891fb035ee6590c20a99a6049ec3e8256a3",
+      "reviewedSourceFingerprint": "48bb17a93fd6a6d6ea0f0825e942c3c139c7873a9f7ea9bce724b69545e0c226",
       "purpose": "Route committed vocal and physical causes through structured acoustic events, lawful listener receipts, and shared bounded presentation.",
       "preconditions": [
         "A causal domain has committed the action or experience that produced the sound."
@@ -225,6 +228,7 @@
       ],
       "exceptions": [
         "Many lawful sounds remain audio-only when text is not salient or presentation capacity is unavailable.",
+        "Current-v8 human contact derives one earliest dry entry or positive occupied-source water contact from the accepted body prefix. Both endpoints require bounded admission; frozen protocols, coarse motion and another wet-cell destination stay excluded. Ordinary native water hearing is anonymous and audio-only, not proof of wet player playback, broad crossings or full population acceptance.",
         "Current surface-terrain transmission covers authenticated core alarms, player steps, dog body-contact receipts and existing keeper/introduction/weather-hold/departure/warning/guardian-call/cat-rain/fox-pursuit/player-reaction sources' independent human audience, including authenticated refused cat/fox hearing. Player reactions retain their exact committed causal locus, including phase ten. A warm admitted cat/fox sound retains coarse hearing when detailed cause becomes unavailable. Fox pending-save and refused-call retention, co-admitted core alarms, and cat admitted/refused pending restore authenticate exact same-T bounded durable custody without relaxing fresh admission or reopening retired save formats; admitted carriers suppress physical twins and only current detailed cause can ground the retained sound. Visible-source classification independently requires the applicable ACTIVE materialized source body, never raw sound custody; cat keeps its original retreat-step tolerance around the historical wet-track locus. Sparse-owner departure remains unproven; distant edge fixtures do not certify positive hearing or ordinary travel. Saved player speech receipts, unknown height/depth, aggregate support, off-frame geography and other unjoined consumers remain explicitly partial rather than inferred clear paths.",
         "Current exhaustion and each ordinary/serious footing meaning retain bounded accepted origins for 600 accepted player steps before another fresh same-meaning choice is eligible; this neither creates timed speech nor suppresses physical incidents or hearing. Existing kernel/family priority and the supported nested-v1 original footing prune fence remain unchanged. Protection/loss/recovery cargo keeps at most three separate origins with existing locks and loss-resolution precedence; pickup uses its action frontier, traversal its actual step. Other meanings remain interval-local. Finite representative review supports current Voice closure; broader natural-rate/longitudinal annoyance evidence is deferred until full Living Foliage, not passed.",
         "Architecture's Learned animal-call recognition section owns bounded player knowledge from a genuine committed seen-and-heard call. A later lawful caption may identify the learned animal kind without a hidden individual, cause or anchor; catalogs, uncommitted intent, rabbit contact and aggregate choruses do not teach species."
@@ -232,6 +236,8 @@
       "owner": "docs/ARCHITECTURE.md#embodied-acoustic-event-and-receipt-pipeline",
       "evidence": [
         "src/game/worldAcoustics.test.ts",
+        "src/game/residentContactAcoustics.test.ts",
+        "src/game/runtime.residentRest.integration.test.ts",
         "src/game/terrainAcoustics.test.ts",
         "src/game/physicalAcousticPerception.test.ts",
         "src/game/dogPhysicalAcousticPerception.test.ts",
@@ -253,7 +259,7 @@
         "locatorType": "heading",
         "locator": "Compatibility lifecycle"
       },
-      "reviewedSourceFingerprint": "8b74f640e4660d4bb09b31f13b645891fb035ee6590c20a99a6049ec3e8256a3",
+      "reviewedSourceFingerprint": "48bb17a93fd6a6d6ea0f0825e942c3c139c7873a9f7ea9bce724b69545e0c226",
       "purpose": "Preserve current authoritative saves now while distinguishing explicitly retired pre-1.0 development formats from supported post-1.0 saves.",
       "preconditions": [
         "Every save carries explicit schema and generator identity sufficient for fail-closed validation."

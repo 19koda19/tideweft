@@ -12,7 +12,7 @@ import { assertWorldInvariants, createWorld, deserializeWorld, runTicks, seriali
 import { replaceResidentActivity, type ResidentActivity } from "../sim/residentActivity";
 import { canonicalResidentActivityForWorld, residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
 import { prepareResidentTravelAdvance, revokeResidentTravelAdvance } from "../sim/residentTravelAdvance";
-import { MAX_TIDE_LEVEL } from "../sim/terrain";
+import { MAX_TIDE_LEVEL, waterDepthAt } from "../sim/terrain";
 import type { WorldState } from "../sim/types";
 
 const BASE = createWorld("resident activity executable rest approach", "standard");
@@ -327,5 +327,264 @@ describe("resident committed dry-contact acoustic producer", () => {
     expect(Object.hasOwn(hearing.observation, "acousticEventId")).toBe(false);
     expect(realizeWorldAcousticText(fact.event, fact.event.durationSteps)).toBeNull();
     expect(deriveResidentContactAcoustics(world, WINDOW, 1)).toEqual([fact]);
+  });
+});
+
+const WET_CONTACT_ACTOR = "H-v1-p0p0-1d9rhmy-2-1kt45xu";
+
+/** Generated geometry/selection, with explicit lower-owner v8 activation only. */
+function generatedWetApproach() {
+  const world = runTicks(createWorld("settlement keeper home night continuity", "wild"), 25);
+  const human = residentAt(world, WET_CONTACT_ACTOR);
+  const source = resolveResidentWorldPlacement(world, human)!.position;
+  const target = residentSettlementRestTarget(world, human)!;
+  expect(world.meta.completedTick).toBe(445);
+  expect(human).toMatchObject({ id: 84, activeContractId: null, intention: "work" });
+  expect(source).toMatchObject({ localX: 88_500, localY: 47_500 });
+  expect(target).toMatchObject({ localX: 89_500, localY: 47_500 });
+  expect(waterDepthAt(tileAt(world, source), world.tide)).toBe(41_474);
+  expect(residentRestTargetHasDrySupport(world, target)).toBe(true);
+  // No need, skill, weather, terrain, task, pose or successful motion is
+  // authored. This is an adapter foundation, not runtime activation/playback.
+  currentBodies(world);
+  expect(prepareResidentRestActivities(world)).toBe(true);
+  expect(residentAt(world, WET_CONTACT_ACTOR).activity!.materialTask).toMatchObject({
+    kind: "settlement-material", projectId: 15, resource: "medicine", phase: "approaching", target,
+  });
+  assertWorldInvariants(world);
+  return { world, actorId: WET_CONTACT_ACTOR, source, target };
+}
+
+function ownContactFacts(world: WorldState, phase: number, actorId: string) {
+  const facts = deriveResidentContactAcoustics(world, WINDOW, phase);
+  expect(facts).not.toBeNull();
+  return facts!.filter(({ event }) => event.sourceId === actorId);
+}
+
+/** Arranged accepted-prefix/terrain codec foundation, never autonomous motion. */
+function wetPrefix(offsets: readonly (readonly [number, number])[], version: ResidentActivity["version"] = 8) {
+  const { world, actorId } = prefix(offsets.length - 1, 1, version);
+  const cell = { x: 20, y: 20 };
+  for (let y = cell.y - 1; y <= cell.y + 2; y += 1) {
+    for (let x = cell.x - 1; x <= cell.x + 2; x += 1) {
+      Object.assign(world.terrain.tiles[y * world.terrain.width + x]!, {
+        terrain: "meadow", elevation: MAX_TIDE_LEVEL + 1,
+      });
+    }
+  }
+  const sourceTile = world.terrain.tiles[cell.y * world.terrain.width + cell.x]!;
+  Object.assign(sourceTile, { terrain: "marsh", elevation: world.tide.level - 1_000 });
+  let heading = headingFromRadians(0);
+  const poses = offsets.map(([x, y], phase) => {
+    const prior = offsets[phase - 1];
+    if (prior !== undefined && (x !== prior[0] || y !== prior[1])) heading = headingFromRadians(Math.atan2(y - prior[1], x - prior[0]));
+    return { position: createWorldPosition({ x: 0, y: 0 }, cell.x * 1_000 + x, cell.y * 1_000 + y), heading };
+  });
+  world.residents = world.residents.map((resident) => resident.identity.stableId === actorId
+    ? replaceResidentActivity(resident, { ...resident.activity!, poses }) : resident);
+  expect(world.residents.every((resident) => canonicalResidentActivityForWorld(world, resident) !== null)).toBe(true);
+  return { world, actorId, sourceTile, poses, cell };
+}
+
+describe("resident occupied-source wet-contact acoustic foundations", () => {
+  it("derives one before-anchored slosh from real generated tick445 motion and retains it after dry arrival", () => {
+    const { world, actorId, source, target } = generatedWetApproach();
+    expect(ownContactFacts(world, 0, actorId)).toEqual([]);
+    advance(world, 1, 1);
+    const moved = residentAt(world, actorId).activity!.poses[1]!.position;
+    expect(worldPositionDelta(source, moved)).toEqual({ x: 105, y: 0 });
+    expect(tileAt(world, source).index).toBe(tileAt(world, moved).index);
+    // The shared dog classification remains unchanged below its 60k threshold.
+    expect(acousticMaterialForTerrainContact({ terrain: tileAt(world, source).terrain,
+      waterDepth: waterDepthAt(tileAt(world, source), world.tide) })).not.toBe("water");
+    const bytes = serializeWorld(world);
+    const facts = ownContactFacts(world, 1, actorId);
+    expect(facts).toHaveLength(1);
+    const fact = facts[0]!;
+    expect(fact).toMatchObject({ phase: 1, event: {
+      domain: "traversal", sourceId: actorId, sourceCategory: "human", sourcePosition: source,
+      occurredAtTick: 445, sourceMaterial: "body", surfaceMaterial: "water", action: "foot-contact",
+      semanticFamily: "slosh", soundClass: "physical-slosh", intensity: 280_000, interrupt: "none",
+      rangeUnits: 6_000, textualEligibility: "audio-only", accessibilityRelevance: "routine",
+    } });
+    expect(fact.sample).toMatchObject({ sourceId: actorId, acousticEventId: fact.event.eventId,
+      position: source, soundClass: "physical-slosh", soundInterrupt: "none", soundLoudness: 280_000,
+      soundRangeUnits: 6_000 });
+    expect([fact, fact.event, fact.sample, fact.event.sourcePosition, fact.sample.position].every(Object.isFrozen)).toBe(true);
+    expect(serializeWorld(world)).toBe(bytes);
+    for (let phase = 2; phase <= 10; phase += 1) {
+      advance(world, phase, phase);
+      expect(ownContactFacts(world, phase, actorId)).toEqual(facts);
+      if (phase === 4) expect(tileAt(world, residentAt(world, actorId).activity!.poses[4]!.position).index)
+        .toBe(tileAt(world, source).index);
+      if (phase === 5) expect(residentRestTargetHasDrySupport(world, residentAt(world, actorId).activity!.poses[5]!.position)).toBe(true);
+    }
+    expect(residentAt(world, actorId).activity!.poses[10]!.position).toEqual(target);
+    expect(residentAt(world, actorId).activity!.materialTask?.phase).toBe("arrived");
+    assertWorldInvariants(world);
+  });
+
+  it("keeps wet phase4/9 clone and inner-save causes exact until real closure consumes the prefix", () => {
+    const { world, actorId } = generatedWetApproach();
+    advance(world, 1, 4);
+    const phase4 = serializeWorld(world);
+    const clone = structuredClone(world);
+    const cold = deserializeWorld(phase4);
+    const facts = ownContactFacts(world, 4, actorId);
+    expect(facts).toHaveLength(1);
+    for (const branch of [clone, cold]) {
+      expect(serializeWorld(branch)).toBe(phase4);
+      expect(ownContactFacts(branch, 4, actorId)).toEqual(facts);
+    }
+    for (const branch of [world, clone, cold]) advance(branch, 5, 9);
+    const phase9 = serializeWorld(world);
+    expect(serializeWorld(clone)).toBe(phase9);
+    expect(serializeWorld(cold)).toBe(phase9);
+    const cold9 = deserializeWorld(phase9);
+    expect(ownContactFacts(cold9, 9, actorId)).toEqual(facts);
+    expect(serializeWorld(cold9)).toBe(phase9);
+    for (const branch of [world, cold9]) {
+      advance(branch, 10, 10);
+      expect(ownContactFacts(branch, 10, actorId)).toEqual(facts);
+      const admission = prepareResidentTravelAdvance(branch, WINDOW);
+      expect(admission).not.toBeNull();
+      try { stepWorld(branch, [], undefined, undefined, admission!); }
+      finally { revokeResidentTravelAdvance(admission!); }
+      expect(branch.residents.every(({ activity }) => activity?.poses.length === 1)).toBe(true);
+      expect(deriveResidentContactAcoustics(branch, WINDOW, 0)).toEqual([]);
+      assertWorldInvariants(branch);
+    }
+    expect(serializeWorld(cold9)).toBe(serializeWorld(world));
+    // This proves pending/consumed derivation, not actual audio playback.
+  });
+
+  it("does not sound a genuine wet-source attempt rejected by actual reserve", () => {
+    const { world, actorId, source } = generatedWetApproach();
+    residentAt(world, actorId).condition.exhaustion = 1_000_000; // Cause-only physical counterfactual.
+    advance(world, 1, 1);
+    expect(residentAt(world, actorId).activity!.poses[1]!.position).toEqual(source);
+    expect(residentAt(world, actorId).activity!.materialTask).toMatchObject({ phase: "waiting", waitReason: "no-traversable-route" });
+    expect(ownContactFacts(world, 1, actorId)).toEqual([]);
+  });
+
+  it("retains accepted wet contact when a later reserve loss stops new movement", () => {
+    const { world, actorId } = generatedWetApproach();
+    advance(world, 1, 4);
+    const facts = ownContactFacts(world, 4, actorId);
+    expect(facts).toHaveLength(1);
+    const lastPose = residentAt(world, actorId).activity!.poses[4]!;
+    residentAt(world, actorId).condition.exhaustion = 1_000_000; // Later physical cause, not a result assignment.
+    advance(world, 5, 5);
+    expect(residentAt(world, actorId).activity!.poses[5]).toEqual(lastPose);
+    expect(residentAt(world, actorId).activity!.materialTask?.phase).toBe("waiting");
+    expect(ownContactFacts(world, 5, actorId)).toEqual(facts);
+  });
+
+  it.each([
+    ["stationary", [500, 500], [500, 500], false],
+    ["lower-x outward", [0, 500], [-10, 500], false],
+    ["lower-y outward", [500, 0], [500, -10], false],
+    ["corner outward diagonal", [0, 0], [-10, 10], false],
+    ["lower edge parallel", [0, 500], [0, 510], true],
+    ["lower edge inward", [0, 500], [10, 500], true],
+    ["one wet unit before dry exit", [1, 500], [-9, 500], true],
+    ["interior diagonal dry exit", [1, 1], [-9, -9], true],
+    ["upper edge owned by dry neighbor", [1_000, 500], [990, 500], false],
+  ] as const)("requires positive half-open source contact for %s", (_name, before, after, audible) => {
+    const { world, actorId, poses } = wetPrefix([before, after]);
+    const facts = ownContactFacts(world, 1, actorId);
+    expect(facts).toHaveLength(audible ? 1 : 0);
+    if (audible) expect(facts[0]!).toMatchObject({ phase: 1, event: {
+      sourcePosition: poses[0]!.position, surfaceMaterial: "water", semanticFamily: "slosh",
+    } });
+  });
+
+  it("never treats invalid/deep/remote support or another wet cell as an occupied-source contact", () => {
+    for (const contrast of ["wet-destination", "deep-source", "deep-destination", "malformed-source", "malformed-destination", "remote"] as const) {
+      const { world, actorId, sourceTile, poses } = wetPrefix([[950, 500], [1_055, 500]]);
+      const destination = tileAt(world, poses[1]!.position);
+      if (contrast === "wet-destination") destination.elevation = world.tide.level - 1_000;
+      if (contrast === "deep-source") sourceTile.terrain = "deep-water";
+      if (contrast === "deep-destination") destination.terrain = "deep-water";
+      if (contrast === "malformed-source") sourceTile.index += 1;
+      if (contrast === "malformed-destination") destination.index += 1;
+      if (contrast === "remote") world.residents = world.residents.map((resident) => resident.identity.stableId === actorId
+        ? replaceResidentActivity(resident, { ...resident.activity!, poses: resident.activity!.poses.map((pose) => ({
+          ...pose, position: createWorldPosition({ x: 1, y: 0 }, pose.position.localX, pose.position.localY),
+        })) }) : resident);
+      expect(ownContactFacts(world, 1, actorId), contrast).toEqual([]);
+    }
+    for (const version of [1, 2, 3, 4, 5, 6, 7] as const) {
+      const { world, actorId } = wetPrefix([[500, 500], [510, 500]], version);
+      expect(ownContactFacts(world, 1, actorId), `frozen v${version}`).toEqual([]);
+    }
+  });
+
+  it("keeps both accepted endpoints in frame and never replaces an excluded wet cause with later dry entry", () => {
+    const { world, actorId, poses, cell } = wetPrefix(Array.from({ length: 11 }, (_, phase) => [950 + phase * 105, 500] as const));
+    const original = ownContactFacts(world, 10, actorId);
+    expect(original).toHaveLength(1);
+    expect(original[0]!.phase).toBe(1);
+    expect(original[0]!.event.sourcePosition).toEqual(poses[0]!.position);
+    const beforeOnly = { origin: { x: cell.x, y: cell.y }, terrain: { width: 1, height: 1 } };
+    expect(Math.floor(poses[0]!.position.localX / 1_000)).toBe(cell.x);
+    expect(Math.floor(poses[1]!.position.localX / 1_000)).toBe(cell.x + 1);
+    expect(deriveResidentContactAcoustics(world, beforeOnly, 10)).toEqual([]);
+    const rebased = { ...WINDOW, origin: { x: cell.x + 1, y: cell.y } };
+    // The phase10 dry entry fits the later frame; the first wet pair does not.
+    expect(Math.floor(poses[9]!.position.localX / 1_000)).toBe(cell.x + 1);
+    expect(Math.floor(poses[10]!.position.localX / 1_000)).toBe(cell.x + 2);
+    expect(deriveResidentContactAcoustics(world, rebased, 10)).toEqual([]);
+    expect(deriveResidentContactAcoustics(structuredClone(world), rebased, 10)).toEqual([]);
+    expect(ownContactFacts(world, 10, actorId)).toEqual(original);
+  });
+
+  it("preserves early wet admission against later lower-ID dry overflow", () => {
+    const { world, movers, start } = prefix(3, 9);
+    const wetId = [...movers].sort().at(-1)!;
+    const startX = Math.floor(start.localX / 1_000);
+    const wetStart = createWorldPosition(start.region, (startX < 48 ? startX + 10 : startX - 10) * 1_000 + 500, start.localY);
+    Object.assign(tileAt(world, wetStart), { terrain: "marsh", elevation: world.tide.level - 1_000 });
+    world.residents = world.residents.map((resident) => !movers.includes(resident.identity.stableId) ? resident
+      : replaceResidentActivity(resident, { ...resident.activity!, poses: Array.from({ length: 4 }, (_, phase) => ({
+        position: resident.identity.stableId === wetId ? translateWorldPosition(wetStart, phase * 25, 0)
+          : translateWorldPosition(start, Math.max(0, phase - 1) * 105, 0),
+        heading: headingFromRadians(0),
+      })) }));
+    const early = structuredClone(world);
+    early.residents = early.residents.map((resident) => replaceResidentActivity(resident, {
+      ...resident.activity!, poses: resident.activity!.poses.slice(0, 2),
+    }));
+    const first = deriveResidentContactAcoustics(early, WINDOW, 1)!;
+    expect(first).toHaveLength(1);
+    expect(first[0]!.event).toMatchObject({ sourceId: wetId, surfaceMaterial: "water", semanticFamily: "slosh" });
+    const complete = deriveResidentContactAcoustics(world, WINDOW, 3)!;
+    expect(complete).toHaveLength(8);
+    expect(complete[0]).toEqual(first[0]);
+    expect(complete.slice(1).map(({ event }) => event.sourceId)).toEqual(movers.filter((id) => id !== wetId).sort().slice(0, 7));
+    expect(complete.slice(1).every(({ phase, event }) => phase === 2 && event.surfaceMaterial !== "water")).toBe(true);
+    const reverse = structuredClone(world);
+    reverse.residents.reverse();
+    expect(deriveResidentContactAcoustics(reverse, WINDOW, 3)).toEqual(complete);
+  });
+
+  it("exposes wet contact only as anonymous hearing, excluding self and complete masking without text", () => {
+    const { world, actorId } = wetPrefix([[500, 500], [510, 500]]);
+    const fact = ownContactFacts(world, 1, actorId)[0]!;
+    const input = { observationId: "resident-wet-contact-hearing", observerId: "independent-listener",
+      observerPosition: translateWorldPosition(fact.sample.position, 500, 0), observedAtTick: world.meta.completedTick + 1,
+      sample: fact.sample, effectiveRangeUnits: fact.sample.soundRangeUnits, ambientNoise: 0, wind: { x: 0, y: 0 } };
+    const heard = evaluatePhysicalAcousticListener(input);
+    expect(heard?.kind).toBe("heard");
+    if (heard?.kind !== "heard") throw new Error("Nearby wet-contact foundation received no real acoustic receipt");
+    expect(heard.observation).toMatchObject({ channel: "hearing", perceivedClass: "physical-slosh", subjectId: null, identification: "anonymous" });
+    expect(heard.observation.area.radiusUnits).toBeGreaterThan(0);
+    expect(heard.observation.area.center).not.toEqual(fact.event.sourcePosition);
+    expect(Object.hasOwn(heard.observation, "sourceId")).toBe(false);
+    expect(Object.hasOwn(heard.observation, "acousticEventId")).toBe(false);
+    expect(evaluatePhysicalAcousticListener({ ...input, observerId: actorId })).toEqual({ kind: "not-heard" });
+    expect(evaluatePhysicalAcousticListener({ ...input, ambientNoise: 1 })).toEqual({ kind: "not-heard" });
+    expect(realizeWorldAcousticText(fact.event, fact.event.durationSteps)).toBeNull();
+    expect(ownContactFacts(world, 1, actorId)).toEqual([fact]);
   });
 });

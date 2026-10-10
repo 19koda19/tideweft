@@ -2074,6 +2074,21 @@ describe("native skill-qualified occupied-source water egress", () => {
     const nativeSources = new Map<string, WorldPosition>();
     const waits = new Map<string, { tick: number; phase: number; depth: number; position: WorldPosition; target: WorldPosition }>();
     const summaries: unknown[] = [];
+    const contactFrames: Array<{
+      tick: number; phase: number;
+      window: Parameters<typeof residentContactAcoustics.deriveResidentContactAcoustics>[1];
+      facts: readonly residentContactAcoustics.ResidentContactAcousticFact[];
+    }> = [];
+    const originalContacts = residentContactAcoustics.deriveResidentContactAcoustics;
+    vi.spyOn(residentContactAcoustics, "deriveResidentContactAcoustics").mockImplementation((...args) => {
+      const facts = originalContacts(...args);
+      if (facts !== null && args[2] === 1) contactFrames.push(structuredClone({
+        tick: args[0].meta.completedTick, phase: args[2],
+        window: { origin: args[1].origin, terrain: { width: args[1].terrain.width, height: args[1].terrain.height } },
+        facts,
+      }));
+      return facts;
+    });
     let seed = "";
     let motionIntervalStartRecord: SaveRecord | undefined;
     let motionIntervalClosedRecord: SaveRecord | undefined;
@@ -2202,6 +2217,18 @@ describe("native skill-qualified occupied-source water egress", () => {
     expect(opportunity.tick).toBeGreaterThan(opportunity.priorWait!.tick);
     console.info("Native source-egress action evidence", JSON.stringify(opportunity));
     expect(opportunity.phase).toBe(1);
+    const nativeFirstContact = contactFrames.find(({ tick, phase }) => tick === action.tick && phase === action.phase);
+    expect(nativeFirstContact).toBeDefined();
+    const { residentTravelBodyIsLocal, residentTravelInteractionFrame } = await import("../sim/residentTravelRoute");
+    const nativeFrame = residentTravelInteractionFrame(nativeFirstContact!.window);
+    expect(nativeFrame).not.toBeNull();
+    expect(residentTravelBodyIsLocal(nativeFrame!, action.source)).toBe(false);
+    expect(nativeFirstContact!.facts.some(({ event }) => event.sourceId === action.actorId)).toBe(false);
+    console.info("Native water acoustic admission evidence", JSON.stringify({
+      tick: action.tick, actorId: action.actorId, window: nativeFirstContact!.window,
+      firstPhaseSources: nativeFirstContact!.facts.map(({ event }) => event.sourceId),
+      ownContact: nativeFirstContact!.facts.find(({ event }) => event.sourceId === action.actorId) ?? null,
+    }));
     expect(motionIntervalStartRecord).toBeDefined();
     expect(motionIntervalClosedRecord).toBeDefined();
     const before = decode(motionIntervalStartRecord!);
@@ -2323,6 +2350,168 @@ describe("native skill-qualified occupied-source water egress", () => {
     // general crossing, loaded transit, gear, injury, manual visual acceptance,
     // long-session liveness or performance claim is implied.
   }, 180_000);
+});
+
+describe("ordinary native resident occupied-water acoustic carry", () => {
+  it("hears the real estuary wet approach at its original phase without captions, cold replay or failed-closing knowledge", async () => {
+    const actorId = "H-v1-p0p0-tg9mg3-4-1xgcisc";
+    const derivations: Array<{ tick: number; phase: number; facts: readonly residentContactAcoustics.ResidentContactAcousticFact[] }> = [];
+    const hearingFrames: Array<{
+      tick: number; samples: readonly humanPerception.PhysicalSoundSample[];
+      phases: readonly humanPerception.HumanSoundSamplePhase[];
+      batches: readonly Pick<humanPerception.HumanObservationBatch, "residentId" | "observerId" | "observations">[];
+    }> = [];
+    const derive = residentContactAcoustics.deriveResidentContactAcoustics;
+    vi.spyOn(residentContactAcoustics, "deriveResidentContactAcoustics").mockImplementation((...args) => {
+      const facts = derive(...args);
+      if (facts !== null) derivations.push({ tick: args[0].meta.completedTick, phase: args[2], facts });
+      return facts;
+    });
+    const collect = humanPerception.collectExistingHumanObservations;
+    vi.spyOn(humanPerception, "collectExistingHumanObservations").mockImplementation((...args) => {
+      const batches = collect(...args);
+      const input = args[0];
+      hearingFrames.push(structuredClone({ tick: input.targetTick, samples: input.physicalSoundSamples ?? [],
+        phases: input.soundSamplePhases ?? [],
+        batches: batches.map(({ residentId, observerId, observations }) => ({ residentId, observerId, observations })),
+      }));
+      return batches;
+    });
+    const repository = new MemoryRepository();
+    const runtime = await open(repository);
+    runtime.dispatchUI({ type: "new-world", seed: "runtime baseline estuary", posture: "journey", sessionShape: "wander" });
+    await runtime.save();
+    const initial = decode(repository.snapshot());
+    const initialWorld = deserializeWorld(initial.world);
+    const source = resolveResidentWorldPlacement(initialWorld, resident(initial, actorId))!.position;
+    expect(source).toMatchObject({ localX: 87_500, localY: 26_500 });
+    expect(initialWorld.residents.every((human) => !Object.hasOwn(human, "activity"))).toBe(true);
+    // Ordinary native waiting and falling tide open the actual north cell.
+    // No terrain, clock, task, need, body, window, listener or result is assigned.
+    advanceOrdinaryFixedSteps(runtime, 50);
+    await runtime.save();
+    const beforeRecord = repository.snapshot();
+    const before = decode(beforeRecord);
+    const beforeWorld = deserializeWorld(before.world);
+    expect(beforeWorld.meta.completedTick).toBe(425);
+    expect(resident(before, actorId).activity!.poses[0]!.position).toEqual(source);
+    expect(resident(before, actorId).activity!.materialTask).toMatchObject({ phase: "approaching", projectId: 15, resource: "medicine" });
+    expect(waterDepthAt(beforeWorld.terrain.tiles[26 * beforeWorld.terrain.width + 87]!, beforeWorld.tide)).toBeGreaterThan(0);
+    expect(beforeWorld.terrain).toEqual(initialWorld.terrain);
+    soundscapePlay.mockClear();
+    advanceOrdinaryFixedSteps(runtime, 4);
+    await runtime.save();
+    const phase4Record = repository.snapshot();
+    const phase4 = decode(phase4Record);
+    const fact = [...derivations].reverse().find(({ tick, phase }) => tick === 425 && phase === 4)?.facts
+      .find(({ event }) => event.sourceId === actorId);
+    if (fact === undefined) throw new Error("Ordinary native estuary water motion produced no in-frame contact");
+    expect(fact).toMatchObject({ phase: 1, event: { sourcePosition: source, surfaceMaterial: "water",
+      semanticFamily: "slosh", interrupt: "none", textualEligibility: "audio-only" } });
+    expect(resident(phase4, actorId).activity!.poses[1]!.position).not.toEqual(source);
+    advanceOrdinaryFixedSteps(runtime, 5);
+    await runtime.save();
+    const phase9Record = repository.snapshot();
+    const phase9 = decode(phase9Record);
+    expect([...derivations].reverse().find(({ tick, phase }) => tick === 425 && phase === 9)?.facts
+      .find(({ event }) => event.sourceId === actorId)).toEqual(fact);
+    const ownAudio = () => soundscapePlay.mock.calls.filter(([, , seed]) => seed === fact.event.presentationVariantSeed);
+    // The actual player is distant; local independent actor hearing is not a
+    // claim that this routine contact plays globally for the player.
+    expect(ownAudio()).toHaveLength(0);
+    expect((runtime.getRenderView().acousticText ?? []).some(({ id }) => id === fact.event.eventId)).toBe(false);
+    expect(runtime.getUIView().expressionCaption?.id).not.toBe(fact.event.eventId);
+    hearingFrames.length = 0;
+    advanceOrdinaryFixedSteps(runtime, 1);
+    await runtime.save();
+    const closedRecord = repository.snapshot();
+    const closed = decode(closedRecord);
+    const closing = hearingFrames.find(({ samples }) => samples.some(({ id }) => id === fact.sample.id));
+    if (closing === undefined) throw new Error("Native estuary slosh never entered actual closing hearing");
+    expect(closing.tick).toBe(426);
+    expect(closing.samples.filter(({ id }) => id === fact.sample.id)).toEqual([fact.sample]);
+    expect(closing.phases.filter(({ sampleId }) => sampleId === fact.sample.id)).toEqual([{ sampleId: fact.sample.id, phase: 1 }]);
+    const receipts = closing.batches.flatMap(({ observerId, residentId, observations }) => observations
+      .filter(({ id }) => id === `hp-h-426-${residentId}-${fact.sample.id}`).map((observation) => ({ observerId, observation })));
+    expect(receipts.length).toBeGreaterThan(0);
+    for (const { observerId, observation } of receipts) {
+      expect(observerId).not.toBe(actorId);
+      expect(observation).toMatchObject({ channel: "hearing", perceivedClass: "physical-slosh", subjectId: null,
+        identification: "anonymous", observedAtTick: 426 });
+      expect(observation.area.radiusUnits).toBeGreaterThanOrEqual(250);
+    }
+    const closedWorld = deserializeWorld(closed.world);
+    const savedHearing = receipts.flatMap(({ observerId, observation }) => {
+      const listener = closedWorld.residents.find(({ identity }) => identity.stableId === observerId);
+      const belief = listener?.perception.beliefs.find(({ sourceObservationId }) => sourceObservationId === observation.id);
+      return belief === undefined ? [] : [{ observerId, observation, belief }];
+    });
+    // Bounded perception need not retain every computed observation, but the
+    // consumer must commit a real anonymous consequence, not just a sidecar.
+    expect(savedHearing.length).toBeGreaterThan(0);
+    for (const { observation, belief } of savedHearing) {
+      expect(belief).toMatchObject({ sourceObservationId: observation.id, channel: "hearing",
+        perceivedClass: "physical-slosh", identification: "anonymous", subjectId: null,
+        area: observation.area, lastObservedTick: 426, strongInterrupt: false });
+    }
+    expect(closed.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expect(ownAudio()).toHaveLength(0);
+    assertWorldInvariants(closedWorld);
+    close(runtime);
+
+    for (const [record, prefix, steps, expected] of [
+      [phase4Record, phase4, 5, phase9], [phase9Record, phase9, 1, closed],
+    ] as const) {
+      const coldRepository = new MemoryRepository(record);
+      soundscapePlay.mockClear();
+      const cold = await open(coldRepository);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(prefix));
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      hearingFrames.length = 0;
+      advanceOrdinaryFixedSteps(cold, steps);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(expected));
+      expect(ownAudio()).toHaveLength(0);
+      if (steps === 1) expect(hearingFrames.find(({ samples }) => samples.some(({ id }) => id === fact.sample.id))).toEqual(closing);
+      close(cold);
+    }
+
+    const failedRepository = new MemoryRepository(phase9Record);
+    const failed = await open(failedRepository);
+    const closure = vi.spyOn(situatedExpressionChannelBank, "closeSituatedExpressionChannelBankInterval").mockReturnValueOnce(null);
+    hearingFrames.length = 0;
+    soundscapePlay.mockClear();
+    advanceOrdinaryFixedStepsForExpectedFailure(failed, 1);
+    expect(hearingFrames.find(({ samples }) => samples.some(({ id }) => id === fact.sample.id))).toEqual(closing);
+    expect(closure).toHaveBeenCalledTimes(1);
+    expect(failed.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+    expect(soundscapePlay.mock.calls).toEqual([["warning", 1]]);
+    await failed.save();
+    const rolledBackRecord = failedRepository.snapshot();
+    expect(authoritativeRoots(decode(rolledBackRecord))).toEqual(authoritativeRoots(phase9));
+    closure.mockRestore();
+    close(failed);
+    const retryRepository = new MemoryRepository(rolledBackRecord);
+    soundscapePlay.mockClear();
+    const retry = await open(retryRepository);
+    advanceOrdinaryFixedSteps(retry, 1);
+    await retry.save();
+    expect(authoritativeRoots(decode(retryRepository.snapshot()))).toEqual(authoritativeRoots(closed));
+    expect(ownAudio()).toHaveLength(0);
+    close(retry);
+    const consumedRepository = new MemoryRepository(closedRecord);
+    soundscapePlay.mockClear();
+    const consumed = await open(consumedRepository);
+    await consumed.save();
+    expect(authoritativeRoots(decode(consumedRepository.snapshot()))).toEqual(authoritativeRoots(closed));
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    console.info("Native estuary water-contact hearing evidence", JSON.stringify({ tick: 425, phase: fact.phase,
+      actorId, source, eventId: fact.event.eventId, listeners: receipts.map(({ observerId }) => observerId),
+      savedListeners: savedHearing.map(({ observerId }) => observerId) }));
+    // One genuine native listener loop, not player playback, normal visual
+    // acceptance, equipment, broad crossings, actor fairness or performance.
+  }, 90_000);
 });
 
 describe("runtime source-anchor transaction foundation", () => {

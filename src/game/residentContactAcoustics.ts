@@ -7,7 +7,7 @@ import { hashCanonical } from "../sim/util";
 import type { LivingActorInteractionWindow } from "./livingActorSimulation";
 import { PHYSICAL_ACOUSTIC_MAX_SAMPLES, createPhysicalSoundSample, type PhysicalSoundSample } from "./physicalAcousticPerception";
 import { acousticMaterialForTerrainContact, createWorldAcousticEvent, type WorldAcousticEvent } from "./worldAcoustics";
-import { WORLD_POSITION_UNITS_PER_TILE, type WorldPosition } from "./worldPosition";
+import { WORLD_POSITION_UNITS_PER_TILE, worldPositionDelta, type WorldPosition } from "./worldPosition";
 
 export interface ResidentContactAcousticFact {
   readonly phase: number;
@@ -19,9 +19,10 @@ export interface ResidentContactAcousticFact {
 export const RESIDENT_CONTACT_ACOUSTIC_MAX_SOURCES = 64;
 
 /**
- * Sparse bare-ground contact from the already accepted current-v8 body prefix.
- * One entered cell per actor/interval represents ordinary dry locomotion, not
- * every microstep or invented tool/gear contact. Older retained protocols are
+ * Sparse surface contact from the already accepted current-v8 body prefix.
+ * One dry cell entry or positive occupied-source water contact per actor/
+ * interval represents actual locomotion, not every microstep or invented
+ * tool/gear contact. Older retained protocols are
  * unchanged until their existing real phase-zero v8 adoption.
  *
  * The prefix itself is the pending-hearing authority: derive before stepWorld
@@ -44,7 +45,7 @@ export function deriveResidentContactAcoustics(
   if (present.length === 0) return Object.freeze([]);
   if (present.length !== world.residents.length) return null;
   const facts: ResidentContactAcousticFact[] = [];
-  const contactStarts = new Map<string, WorldPosition>();
+  const contactEndpoints = new Map<string, readonly [WorldPosition, WorldPosition]>();
   const ids = new Set<string>();
   try {
     for (const resident of present) {
@@ -56,19 +57,30 @@ export function deriveResidentContactAcoustics(
       for (let atPhase = 1; atPhase <= phase; atPhase += 1) {
         const before = activity.poses[atPhase - 1]!.position;
         const after = activity.poses[atPhase]!.position;
-        const from = dryContactTile(world, before);
-        const to = dryContactTile(world, after);
-        if (from === null || to === null || from.index === to.index) continue;
-        const material = acousticMaterialForTerrainContact({ terrain: to.terrain, waterDepth: 0 });
+        const from = contactTile(world, before);
+        const to = contactTile(world, after);
+        if (from === null || to === null) continue;
+        const wetContact = waterDepthAt(from, world.tide) > 0;
+        if (wetContact) {
+          // Current fine locomotion may leave its occupied wet source, not
+          // enter another wet cell. Do not reappraise an accepted prefix using
+          // later reserve, task or aid state. A dry exit still sounds at water.
+          if ((from.index !== to.index && waterDepthAt(to, world.tide) > 0)
+            || !hasPositiveSourceContact(before, after, from)) continue;
+        } else if (waterDepthAt(to, world.tide) !== 0 || from.index === to.index) continue;
+        // This is actual occupied water, even below the shared dog contact
+        // classification threshold; that existing classification stays exact.
+        const material = wetContact ? "water"
+          : acousticMaterialForTerrainContact({ terrain: to.terrain, waterDepth: 0 });
         const triggerEventId = `resident-contact:${activity.tick}:${atPhase}:${hashCanonical({
           seed: world.meta.rootSeed, actorId: activity.actorId, before, after, material,
         })}`;
         const event = createWorldAcousticEvent({
           triggerEventId, domain: "traversal", sourceId: activity.actorId,
-          sourceCategory: "human", sourcePosition: after, occurredAtTick: activity.tick,
+          sourceCategory: "human", sourcePosition: wetContact ? before : after, occurredAtTick: activity.tick,
           action: material === "foliage" ? "brush" : "foot-contact",
           sourceMaterial: "body", surfaceMaterial: material,
-          semanticFamily: material === "foliage" ? "rustle" : material === "stone" ? "scrape" : "thud",
+          semanticFamily: wetContact ? "slosh" : material === "foliage" ? "rustle" : material === "stone" ? "scrape" : "thud",
           intensity: material === "foliage" ? 360_000 : material === "stone" ? 320_000 : 280_000,
           interrupt: "none", rangeUnits: 6 * WORLD_POSITION_UNITS_PER_TILE,
           durationSteps: 3, priority: 280_000, salience: 300_000,
@@ -84,7 +96,7 @@ export function deriveResidentContactAcoustics(
         });
         if (event === null || sample === null) return null;
         facts.push(Object.freeze({ phase: atPhase, event, sample }));
-        contactStarts.set(event.sourceId, before);
+        contactEndpoints.set(event.sourceId, [before, after]);
         break;
       }
     }
@@ -98,13 +110,12 @@ export function deriveResidentContactAcoustics(
   return Object.freeze(facts.sort((left, right) => left.phase - right.phase || (
     left.event.sourceId < right.event.sourceId ? -1 : left.event.sourceId > right.event.sourceId ? 1 : 0
   )).slice(0, PHYSICAL_ACOUSTIC_MAX_SAMPLES).filter(({ event }) => {
-    const before = contactStarts.get(event.sourceId);
-    return before !== undefined && residentTravelBodyIsLocal(frame, before)
-      && residentTravelBodyIsLocal(frame, event.sourcePosition);
+    const endpoints = contactEndpoints.get(event.sourceId);
+    return endpoints !== undefined && endpoints.every((position) => residentTravelBodyIsLocal(frame, position));
   }));
 }
 
-function dryContactTile(world: WorldState, position: WorldPosition): TerrainTile | null {
+function contactTile(world: WorldState, position: WorldPosition): TerrainTile | null {
   // The current resident locomotion owner has no remote generated-body path.
   if (position.region.x !== 0 || position.region.y !== 0) return null;
   const x = Math.floor(position.localX / WORLD_POSITION_UNITS_PER_TILE);
@@ -112,6 +123,16 @@ function dryContactTile(world: WorldState, position: WorldPosition): TerrainTile
   if (x < 0 || y < 0 || x >= world.terrain.width || y >= world.terrain.height) return null;
   const tile = world.terrain.tiles[y * world.terrain.width + x];
   return tile !== undefined && tile.index === y * world.terrain.width + x
-    && tile.x === x && tile.y === y && tile.terrain !== "deep-water"
-    && waterDepthAt(tile, world.tide) === 0 ? tile : null;
+    && tile.x === x && tile.y === y && tile.terrain !== "deep-water" ? tile : null;
+}
+
+/** Positive clipped contact, not mere wet membership at an outward boundary. */
+function hasPositiveSourceContact(before: WorldPosition, after: WorldPosition, tile: TerrainTile): boolean {
+  const delta = worldPositionDelta(before, after);
+  // The current accepted step is <=105 units with outside-cell waypoints at
+  // tile centers. It cannot leave and return in this step; no second distance
+  // or wear algorithm is needed to distinguish zero occupied-source contact.
+  return (delta.x !== 0 || delta.y !== 0)
+    && !(delta.x < 0 && before.localX === tile.x * WORLD_POSITION_UNITS_PER_TILE)
+    && !(delta.y < 0 && before.localY === tile.y * WORLD_POSITION_UNITS_PER_TILE);
 }

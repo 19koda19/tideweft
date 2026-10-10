@@ -241,26 +241,32 @@ function assertResidentContactHearing(envelope: Record<string, unknown>, seed: s
   const world = deserializeWorld(envelope.world as string);
   const listeners = world.residents.map((resident) => ({
     resident,
-    // This production sample namespace belongs to accepted resident tile
+    // This production sample namespace belongs to accepted resident surface
     // contact, not speech, player movement, or identified visual observation.
     beliefs: resident.perception.beliefs.filter(({ sourceObservationId }) => (
       sourceObservationId.includes("-prc-")
     )),
   })).filter(({ beliefs }) => beliefs.length > 0);
   expect(listeners.flatMap(({ beliefs }) => beliefs)).toHaveLength(
-    seed === "runtime baseline estuary" ? 59 : 0,
+    seed === "runtime baseline estuary" ? 50 : 0,
   );
   expect(listeners.map(({ resident }) => resident.id)).toEqual(
     seed === "runtime baseline estuary"
-      ? [64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 82, 83, 84, 100, 101, 102, 103, 104, 105]
+      ? [64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 82, 83, 84, 85, 86, 87]
       : [],
   );
+  const contacts = listeners.flatMap(({ beliefs }) => beliefs);
+  expect(contacts.filter(({ perceivedClass }) => perceivedClass === "physical-thud"))
+    .toHaveLength(seed === "runtime baseline estuary" ? 34 : 0);
+  expect(contacts.filter(({ perceivedClass }) => perceivedClass === "physical-slosh"))
+    .toHaveLength(seed === "runtime baseline estuary" ? 16 : 0);
   for (const { resident, beliefs } of listeners) {
     for (const belief of beliefs) {
       expect(belief).toMatchObject({
-        channel: "hearing", perceivedClass: "physical-thud",
+        channel: "hearing",
         identification: "anonymous", subjectId: null, strongInterrupt: false,
       });
+      expect(["physical-thud", "physical-slosh"]).toContain(belief.perceivedClass);
       expect(belief.sourceObservationId).toMatch(new RegExp(
         `^hp-h-(421|422|423)-${resident.id}-prc-[0-9a-f]{16}$`,
       ));
@@ -370,6 +376,11 @@ describe("runtime performance telemetry", () => {
         // service egress changes real poses and therefore the heard causes.
         // Independent exact-checkpoint captures explain both changes (Research).
         // Neither knowledge nor bodies are stripped to restore an older hash.
+        // Occupied-source water now supplies earlier before-anchored slosh.
+        // The unchanged earliest-eight budget admits those real causes before
+        // later dry contacts; a retained thirty-step capture differs only in
+        // anonymous physical perception and its enclosing checksum/integrity.
+        // Full bodies, other knowledge, economy/custody and dense bytes match.
         assertResidentContactHearing(envelope, seed);
         if (seed === "runtime baseline estuary") {
           const session = envelope.session as Record<string, unknown>;
@@ -397,7 +408,7 @@ describe("runtime performance telemetry", () => {
           });
         }
         const baselineDigests: Readonly<Record<string, string>> = {
-          "runtime baseline estuary": "cd127e124ad5ad6718283e670c5415597662c7d4993d262032772f42d48dfc38",
+          "runtime baseline estuary": "922d9c808e418f350cf9ad7f97a4544b8663080e0f328fc9eeea94b9d870ec56",
           "breathing room regional density 8": "a7b713dd04b7e96e637c441c313ef6bc4b124715ff2ebf4fd39301c5dbbe2944",
         };
         expect(createHash("sha256").update(worldJson).digest("hex")).toBe(baselineDigests[seed]);

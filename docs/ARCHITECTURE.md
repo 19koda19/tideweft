@@ -744,13 +744,26 @@ The local/unpublished resident-contact candidate reuses the current-v8 human
 body prefix rather than the dog-only carry or a new save root. Its existing
 world/save owners authenticate stable identity, tick, task, and all accepted
 phase0–10 poses. `residentContactAcoustics.ts` derives one sparse ordinary
-contact per source/interval from the first actual dry-ground tile entry. Its
-before/after points must both fit the bounded current interaction window for
-admission; leaving that frame never substitutes a later contact. No
-movement, same-cell motion, coarse transport, an unavailable physical source,
-or a frozen older body protocol produces this new contact. Current terrain/tide
-stay fixed during the fine interval; aid-specific contact and future mutable
-surfaces require separately retained causal evidence rather than guessing.
+contact per source/interval from the first actual dry-ground tile entry or
+positive occupied-source water contact. Both terrain records must authenticate
+as nondeep compatibility terrain; both accepted endpoints must fit the bounded
+current interaction window for admission. Leaving that frame never substitutes
+a later contact. No movement, same-cell **dry** motion, coarse transport, an
+unavailable physical source, or a frozen older body protocol produces this
+contact. Current terrain/tide stay fixed during the fine interval; aid-specific
+contact and future mutable surfaces require separately retained causal evidence
+rather than guessing.
+
+The narrow water producer consumes accepted current-v8 source escape, not a
+new swimming capability: the endpoint stays in that same wet cell or reaches
+genuinely dry support, never another wet cell. Actual positive occupied-source
+contact yields water/slosh at the **before** point, including a dry exit. An
+exact lower-edge outward step has zero half-open source contact and stays
+silent; parallel/inward or interior exit contact may qualify. The current
+bounded step/waypoint owner makes this a positive-contact predicate, not a
+second distance/wear algorithm. Later reserve, aid or task changes cannot
+reappraise an already accepted cause. Actual water is classified explicitly;
+the unchanged shared dog contact threshold is not a human water-depth gate.
 
 The unchanged shared terrain classification supplies bare material semantics.
 Opaque seed/actor/tick/phase/pose/material identity determines one immutable
@@ -777,9 +790,14 @@ perception law. Loading phase4/9 preserves the unconsumed history but does not
 play it; consumed phase zero has no adjacent pair to replay. A late failure
 must restore bodies/hearing and release no contact audio. Writer58/carry14 and
 the supported reader set stay unchanged. Controlled native-geometry rest
-pressure establishes a real runtime cause and receipt, not unmodified crowd
-behavior, rendered play, performance, broad human-contact or directive-closure
-proof; Research owns the actual acceptance evidence.
+pressure establishes the dry runtime cause/receipt and once-only player audio.
+An ordinary generated estuary wet approach additionally establishes anonymous
+independent-human hearing at the original phase, cold continuation and late
+rollback without captions; its actual distant player hears no global cue. A
+different native water-egress actor is genuinely off-frame and remains excluded.
+These are representative consumers, not general crowd, rendered wet playback,
+performance, broad human-contact or directive-closure proof; Research owns the
+actual acceptance evidence.
 
 Current fixed-step hearing records accepted physical displacement, not terminal
 velocity: sweep entry moves the body before resetting velocity for the next
@@ -2730,10 +2748,11 @@ current at equal depth. These are bounded source-escape proofs, not complete
 current knowledge, general turbulence/support policy, ordinary crowd/visual proof,
 general wading/crossing or animal evacuation. Shared flow is zero in the
 unchanged35k band; that older band alone is not a current-resistance test.
-Water contact sound remains outside the narrow dry-contact producer rather
-than being fabricated from this access; applicable wet contact, broader support
-and observed-current responses remain with the existing-human integration
-owner. Research owns commands, exact native inputs and evidence limits.
+The [resident contact carry](#resident-dry-contact-acoustic-carry) consumes
+positive accepted occupied-source water movement, not access or task intent
+alone. Broader water contacts/support and observed-current responses remain
+with the existing-human integration owner. Research owns commands, exact native
+inputs and evidence limits.
 
 #### Source-qualified resident tide-anchor service
 

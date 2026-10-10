@@ -6624,6 +6624,102 @@ artifact/interaction checks, not normal assisted-anchor deployment, complete
 tasks/fairness, hardware mobile/audio, performance, soak, ZIP/install/signing,
 other-platform, CI/Pages/deployment or cumulative certification.
 
+### Wet-support cumulative and ordinary attention evidence — 2026-10-10
+
+Exact clean local `e9c665227904e412d0e87015b138f55d22f371b7` passes
+`npm run test:ci -- --reporter=default --reporter=json
+--outputFile=artifacts/validation/world0-water-egress/support-e9c6652-cumulative.json`:
+419 test files /5,421 tests, zero failed/pending,2748.35s. Context28,
+player-facing40 and documentation-reuse45 prerequisites pass. All750 tracked
+input files retain the pre-run digest
+`09d46a1fe1e40dd54132e13b7cf5451349a10ea878710bb3767c010cae04f033`;
+report SHA256 is
+`cf522ddd88798c0c709dab951dde29cf237a68a26a7e002993c711ef36088852`.
+The ignored companion certificate records exact inputs/command/host toolchain.
+This establishes cumulative local correctness for e9, not subsequent executable
+edits, production performance, longitudinal Voice acceptance or directive closure.
+
+A retrospective inspection reuses the unchanged140.293-second ordinary browser
+witness recorded above, rather than repeating it solely for a new assertion.
+Four native humans have public glancing/watching projections at421–422,
+ordinary labels at423 and same-human ration presentation at540 in Relief.
+One representative moves in the public projection during the glance without
+body-heading reversal. Separately the greeted human stays waiting/name-only
+through543–560; absence of a visible watch lock is not a positive post-GREET
+glance-return/work proof. Exact original samples, report and reviewed projection/
+attention source fingerprints match in the ignored `attention-review.json`.
+This is bounded public-presentation evidence, not complete task/knowledge/stock
+traces, pixel legibility, every-human fairness or a separate head/gaze model.
+No new runtime run, task assignment or gameplay change produced this review.
+
+### Resident occupied-source water acoustic carry — 2026-10-10
+
+Local/unpublished construction extends the existing current-v8 accepted human
+body-prefix producer at parent `e9c6652`; it does not add locomotion, a sound
+save root, captions, gear, or another hearing pipeline. The first positive
+occupied-source water contact yields one routine before-anchored slosh. Both
+nondeep terrain records and both bounded-frame endpoints authenticate; a wet
+neighbor destination or exact lower-edge outward zero contact stays silent.
+Dry contact identities, frozen v1–v7 silence, occurrence-first eight-slot
+admission, actual listener poses and transactional release remain unchanged.
+Later reserve/task/aid changes cannot erase an already accepted cause.
+
+The ordinary `runtime baseline estuary` journey reaches425 through50 accepted
+fixed steps without assigning terrain, clock, task, body, needs or listener.
+Generated human86 at(87.5,26.5) selects existing medicine project15 and moves
+from its wet source after the tide opens a dry north neighbor. Its phase-one
+`acoustic:traversal:c7c569d26dcb6627` reaches five actual independent human
+listeners at closing426 as anonymous `physical-slosh`, with uncertain area and
+no hidden identity. The real distant player receives no global audio or caption.
+Exact phase4/9 complete saved-root cold continuation, consumed/load nonreplay,
+late-channel-closure rollback of knowledge and cold retry pass. Only established
+session recap/envelope integrity are excluded from root equality.
+
+The separate ordinary445 positive-current source-egress witness is genuinely
+outside frame(-56,-4)/120×120 and yields no admitted contact. A source-centered
+lower-owner generated445 fixture does establish before-anchored contact,
+retention after dry arrival and exact cold consumption, but it is FOUNDATION,
+not runtime admission or player playback. Positive/masked/self-excluded hearing,
+half-open boundary contrasts, malformed/deep/remote/wet-neighbor rejection,
+both-endpoint rebase and early-wet/later-dry admission are directly tested.
+
+Focused command `npx vitest run src/game/runtime.residentRest.integration.test.ts
+-t 'hears real sparse rest-approach contact|selects real native service, waits|hears
+the real estuary wet approach' --maxWorkers=1` passes3 selected/19 unselected
+cases,37.06s; ignored JSON `wet-contact-runtime-group.json` retains exact result.
+The complete contact/shared-acoustic/human-perception domain selection passes
+8 files/159 tests,34.28s, in `wet-contact-hearing-domain.json`; unchanged old
+producer26 cases remain, with17 additive water cases. Typecheck passes.
+The full resident-rest file passes all22 cases in the original two-file domain
+run; that report remains **FAIL**, because the telemetry oracle still expected
+59 old dry contacts. Its failure was investigated rather than hidden. A retained
+real thirty-step current58 capture, whose golden passed the clean e9 cumulative,
+was compared with a new production capture at equal accepted work. Estuary
+changes only anonymous physical perception and enclosing checksums/integrity:
+34 surviving dry receipts are unchanged,16 new sloshes occupy earlier slots,
+and25 later dry receipts are no longer admitted under the same eight-event
+budget. Bodies/tasks, other knowledge, cargo, stock, events and all other roots
+match; dense saved bytes match completely. Existing attention/pressure consumes
+those changed lawful observations; no new threat rule is introduced.
+The independently reviewed updated oracle retains full-save, complete-cohort
+body and instrumentation-on/off equality. Its final four tests pass,29.84s;
+estuary worldJson SHA256 is
+`922d9c808e418f350cf9ad7f97a4544b8663080e0f328fc9eeea94b9d870ec56`,
+dense stays `a7b713dd04b7e96e637c441c313ef6bc4b124715ff2ebf4fd39301c5dbbe2944`.
+The final strengthened native case passes separately,19.72s: all five actual
+listeners commit anonymous slosh beliefs, not merely computed observations.
+The existing later-interval introduction/save/vocal-audio rollback case passes
+1 selected/97 unselected,7.48s. Critical `npm run test:smoke` passes6 files/
+105 tests,4.21s; context28/documentation-reuse45 and final typecheck pass.
+Exact commands and original failed/final passed JSON reports remain in the
+ignored local validation checkpoint. These are correctness characterizations,
+not CPU, FPS, memory or production audio measurements.
+This establishes one real anonymous listener loop, not wet player playback,
+normal wet visual/audio acceptance, all-population liveness/fairness, production
+performance, broad crossings/animals or directive closure. Writer58/carry14,
+supported readers, dependencies and upstream source stay unchanged. The e9
+cumulative certificate above does not certify these subsequent executable edits.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
