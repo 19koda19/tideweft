@@ -8089,8 +8089,14 @@ actual mean1.493ms;1,101 safely bracketed samples carry1,550.236ms of weight
 against1,709.800ms callback wall time. These are attribution weights, not
 unsampled durations or equal-work/repair proof. V6 util leaf caller weights are
 26.572ms beneath breadth receipt seeding and11.742ms beneath lineage hashing.
-Post-world `refreshViews` has197.641ms inclusive weight, including98.915ms
-under player-perception projection. Inclusive parents overlap and must not be
+Post-world `refreshViews` has197.641ms inclusive weight. Across all advancing
+callback samples, player-perception projection has98.915ms inclusive weight,
+of which92.913ms is outside that post-world presentation subtree; these are
+not one nested attribution. Disjoint advancing-callback ancestry attributes
+462.793ms to V6 commit,199.144ms to subsequent presentation and888.299ms to
+other callback work (not exclusively the world block). Within presentation,
+active ecology projection112.036ms includes binding67.485ms, while
+`projectGameView` carries54.061ms. Inclusive parents overlap and must not be
 added. Child-input repetition alone does not establish a worthwhile gain;
 remaining perception/publication work needs its own original-input census.
 No application optimization, browser attribution or standing-gate pass is
