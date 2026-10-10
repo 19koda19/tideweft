@@ -7160,7 +7160,7 @@ global fairness or long-session certification.
 
 ### Same-epoch closure publication experiment — 2026-10-10
 
-**Correctness candidate; production benefit not yet verified.** Starting clean
+**Retained bounded work reduction; world-cost gate remains incomplete.** Starting clean
 local `d1b0b752b2c4f0b9c53ed6b71ac9c31064ab2b87` retains the preceding terrain
 receipt repair. The exact shipped ASAR is
 `0094448def5d5a44105a43b8a9a72cd08feb02468c4742e5bfbec0d2a7c280cb`, JS
@@ -7206,8 +7206,62 @@ the original late introduction/save/audio rollback case (97 unselected).
 Context28 and documentation-reuse45 self-tests pass. Acoustic/save summaries
 are reopened and unchanged; only their owner fingerprints follow the new
 publication paragraph. No summary replaces its canonical law.
-The original short scenario budgets remain frozen; confirmation follows with
-the existing production runners, without a sampler or competing workloads.
+The candidate is committed locally as `908cead493155ddc77373d62b6f3e47fff25ce46`.
+Its ASAR is `4f5b37c8c2253b50b846a6622d04a9494d104993ef46ce4ce92852940effaed8`,
+JS `6f54f98b74794f98544fad7c0dbe0b41f1855cc483184f2daef1ca3971f90504`.
+Exact comparison authenticates all seven checkout/dist runtime files in the
+ten-entry archive. `npm run package:desktop`, `npm run smoke:web` and fresh
+normal macOS arm64 `smoke:desktop` pass; desktop/mobile Relief screenshots are
+actually inspected. Static smoke serves the five generated files at `/tideweft/`.
+No ZIP, installation, signing, other-OS, physical-mobile or deployment proof is
+claimed. Finder-only `.DS_Store` blocked the first packaging attempt; moving
+that metadata aside and removing the empty generated output permits an unchanged
+retry. No player data is removed.
+
+Production confirmation uses the existing `profile:baseline` estuary desktop
+Relief scenario and `profile:browser -- --packaged-baseline <matching capture>`:
+two15s windows per platform,30 renderer warm-up frames,1440×900 CSS/DPR1,
+unchanged quality, AC Apple M4/16GiB, macOS26.5.2, Low Power Mode off,
+Electron44.1.0 and Firefox157, sequential with no sampler or competing tests.
+Before is the exact preceding terrain-receipt artifact, not Alpha64 source.
+Arithmetic means of per-run means give the following bounded observations:
+
+| Platform / comparison | Inclusive world mean ms before → after | Draw CPU mean ms before → after | Renderer callbacks/s before → after |
+|---|---|---|---|
+| Electron, original pair | 102.029 → 97.736 | 23.990 → 25.359 | 33.843 → 32.283 |
+| Firefox, original pair | 174.367 → 170.933 | 20.710 → 21.050 | 29.875 → 29.706 |
+| Electron, matched recheck | 101.150 → 98.036 | 23.962 → 23.959 | 33.733 → 34.068 |
+| Firefox, matched recheck | 173.467 → 168.200 | 20.679 → 20.450 | 29.988 → 30.168 |
+
+The initial draw/callback changes therefore do not establish a repeatable
+penalty or an FPS gain. The recheck builds clean `d1b0b75` in an isolated
+detached worktree through normal Forge, verifies the same frozen BEFORE ASAR/JS,
+then alternates BEFORE/AFTER per platform. A prior direct archive-replay attempt
+correctly fails Electron's embedded header integrity before gameplay; the
+candidate bytes are restored exactly. That failure is not a timed sample and
+no fuse, security policy or archive-integrity safeguard is weakened.
+
+All Electron windows accept149 steps/14 advances,420→434. Original Firefox
+BEFORE windows accept152/151 steps, AFTER150/152; its recheck accepts152 on
+both sides, all15 advances/420→435. Wall windows are not an authoritative
+equal-work comparison. Exact-work proof remains the independent native tests
+above. In the recheck, observed-aftermath mean falls9.579→6.693ms Electron
+and9.667→6.000ms Firefox, consistent with the selected publication owner.
+The original AFTER world maxima/p99 are127.9/128.0ms Electron and239/212ms
+Firefox; recheck130.1/186ms versus control130.9/203ms. Renderer callback p99
+gaps are131.7/131.7 and200/197ms originally; recheck126.1/197ms, with worst
+159.2/206ms versus control153.5/225ms. Sparse14/15 advance observations make
+world p99 essentially max; p50/p95 and a population-tail claim are unavailable.
+
+**Retain only the measured few-millisecond publication reduction**, not hitch
+removal, reliable callback-tail improvement or a passed transition. Frozen
+inclusive-world limits94.661/163.8ms still fail; Firefox callback minimum30.545/s
+also fails. Original endpoint six pending counters are zero, all supplied caps
+pass and explicit tail saves stay below4MiB. Recheck saves are1,980,354B Electron
+and1,948,809B Firefox. Heap points remain GC-sensitive, not growth evidence.
+No timed autosave, backlog/input-latency, travel, acoustic saturation or prolonged
+soak is certified. Existing full-Foliage deferrals and accepted older hitch
+remain distinct from this unfinished current regression gate.
 Dependency changes: NONE. Upstream p5/Electron source modified: NO.
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
