@@ -61,6 +61,7 @@ import {
 } from "./perceptionPresentation";
 import {
   commandForWorldTap,
+  createWorldPointerHitCycle,
   routePointerTargetIsDirectlyPerceived,
   usesCoarseWorldPointer,
   validatePerceivedEntityCommand,
@@ -414,6 +415,7 @@ export function createTideweftRenderer(
   let latestView: TideweftView | null = null;
   let active = true;
   let hoverTarget: HoverTarget | null = null;
+  const pointerHitCycle = createWorldPointerHitCycle<HoverTarget>();
   let pointerWorld: WorldPoint | null = null;
   let clickCandidate: ClickCandidate | null = null;
   let parcelPress: LooseCargoPointerPress | null = null;
@@ -539,6 +541,7 @@ export function createTideweftRenderer(
   };
 
   const invalidateSpatialInteraction = (): void => {
+    pointerHitCycle.reset();
     const capturedPointerIds = [...touchSequence.activePointerIds];
     if (clickCandidate) capturedPointerIds.push(clickCandidate.pointerId);
     if (parcelPress) capturedPointerIds.push(parcelPress.pointerId);
@@ -654,21 +657,18 @@ export function createTideweftRenderer(
     (parcel) => worldToScreen(parcel.position),
   );
 
-  const findHoverTarget = (point: WorldPoint): HoverTarget | null => {
+  const findHoverTarget = (point: WorldPoint, advance = false): HoverTarget | null => {
     const view = latestView;
     if (!view) return null;
     const settlementRadius = 25 / Math.max(camera.zoom, 0.01);
-    let nearest: { target: HoverTarget; distance: number } | null = null;
+    const hits = pointerHitCycle.begin();
 
     for (const settlement of view.settlements) {
       if (settlement.discovered === false) continue;
       if (currentSettlementVisibility(settlement, view.perception !== undefined) < 1) continue;
       const distance = distanceSquared(point, settlement.position);
-      if (distance <= settlementRadius * settlementRadius && (!nearest || distance < nearest.distance)) {
-        nearest = {
-          target: { entity: "settlement", id: settlement.id },
-          distance,
-        };
+      if (distance <= settlementRadius * settlementRadius) {
+        hits.consider({ entity: "settlement", id: settlement.id }, distance);
       }
     }
 
@@ -684,19 +684,16 @@ export function createTideweftRenderer(
       point,
       resourceRadius,
     );
-    if (resourceHit && (!nearest || resourceHit.distanceSquared < nearest.distance)) {
-      nearest = {
-        target: { entity: "resource", id: resourceHit.node.id },
-        distance: resourceHit.distanceSquared,
-      };
+    if (resourceHit) {
+      hits.consider({ entity: "resource", id: resourceHit.node.id }, resourceHit.distanceSquared);
     }
 
     const porterRadius = 22 / Math.max(camera.zoom, 0.01);
     for (const porter of view.porters) {
       if (!isWithinPlayerRecognitionRange(view, porter.position)) continue;
       const distance = distanceSquared(point, porter.position);
-      if (distance <= porterRadius * porterRadius && (!nearest || distance < nearest.distance)) {
-        nearest = { target: { entity: "porter", id: porter.id }, distance };
+      if (distance <= porterRadius * porterRadius) {
+        hits.consider({ entity: "porter", id: porter.id }, distance);
       }
     }
 
@@ -707,15 +704,8 @@ export function createTideweftRenderer(
     for (const dog of view.dogs ?? []) {
       if (!isWithinPlayerRecognitionRange(view, dog.position)) continue;
       const distance = distanceSquared(point, dog.position);
-      if (distance <= dogRadius * dogRadius && (!nearest || distance < nearest.distance)) {
-        nearest = {
-          target: {
-            entity: "living-actor",
-            species: "domestic-dog",
-            id: dog.actorId,
-          },
-          distance,
-        };
+      if (distance <= dogRadius * dogRadius) {
+        hits.consider({ entity: "living-actor", species: "domestic-dog", id: dog.actorId }, distance);
       }
     }
 
@@ -730,15 +720,8 @@ export function createTideweftRenderer(
         22 / Math.max(camera.zoom, 0.01),
       );
       const distance = distanceSquared(point, actor.position);
-      if (distance <= wildlifeRadius * wildlifeRadius && (!nearest || distance < nearest.distance)) {
-        nearest = {
-          target: {
-            entity: "living-actor",
-            species: actor.species,
-            id: actor.actorId,
-          },
-          distance,
-        };
+      if (distance <= wildlifeRadius * wildlifeRadius) {
+        hits.consider({ entity: "living-actor", species: actor.species, id: actor.actorId }, distance);
       }
     }
 
@@ -749,11 +732,8 @@ export function createTideweftRenderer(
     for (const carcass of view.wildlifeCarcasses ?? []) {
       if (!isWithinPlayerRecognitionRange(view, carcass.position)) continue;
       const distance = distanceSquared(point, carcass.position);
-      if (distance <= carcassRadius ** 2 && (!nearest || distance < nearest.distance)) {
-        nearest = {
-          target: { entity: "wildlife-carcass", id: carcass.carcassId },
-          distance,
-        };
+      if (distance <= carcassRadius ** 2) {
+        hits.consider({ entity: "wildlife-carcass", id: carcass.carcassId }, distance);
       }
     }
 
@@ -765,16 +745,9 @@ export function createTideweftRenderer(
       if (evidence.representation !== "population-evidence") continue;
       if (!isWithinPlayerRecognitionRange(view, evidence.position)) continue;
       const distance = distanceSquared(point, evidence.position);
-      if (distance <= evidenceRadius ** 2 && (!nearest || distance < nearest.distance)) {
-        nearest = {
-          target: {
-            entity: "aggregate-wildlife-evidence",
-            species: evidence.species,
-            aggregateId: evidence.aggregateId,
-            evidenceId: evidence.evidenceId,
-          },
-          distance,
-        };
+      if (distance <= evidenceRadius ** 2) {
+        hits.consider({ entity: "aggregate-wildlife-evidence", species: evidence.species,
+          aggregateId: evidence.aggregateId, evidenceId: evidence.evidenceId }, distance);
       }
     }
 
@@ -782,12 +755,12 @@ export function createTideweftRenderer(
       const routeRadius = 10 / Math.max(camera.zoom, 0.01);
       for (const route of view.routes) {
         const distance = routeDistanceSquared(point, route);
-        if (distance <= routeRadius * routeRadius && (!nearest || distance < nearest.distance)) {
-          nearest = { target: { entity: "route", id: route.id }, distance };
+        if (distance <= routeRadius * routeRadius) {
+          hits.consider({ entity: "route", id: route.id }, distance);
         }
       }
     }
-    return nearest?.target ?? null;
+    return hits.resolve(advance);
   };
 
   const pulseScan = (point?: WorldPoint): void => {
@@ -1056,7 +1029,7 @@ export function createTideweftRenderer(
       }
       const point = clientToWorld(event.clientX, event.clientY);
       pointerWorld = point;
-      const target = findHoverTarget(point);
+      const target = findHoverTarget(point, true);
       const view = latestView;
       if (view) emit(commandForWorldTap(
         view,
@@ -6015,6 +5988,7 @@ export function createTideweftRenderer(
         return;
       }
       if (!nextActive) {
+        pointerHitCycle.reset();
         releaseActiveTouchPointerCaptures();
         clickCandidate = null;
         parcelPress = null;
@@ -6048,6 +6022,7 @@ export function createTideweftRenderer(
     },
     pulseScan,
     destroy: () => {
+      pointerHitCycle.reset();
       telemetry.setActive(false);
       releaseActiveTouchPointerCaptures();
       clickCandidate = null;

@@ -710,6 +710,136 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+describe("Relief coincident world pointer selection", () => {
+  const point = { x: 48, y: 48 };
+  const overlapView = (ids = ["90", "89", "88"]): TideweftView => {
+    const base = view("relief-overlap-fixture", point);
+    return {
+      ...base,
+      perception: {
+        version: 3, signature: "direct-overlap-fixture", valid: true,
+        visibleTileCount: 16, directTileCount: 16, peripheralTileCount: 0,
+        detailVisibleTileCount: 16, detailDirectTileCount: 16, detailPeripheralTileCount: 0,
+      },
+      terrain: { ...base.terrain, tiles: base.terrain.tiles.map((tile) => ({
+        ...tile, currentVisibility: 1, currentDetailVisibility: 1 as const,
+      })) },
+      settlements: [{ id: "harbor", name: "Visible harbor", position: point,
+        population: 3, status: "steady", connection: 1, stress: 0,
+        discovered: true, currentVisibility: 1, selected: false }],
+      porters: ids.map((id) => ({ actorId: `human:visible-${id}`, id,
+        quickLabel: "Unknown resident", position: point, facing: 0,
+        state: "waiting" as const, selected: false })),
+    };
+  };
+
+  it.each([["90", "89", "88"], ["88", "89", "90"]])(
+    "physically reaches every coincident human and the harbor independent of input order %s",
+    (...ids) => {
+      vi.stubGlobal("performance", { now: () => 0 });
+      let current = overlapView(ids);
+      const harness = renderHarness(current);
+      // Only the surface intersection is fixed; actual picking and the
+      // release-frame perception validator remain in the production path.
+      const ray = vi.spyOn(reliefCamera, "screenToDiscoveredReliefSurface").mockReturnValue(point);
+      try {
+        harness.draw();
+        const expected = [
+          ["porter", "88"], ["porter", "89"], ["porter", "90"],
+          ["settlement", "harbor"], ["porter", "88"],
+        ] as const;
+        for (const [index, [entity, id]] of expected.entries()) {
+          const before = JSON.stringify(current);
+          // Hover/draw queries must not consume the repeated-click choice.
+          harness.canvas.fire("pointermove", pointer(harness.canvas));
+          harness.canvas.fire("pointermove", pointer(harness.canvas));
+          harness.draw();
+          const event = pointer(harness.canvas, { pointerId: 300 + index });
+          harness.canvas.fire("pointerdown", event);
+          harness.canvas.fire("pointerup", event);
+          expect(harness.dispatch.mock.calls.at(-1)?.[0]).toEqual({
+            type: "select", entity, id, point,
+          });
+          expect(JSON.stringify(current)).toBe(before);
+          // Emulate only the public selected projection and ABOUT closing;
+          // this fixture does not enact a world action or learn a name.
+          current = { ...current,
+            porters: current.porters.map((porter) => ({ ...porter, selected: entity === "porter" && porter.id === id })),
+            settlements: current.settlements.map((settlement) => ({ ...settlement, selected: entity === "settlement" && settlement.id === id })),
+          };
+          harness.setView(current);
+          harness.draw();
+          current = { ...current,
+            porters: current.porters.map((porter) => ({ ...porter, selected: false })),
+            settlements: current.settlements.map((settlement) => ({ ...settlement, selected: false })),
+          };
+          harness.setView(current);
+          harness.draw();
+          // Actual focus transfer to ABOUT/close must release input but
+          // preserve the next coincident-target choice on returning to canvas.
+          harness.canvas.fire("blur", pointer(harness.canvas));
+        }
+        expect(harness.dispatch.mock.calls.filter(([command]) => command.type === "select"))
+          .toHaveLength(expected.length);
+      } finally { ray.mockRestore(); harness.renderer.destroy(); }
+    },
+  );
+
+  it("keeps a strictly closer harbor ahead of overlapping but non-tied humans", () => {
+    vi.stubGlobal("performance", { now: () => 0 });
+    const base = overlapView();
+    const current: TideweftView = { ...base, porters: base.porters.map((porter) => ({
+      ...porter, position: { x: point.x + 2, y: point.y },
+    })) };
+    const before = JSON.stringify(current), harness = renderHarness(current);
+    const ray = vi.spyOn(reliefCamera, "screenToDiscoveredReliefSurface").mockReturnValue(point);
+    try {
+      harness.draw();
+      for (const pointerId of [310, 311]) {
+        const event = pointer(harness.canvas, { pointerId });
+        harness.canvas.fire("pointerdown", event);
+        harness.canvas.fire("pointerup", event);
+      }
+      expect(harness.dispatch.mock.calls.map(([command]) => command)).toEqual([
+        { type: "select", entity: "settlement", id: "harbor", point },
+        { type: "select", entity: "settlement", id: "harbor", point },
+      ]);
+      expect(JSON.stringify(current)).toBe(before);
+    } finally { ray.mockRestore(); harness.renderer.destroy(); }
+  });
+
+  it.each(["removed", "detail lost"] as const)(
+    "does not select the pressed human after its release-frame projection is %s",
+    (change) => {
+      vi.stubGlobal("performance", { now: () => 0 });
+      let current = overlapView();
+      const harness = renderHarness(current);
+      const ray = vi.spyOn(reliefCamera, "screenToDiscoveredReliefSurface").mockReturnValue(point);
+      try {
+        harness.draw();
+        const event = pointer(harness.canvas, { pointerId: 320 });
+        harness.canvas.fire("pointerdown", event);
+        current = change === "removed"
+          ? { ...current, porters: current.porters.filter((porter) => porter.id !== "88") }
+          : { ...current,
+              perception: { ...current.perception!, signature: "obscured-overlap-fixture",
+                detailVisibleTileCount: 0, detailDirectTileCount: 0 },
+              terrain: { ...current.terrain, tiles: current.terrain.tiles.map((tile) => ({
+                ...tile, currentDetailVisibility: 0 as const,
+              })) },
+            };
+        harness.setView(current);
+        const before = JSON.stringify(current);
+        harness.canvas.fire("pointerup", event);
+        expect(harness.dispatch.mock.calls.at(-1)?.[0]).toEqual(change === "removed"
+          ? { type: "select", entity: "porter", id: "89", point }
+          : { type: "move-target", point, additive: false });
+        expect(JSON.stringify(current)).toBe(before);
+      } finally { ray.mockRestore(); harness.renderer.destroy(); }
+    },
+  );
+});
+
 describe("Relief focus accessibility", () => {
   it("retains an explicit reduced-motion focus through the next frame without easing or extending its lease", () => {
     p5Harness.reducedMotion = true;

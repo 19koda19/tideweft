@@ -4819,6 +4819,17 @@ marker, route-memory, name, distance, bearing, camera-focus, Relief ring/label,
 and hit-target channels: approximate knowledge can never route or focus an
 exact undiscovered point.
 
+Both renderers use the shared `worldTap.ts` exact-nearest hit policy. When
+eligible public targets have exactly equal pointer distance, a human precedes
+the harbor marker and repeated releases cycle the same stable-ID tie group,
+including the harbor; merely hovering does not advance it. A strictly nearer
+target still wins, with no widened radius or approximate-distance tie. This
+disposable input cursor resets on spatial invalidation or view deactivation;
+it neither moves bodies nor persists selection history. Current perception
+filters and release-frame command validation still exclude hidden or removed
+targets. Touch harbor routing retains its existing semantics when its turn is
+selected. This repairs coincident-target access, not general label layout.
+
 At widths at or below 44rem—or at short landscape sizes no wider than 64rem—CSS removes the duplicate desktop HUD and folds the detailed objective, Promises, and inspector surfaces when the UI shell's disclosure flag is false. The shell starts compact and exposes a native 44-pixel `PROMISES + / PROMISES −` button whose `aria-expanded` state controls only the identified Promises surface. The compact strip is a translucent four-column projection of Stamina, Stability, Loom, and Cargo, with values and native progress semantics, followed by route and immediate safety/terrain cause. It deliberately hides keyboard-instruction copy; the large touch action dock remains reachable. The disclosure opens the existing scrollable Promises DOM as one full safe-area sheet, while settlement interaction opens the inspector as a mutually exclusive sheet. Neither disclosure nor sheet mode enters game saves.
 
 The current CSS layer intentionally narrows the title and field palette to black/charcoal/off-white with small seafoam and gold semantic accents, hairline borders, and minimal blur. This is presentation-only; it does not fork DOM structure or gameplay between web and Electron.

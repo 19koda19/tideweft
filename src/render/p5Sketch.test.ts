@@ -1378,6 +1378,165 @@ describe("Chart shared outdoor illumination", () => {
   });
 });
 
+describe("Chart overlapping human and harbor selection", () => {
+  const humanIds = ["porter:Z", "porter:a", "porter:z"] as const;
+
+  function overlapView(reverse: boolean): TideweftView {
+    const point = { x: 12, y: 12 };
+    const base = view("chart-overlap", point);
+    // Renderer-boundary fixture: these unknown public humans have already
+    // passed direct-detail sight. This is not a simulation perception receipt.
+    return {
+      ...base,
+      perception: { version: 3, signature: "chart-overlap-direct", valid: true,
+        visibleTileCount: 1, directTileCount: 1, peripheralTileCount: 0,
+        detailVisibleTileCount: 1, detailDirectTileCount: 1, detailPeripheralTileCount: 0 },
+      terrain: { ...base.terrain, tiles: [{ kind: "meadow", elevation: 0.2,
+        discovered: 1, currentVisibility: 1, currentDetailVisibility: 1 }] },
+      settlements: [{ id: "harbor:overlap", name: "Overlap Harbor", position: point,
+        population: 3, status: "steady", connection: 1, stress: 0,
+        discovered: true, currentVisibility: 1 }],
+      porters: (reverse ? [...humanIds].reverse() : humanIds).map((id) => ({
+        actorId: `human:${id}`, id, quickLabel: "Unknown resident", position: point,
+        facing: 0, state: "waiting", selected: false,
+      })),
+    };
+  }
+
+  it.each([false, true])("cycles exact-distance public humans before their harbor independently of reversed order %s", (reverse) => {
+    p5Harness.reducedMotion = true;
+    const current = overlapView(reverse), before = JSON.stringify(current);
+    const commands: RendererCommand[] = [];
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: (command) => commands.push(command),
+    });
+    try {
+      draw();
+      for (let index = 0; index < 5; index += 1) {
+        // Hover is presentation only: it must not consume a physical release.
+        canvas.emit("pointermove", { pointerId: index + 1 });
+        canvas.emit("pointermove", { pointerId: index + 1 });
+        canvas.emit("pointerdown", { pointerId: index + 1 });
+        canvas.emit("pointerup", { pointerId: index + 1 });
+        // ABOUT and close transfer focus away from the canvas between taps.
+        canvas.emit("blur");
+        expect(JSON.stringify(current)).toBe(before);
+      }
+      expect(commands.filter((command) => command.type === "select")).toEqual([
+        ...humanIds.map((id) => ({ type: "select", entity: "porter", id, point: { x: 12, y: 12 } })),
+        { type: "select", entity: "settlement", id: "harbor:overlap", point: { x: 12, y: 12 } },
+        { type: "select", entity: "porter", id: humanIds[0], point: { x: 12, y: 12 } },
+      ]);
+    } finally { renderer.destroy(); }
+  });
+
+  it("cycles touch releases through humans while retaining the harbor's coarse travel command", () => {
+    const current = overlapView(true), before = JSON.stringify(current);
+    const commands: RendererCommand[] = [];
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: (command) => commands.push(command),
+    });
+    try {
+      draw();
+      for (let index = 0; index < 4; index += 1) {
+        canvas.emit("pointerdown", { pointerId: index + 1, pointerType: "touch" });
+        canvas.emit("pointerup", { pointerId: index + 1, pointerType: "touch" });
+      }
+      expect(commands).toEqual([
+        ...humanIds.map((id) => ({ type: "select", entity: "porter", id, point: { x: 12, y: 12 } })),
+        { type: "move-target", point: { x: 12, y: 12 }, additive: false },
+      ]);
+      expect(JSON.stringify(current)).toBe(before);
+    } finally { renderer.destroy(); }
+  });
+
+  it("keeps a genuinely closer harbor ahead of all nontied humans", () => {
+    const base = overlapView(true);
+    const current: TideweftView = { ...base,
+      porters: base.porters.map((porter) => ({ ...porter, position: { x: 13, y: 12 } })) };
+    const before = JSON.stringify(current), commands: RendererCommand[] = [];
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: (command) => commands.push(command),
+    });
+    try {
+      draw();
+      for (let index = 0; index < 4; index += 1) {
+        canvas.emit("pointerdown", { pointerId: index + 1 });
+        canvas.emit("pointerup", { pointerId: index + 1 });
+      }
+      expect(commands).toEqual(Array.from({ length: 4 }, () => ({
+        type: "select", entity: "settlement", id: "harbor:overlap", point: { x: 12, y: 12 },
+      })));
+      expect(JSON.stringify(current)).toBe(before);
+    } finally { renderer.destroy(); }
+  });
+
+  it.each(["removed", "hidden"] as const)("excludes humans made %s between physical press and release", (change) => {
+    let current = overlapView(true);
+    const original = JSON.stringify(current), commands: RendererCommand[] = [];
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: (command) => commands.push(command),
+    });
+    try {
+      draw();
+      canvas.emit("pointerdown", { pointerId: 41 });
+      current = change === "removed"
+        ? { ...current, porters: current.porters.filter((porter) => porter.id !== humanIds[0]) }
+        : { ...current, terrain: { ...current.terrain,
+            tiles: current.terrain.tiles.map((tile) => ({ ...tile, currentDetailVisibility: 0 })) } };
+      const changed = JSON.stringify(current);
+      expect(changed).not.toBe(original);
+      draw();
+      canvas.emit("pointerup", { pointerId: 41 });
+      // Losing detail on this shared tile hides the harbor's exact inspection
+      // too. The unchanged release validator must fall back to ordinary travel,
+      // not grant a hidden settlement selection just because its broad marker remains.
+      expect(commands).toEqual([change === "removed"
+        ? { type: "select", entity: "porter", id: humanIds[1], point: { x: 12, y: 12 } }
+        : { type: "move-target", point: { x: 12, y: 12 }, additive: false }]);
+      expect(JSON.stringify(current)).toBe(changed);
+    } finally { renderer.destroy(); }
+  });
+
+  it.each(["spatial", "view"] as const)("resets the ephemeral tie cursor after %s invalidation", (invalidation) => {
+    let current = overlapView(true);
+    const commands: RendererCommand[] = [];
+    const renderer = createTideweftRenderer({
+      mount: { getBoundingClientRect: () => canvas.getBoundingClientRect() } as HTMLElement,
+      getView: () => current,
+      dispatch: (command) => commands.push(command),
+    });
+    const click = (pointerId: number): void => {
+      canvas.emit("pointerdown", { pointerId });
+      canvas.emit("pointerup", { pointerId });
+    };
+    try {
+      draw();
+      click(51);
+      click(52);
+      if (invalidation === "spatial") current = { ...current, spatialEpoch: "chart-overlap-rebased" };
+      else {
+        renderer.setActive?.(false);
+        renderer.setActive?.(true);
+      }
+      const before = JSON.stringify(current);
+      draw();
+      click(53);
+      expect(commands.flatMap((command) => command.type === "select" && "id" in command ? [command.id] : []))
+        .toEqual([humanIds[0], humanIds[1], humanIds[0]]);
+      expect(JSON.stringify(current)).toBe(before);
+    } finally { renderer.destroy(); }
+  });
+});
+
 describe("Chart spatial epoch gate", () => {
   it("keeps legacy, first-defined, repeated, and temporarily absent epochs compatible", () => {
     let current = view(undefined);

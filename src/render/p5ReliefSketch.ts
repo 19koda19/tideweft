@@ -118,6 +118,7 @@ import {
 } from "./perceptionPresentation";
 import {
   commandForWorldTap,
+  createWorldPointerHitCycle,
   routePointerTargetIsDirectlyPerceived,
   usesCoarseWorldPointer,
   validatePerceivedEntityCommand,
@@ -589,6 +590,7 @@ export function createTideweftReliefRenderer(
   let pointerWorld: WorldPoint | null = null;
   let hoverParcelId: string | null = null;
   let hoverTarget: ReliefHoverTarget | null = null;
+  const pointerHitCycle = createWorldPointerHitCycle<ReliefHoverTarget>();
   let hasObservedSpatialEpoch = false;
   let observedSpatialEpoch: TideweftView["spatialEpoch"];
   let observedSpatialFrame: TerrainSpatialFrame | null = null;
@@ -734,6 +736,8 @@ export function createTideweftReliefRenderer(
   };
 
   const releaseInput = (): void => {
+    // ABOUT controls blur the canvas. Release held input without consuming
+    // or resetting the next coincident-target choice when focus returns.
     heldDirections.clear();
     if (heldBraceKeys.size > 0) options.dispatch({ type: "brace", active: false });
     heldBraceKeys.clear();
@@ -763,6 +767,7 @@ export function createTideweftReliefRenderer(
    * die before pointerup can resolve against the new view.
    */
   const cancelSpatialCandidates = (): void => {
+    pointerHitCycle.reset();
     const capturedPointerIds = new Set<number>(activeTouchPointers.keys());
     if (orbitDrag) capturedPointerIds.add(orbitDrag.pointerId);
     if (clickCandidate) capturedPointerIds.add(clickCandidate.pointerId);
@@ -1632,17 +1637,18 @@ export function createTideweftReliefRenderer(
 
   const findSelection = (
     point: WorldPoint,
+    advance = false,
   ): ReliefHoverTarget | null => {
     const view = latestView;
     if (!view) return null;
-    let nearest: { target: ReliefHoverTarget; distance: number } | null = null;
+    const hits = pointerHitCycle.begin();
     const settlementRadius = Math.max(view.terrain.tileSize * 0.55, unitsPerPixel() * 18);
     for (const settlement of view.settlements) {
       if (settlement.discovered === false) continue;
       if (currentSettlementVisibility(settlement, view.perception !== undefined) < 1) continue;
       const distance = distanceSquared(point, settlement.position);
-      if (distance <= settlementRadius ** 2 && (!nearest || distance < nearest.distance)) {
-        nearest = { target: { entity: "settlement", id: settlement.id }, distance };
+      if (distance <= settlementRadius ** 2) {
+        hits.consider({ entity: "settlement", id: settlement.id }, distance);
       }
     }
     const resourceRadius = Math.max(view.terrain.tileSize * 0.58, unitsPerPixel() * 22);
@@ -1654,33 +1660,23 @@ export function createTideweftReliefRenderer(
       point,
       resourceRadius,
     );
-    if (resourceHit && (!nearest || resourceHit.distanceSquared < nearest.distance)) {
-      nearest = {
-        target: { entity: "resource", id: resourceHit.node.id },
-        distance: resourceHit.distanceSquared,
-      };
+    if (resourceHit) {
+      hits.consider({ entity: "resource", id: resourceHit.node.id }, resourceHit.distanceSquared);
     }
     const porterRadius = Math.max(view.terrain.tileSize * 0.35, unitsPerPixel() * 22);
     for (const porter of view.porters) {
       if (!isWithinPlayerRecognitionRange(view, porter.position)) continue;
       const distance = distanceSquared(point, porter.position);
-      if (distance <= porterRadius ** 2 && (!nearest || distance < nearest.distance)) {
-        nearest = { target: { entity: "porter", id: porter.id }, distance };
+      if (distance <= porterRadius ** 2) {
+        hits.consider({ entity: "porter", id: porter.id }, distance);
       }
     }
     const dogRadius = Math.max(view.terrain.tileSize * 0.4, unitsPerPixel() * 22);
     for (const dog of view.dogs ?? []) {
       if (!isWithinPlayerRecognitionRange(view, dog.position)) continue;
       const distance = distanceSquared(point, dog.position);
-      if (distance <= dogRadius ** 2 && (!nearest || distance < nearest.distance)) {
-        nearest = {
-          target: {
-            entity: "living-actor",
-            species: "domestic-dog",
-            id: dog.actorId,
-          },
-          distance,
-        };
+      if (distance <= dogRadius ** 2) {
+        hits.consider({ entity: "living-actor", species: "domestic-dog", id: dog.actorId }, distance);
       }
     }
     for (const wildlife of view.wildlife ?? []) {
@@ -1694,15 +1690,8 @@ export function createTideweftReliefRenderer(
         unitsPerPixel() * 22,
       );
       const distance = distanceSquared(point, wildlife.position);
-      if (distance <= wildlifeRadius ** 2 && (!nearest || distance < nearest.distance)) {
-        nearest = {
-          target: {
-            entity: "living-actor",
-            species: wildlife.species,
-            id: wildlife.actorId,
-          },
-          distance,
-        };
+      if (distance <= wildlifeRadius ** 2) {
+        hits.consider({ entity: "living-actor", species: wildlife.species, id: wildlife.actorId }, distance);
       }
     }
     for (const carcass of view.wildlifeCarcasses ?? []) {
@@ -1712,11 +1701,8 @@ export function createTideweftReliefRenderer(
         unitsPerPixel() * 22,
       );
       const distance = distanceSquared(point, carcass.position);
-      if (distance <= carcassRadius ** 2 && (!nearest || distance < nearest.distance)) {
-        nearest = {
-          target: { entity: "wildlife-carcass", id: carcass.carcassId },
-          distance,
-        };
+      if (distance <= carcassRadius ** 2) {
+        hits.consider({ entity: "wildlife-carcass", id: carcass.carcassId }, distance);
       }
     }
     for (const evidence of view.aggregateWildlifeEvidence ?? []) {
@@ -1730,28 +1716,21 @@ export function createTideweftReliefRenderer(
         unitsPerPixel() * 22,
       );
       const distance = distanceSquared(point, evidence.position);
-      if (distance <= evidenceRadius ** 2 && (!nearest || distance < nearest.distance)) {
-        nearest = {
-          target: {
-            entity: "aggregate-wildlife-evidence",
-            species: evidence.species,
-            aggregateId: evidence.aggregateId,
-            evidenceId: evidence.evidenceId,
-          },
-          distance,
-        };
+      if (distance <= evidenceRadius ** 2) {
+        hits.consider({ entity: "aggregate-wildlife-evidence", species: evidence.species,
+          aggregateId: evidence.aggregateId, evidenceId: evidence.evidenceId }, distance);
       }
     }
     if (routePointerTargetIsDirectlyPerceived(view, point)) {
       const routeRadius = Math.max(view.terrain.tileSize * 0.2, unitsPerPixel() * 8);
       for (const route of view.routes) {
         const distance = routeDistanceSquared(point, route);
-        if (distance <= routeRadius ** 2 && (!nearest || distance < nearest.distance)) {
-          nearest = { target: { entity: "route", id: route.id }, distance };
+        if (distance <= routeRadius ** 2) {
+          hits.consider({ entity: "route", id: route.id }, distance);
         }
       }
     }
-    return nearest?.target ?? null;
+    return hits.resolve(advance);
   };
 
   const pulseScan = (point?: WorldPoint): void => {
@@ -1915,7 +1894,7 @@ export function createTideweftReliefRenderer(
       const point = pickWorld(screen);
       if (!point) return;
       pointerWorld = point;
-      const target = findSelection(point);
+      const target = findSelection(point, true);
       const view = latestView;
       if (view) emit(commandForWorldTap(
         view,
@@ -2155,6 +2134,7 @@ export function createTideweftReliefRenderer(
       );
     };
     const contextLostListener = (event: Event): void => {
+      pointerHitCycle.reset();
       event.preventDefault();
       contextLost = true;
       telemetry.setActive(false);
@@ -6978,6 +6958,7 @@ export function createTideweftReliefRenderer(
   };
 
   const destroy = (): void => {
+    pointerHitCycle.reset();
     telemetry.setActive(false);
     releaseInput();
     detachCanvasListeners();
@@ -7026,6 +7007,7 @@ export function createTideweftReliefRenderer(
     telemetry.setActive(active && !contextLost && webglSupported);
     syncActivePresentation();
     if (!active) {
+      pointerHitCycle.reset();
       releaseInput();
       instance?.noLoop();
     } else if (!contextLost && webglSupported) {

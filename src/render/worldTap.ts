@@ -39,6 +39,80 @@ export type WorldTapTarget =
       readonly evidenceId: string;
     };
 
+export type WorldPointerHitTarget = WorldTapTarget
+  | { readonly entity: "wildlife-carcass" | "parcel"; readonly id: string };
+
+// Humans must remain reachable when standing on a harbor marker. The other
+// families retain the old renderer precedence; IDs break exact ties without
+// depending on array order, localized names, or locale-specific collation.
+const POINTER_HIT_ORDER: Readonly<Record<WorldPointerHitTarget["entity"], number>> = {
+  porter: 0,
+  settlement: 1,
+  resource: 2,
+  "living-actor": 3,
+  "wildlife-carcass": 4,
+  "aggregate-wildlife-evidence": 5,
+  route: 6,
+  parcel: 7,
+};
+
+const pointerHitKey = (target: WorldPointerHitTarget): string => JSON.stringify(
+  target.entity === "aggregate-wildlife-evidence"
+    ? [target.entity, target.species, target.aggregateId, target.evidenceId]
+    : target.entity === "living-actor"
+      ? [target.entity, target.species, target.id]
+      : [target.entity, target.id],
+);
+
+/**
+ * Resolves only the already eligible, exactly nearest public pointer hits.
+ * Each query retains at most its tied hits; only a committed pointer release
+ * advances the small presentation cursor. Hovering cannot consume a turn.
+ * No positions, knowledge, or world state are changed or retained here.
+ */
+export function createWorldPointerHitCycle<T extends WorldPointerHitTarget>() {
+  let previousGroup: string | null = null;
+  let previousKey: string | null = null;
+  const reset = (): void => { previousGroup = previousKey = null; };
+  return {
+    reset,
+    begin: () => {
+      let nearestDistance = Infinity;
+      const targets = new Map<string, T>();
+      return {
+        consider: (target: T, distanceSquared: number): void => {
+          if (!Number.isFinite(distanceSquared) || distanceSquared < 0) return;
+          if (distanceSquared < nearestDistance) {
+            nearestDistance = distanceSquared;
+            targets.clear();
+          }
+          if (distanceSquared === nearestDistance) targets.set(pointerHitKey(target), target);
+        },
+        resolve: (advance = false): T | null => {
+          const entries = [...targets.entries()].sort(([aKey, a], [bKey, b]) => (
+            POINTER_HIT_ORDER[a.entity] - POINTER_HIT_ORDER[b.entity]
+            || (aKey < bKey ? -1 : aKey > bKey ? 1 : 0)
+          ));
+          if (entries.length <= 1) {
+            if (advance) reset();
+            return entries[0]?.[1] ?? null;
+          }
+          const group = JSON.stringify(entries.map(([key]) => key));
+          const previousIndex = group === previousGroup
+            ? entries.findIndex(([key]) => key === previousKey)
+            : -1;
+          const [key, target] = entries[(previousIndex + 1) % entries.length]!;
+          if (advance) {
+            previousGroup = group;
+            previousKey = key;
+          }
+          return target;
+        },
+      };
+    },
+  };
+}
+
 export function usesCoarseWorldPointer(
   pointerType: string,
   coarseMediaMatches: boolean,

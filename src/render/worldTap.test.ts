@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import type { LivingActorViewSpecies, TideweftView } from "./types";
 import {
   commandForWorldTap,
+  createWorldPointerHitCycle,
   routePointerTargetIsDirectlyPerceived,
   usesCoarseWorldPointer,
   validatePerceivedEntityCommand,
+  type WorldPointerHitTarget,
 } from "./worldTap";
 
 const view = {
@@ -1048,3 +1050,170 @@ type FrogIsNotARenderLivingActor = "southern-leopard-frog" extends LivingActorVi
   : true;
 const frogIsNotARenderLivingActor: FrogIsNotARenderLivingActor = true;
 void frogIsNotARenderLivingActor;
+
+describe("shared world pointer exact-hit cycling", () => {
+  const porter = { entity: "porter", id: "shared" } as const;
+  const harbor = { entity: "settlement", id: "shared" } as const;
+  const resource = { entity: "resource", id: "shared" } as const;
+  type Cycle = ReturnType<typeof createWorldPointerHitCycle<WorldPointerHitTarget>>;
+
+  function query(cycle: Cycle, targets: readonly WorldPointerHitTarget[], advance = false) {
+    const hits = cycle.begin();
+    for (const target of targets) hits.consider(target, 4);
+    return hits.resolve(advance);
+  }
+
+  it("returns no target for an empty query", () => {
+    const cycle = createWorldPointerHitCycle<WorldPointerHitTarget>();
+    expect(cycle.begin().resolve()).toBeNull();
+    expect(cycle.begin().resolve(true)).toBeNull();
+  });
+
+  it.each([-1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    "ignores invalid squared distance %s without replacing a valid nearest hit",
+    (invalid) => {
+      const cycle = createWorldPointerHitCycle<WorldPointerHitTarget>();
+      const empty = cycle.begin();
+      empty.consider(porter, invalid);
+      expect(empty.resolve()).toBeNull();
+      const valid = cycle.begin();
+      valid.consider(harbor, 0);
+      valid.consider(porter, invalid);
+      expect(valid.resolve(true)).toEqual(harbor);
+    },
+  );
+
+  it("keeps strictly nearest hits and never widens almost equal distances into a tie", () => {
+    const cycle = createWorldPointerHitCycle<WorldPointerHitTarget>();
+    const almost = cycle.begin();
+    almost.consider(porter, 1 + Number.EPSILON);
+    almost.consider(harbor, 1);
+    expect(almost.resolve(true)).toEqual(harbor);
+    const nearer = cycle.begin();
+    nearer.consider(porter, 9);
+    nearer.consider(harbor, 9);
+    nearer.consider(resource, 4);
+    nearer.consider({ entity: "parcel", id: "farther" }, 5);
+    expect(nearer.resolve(true)).toEqual(resource);
+    expect(nearer.resolve()).toEqual(resource);
+  });
+
+  it("ranks exact ties by the shared family order regardless of traversal order", () => {
+    const cycle = createWorldPointerHitCycle<WorldPointerHitTarget>();
+    const ordered = [
+      porter, harbor, resource,
+      { entity: "living-actor", species: "deer", id: "DEER-v1-tied" },
+      { entity: "wildlife-carcass", id: "body-v1-tied" },
+      { entity: "aggregate-wildlife-evidence", species: "brown-rat", aggregateId: "rat-population:tied", evidenceId: "rat-evidence:tied" },
+      { entity: "route", id: "route-tied" },
+      { entity: "parcel", id: "parcel-tied" },
+    ] as const satisfies readonly WorldPointerHitTarget[];
+    for (const expected of ordered) {
+      expect(query(cycle, [...ordered].reverse(), true)).toEqual(expected);
+    }
+    expect(query(cycle, ordered, true)).toEqual(porter);
+  });
+
+  it("orders same-family stable IDs by code units rather than insertion or numeric order", () => {
+    const cycle = createWorldPointerHitCycle<WorldPointerHitTarget>();
+    const targets = ["a", "2", "Z", "10"].map((id) => ({ entity: "porter" as const, id }));
+    for (const id of ["10", "2", "Z", "a"]) {
+      expect(query(cycle, targets, true)).toEqual({ entity: "porter", id });
+    }
+  });
+
+  it("does not advance the click cursor when resolving hover queries", () => {
+    const cycle = createWorldPointerHitCycle<WorldPointerHitTarget>();
+    expect(query(cycle, [harbor, porter])).toEqual(porter);
+    expect(query(cycle, [porter, harbor])).toEqual(porter);
+    expect(query(cycle, [harbor, porter], true)).toEqual(porter);
+    const hover = query(cycle, [harbor, porter]);
+    expect(query(cycle, [porter, harbor])).toEqual(hover);
+    expect(query(cycle, [])).toBeNull();
+    expect(query(cycle, [resource])).toEqual(resource);
+    expect(query(cycle, [resource, porter])).toEqual(porter);
+    expect(query(cycle, [porter, harbor], true)).toEqual(harbor);
+    expect(query(cycle, [harbor, porter], true)).toEqual(porter);
+  });
+
+  it("retains a click cycle across new queries and cloned targets without public selection state", () => {
+    const cycle = createWorldPointerHitCycle<WorldPointerHitTarget>();
+    expect(query(cycle, [harbor, porter], true)).toEqual(porter);
+    expect(query(cycle, [{ ...porter }, { ...harbor }], true)).toEqual(harbor);
+    const movedPointer = cycle.begin();
+    movedPointer.consider({ ...harbor }, 16);
+    movedPointer.consider({ ...porter }, 16);
+    expect(movedPointer.resolve(true)).toEqual(porter);
+    expect(porter).toEqual({ entity: "porter", id: "shared" });
+    expect(harbor).toEqual({ entity: "settlement", id: "shared" });
+  });
+
+  it("starts again when the exact tied target group changes", () => {
+    const cycle = createWorldPointerHitCycle<WorldPointerHitTarget>();
+    expect(query(cycle, [porter, harbor], true)).toEqual(porter);
+    expect(query(cycle, [porter, harbor], true)).toEqual(harbor);
+    expect(query(cycle, [porter, resource], true)).toEqual(porter);
+    expect(query(cycle, [porter, harbor], true)).toEqual(porter);
+  });
+
+  it("clears the previous cycle after a committed query has no target", () => {
+    const cycle = createWorldPointerHitCycle<WorldPointerHitTarget>();
+    expect(query(cycle, [porter, harbor], true)).toEqual(porter);
+    expect(query(cycle, [], true)).toBeNull();
+    expect(query(cycle, [porter, harbor], true)).toEqual(porter);
+  });
+
+  it("clears the previous cycle after a committed singleton query", () => {
+    const cycle = createWorldPointerHitCycle<WorldPointerHitTarget>();
+    expect(query(cycle, [porter, harbor], true)).toEqual(porter);
+    expect(query(cycle, [harbor], true)).toEqual(harbor);
+    expect(query(cycle, [porter, harbor], true)).toEqual(porter);
+  });
+
+  it("does not retain a removed selection or reuse its old index in a changed group", () => {
+    const cycle = createWorldPointerHitCycle<WorldPointerHitTarget>();
+    expect(query(cycle, [resource, porter, harbor], true)).toEqual(porter);
+    expect(query(cycle, [resource, porter, harbor], true)).toEqual(harbor);
+    expect(query(cycle, [resource, porter], true)).toEqual(porter);
+    expect(query(cycle, [resource, porter], true)).toEqual(resource);
+    expect(query(cycle, [resource, harbor], true)).toEqual(harbor);
+  });
+
+  it("resets explicitly without requiring an inspector selection field", () => {
+    const cycle = createWorldPointerHitCycle<WorldPointerHitTarget>();
+    expect(query(cycle, [porter, harbor], true)).toEqual(porter);
+    cycle.reset();
+    expect(query(cycle, [harbor, porter], true)).toEqual(porter);
+    expect(query(cycle, [porter, harbor], true)).toEqual(harbor);
+  });
+
+  it("deduplicates exact target keys rather than giving duplicates extra turns", () => {
+    const cycle = createWorldPointerHitCycle<WorldPointerHitTarget>();
+    const repeated = [harbor, porter, { ...porter }, { ...harbor }, porter];
+    expect(query(cycle, repeated, true)).toEqual(porter);
+    expect(query(cycle, repeated, true)).toEqual(harbor);
+    expect(query(cycle, repeated, true)).toEqual(porter);
+  });
+
+  it("keeps entity, species, population and evidence identity namespaces distinct", () => {
+    const cycle = createWorldPointerHitCycle<WorldPointerHitTarget>();
+    // These are pure pointer-key fixtures, not claims that species-mismatched
+    // IDs pass the separate, unchanged release-frame perception validator.
+    const targets = [
+      porter, harbor, resource,
+      { entity: "living-actor", species: "deer", id: "shared" },
+      { entity: "living-actor", species: "domestic-cat", id: "shared" },
+      { entity: "wildlife-carcass", id: "shared" },
+      { entity: "route", id: "shared" },
+      { entity: "parcel", id: "shared" },
+      { entity: "aggregate-wildlife-evidence", species: "brown-rat", aggregateId: "a:b", evidenceId: "c" },
+      { entity: "aggregate-wildlife-evidence", species: "brown-rat", aggregateId: "a", evidenceId: "b:c" },
+      { entity: "aggregate-wildlife-evidence", species: "brown-rat", aggregateId: "a:b", evidenceId: "other" },
+      { entity: "aggregate-wildlife-evidence", species: "southern-leopard-frog", aggregateId: "a:b", evidenceId: "c" },
+    ] as const satisfies readonly WorldPointerHitTarget[];
+    const selected = targets.map(() => query(cycle, [...targets].reverse(), true));
+    expect(new Set(selected.map((target) => JSON.stringify(target))).size).toBe(targets.length);
+    expect(selected).toEqual(expect.arrayContaining([...targets]));
+    expect(query(cycle, targets, true)).toEqual(porter);
+  });
+});
