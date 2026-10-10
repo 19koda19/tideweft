@@ -7541,6 +7541,69 @@ Complete affected4files41PASS (15.61s), maintained critical6files105PASS
 matching launcher were frozen locally before a candidate build; no dependency,
 save, schema, timing, privacy, release or directive change is made.
 
+### Fresh control and discarded perception-selection experiment — 2026-10-10
+
+The first control at clean `6a792dd` is excluded: a second running game was
+reported after capture. That sample's world mean112.436ms cannot be compared
+as an isolated control or claimed as an application improvement. Fresh live
+inspection found no game process; the exact full control app (not an archive
+inserted into a different integrity header) and production web files remained
+unchanged from executable `908cead`. Control ASAR `4f5b37c8…`, JS `6f54f98b…`.
+
+Two fresh15s windows per build/platform use the existing desktop baseline and
+fixed Firefox witness: native estuary,1440×900 CSS/DPR1, existing renderer
+warm-up, unchanged quality, AC Apple M4/16GiB/macOS26.5.2, Low Power Mode off,
+Electron44.1.0/Firefox157. Runs are sequential without competing tests/game or
+CPU sampling. They are a partial stationary diagnostic, not the full scenario
+matrix. Finite existing budgets and the retention rule were frozen before edits.
+
+Candidate `2f41c2379b69f625d789d35d7b9bb8b4f09e2dd0` skips only selection of a
+supplied object identical to the freshly queried current perception. Both old
+branches already selected that object. The current owner's cache validation,
+exported validator, distinct/cold/stale fallback, UI omitted-input semantics
+and sleeping suppression stay intact. Tests prove one fewer candidate signature
+check and complete projection equality. Affected5files45, runtime perception/
+telemetry2files33, original late-rollback1selected, critical6files105 and
+typecheck pass. Equal30-step current-save hashes remain `922d9c80…` (estuary)
+and `a7b713dd…` (density8); diagnostics cannot alter authority or save bytes.
+
+| Platform | World mean ms before → candidate | Projection mean ms before → candidate | Draw CPU mean ms before → candidate | Renderer callbacks/s before → candidate |
+|---|---|---|---|---|
+| Electron | 97.525 → 96.543 | 5.472 → 5.007 | 25.228 → 25.989 | 32.382 → 31.683 |
+| Firefox | 169.300 → 169.000 | 8.132 → 7.336 | 20.930 → 20.930 | 29.872 → 30.017 |
+
+Arithmetic means of the two per-run means are reported. Electron world gain
+0.982ms exceeds the larger within-pair range0.471ms. Firefox gain0.300ms does
+not exceed its candidate range1.067ms. **Discard the experiment under its
+predeclared world-cost retention rule**, despite the lower projection means.
+Do not relabel the targeted gain or adjust acceptance after seeing the result.
+Existing world94.661/163.8ms and Firefox callback30.545/s gates still fail.
+
+Every Electron run accepts149steps/14advances420→434; every Firefox run152/
+15advances420→435. Same wall endpoints/counts alone are not all-root equivalence;
+independent deterministic tests provide that proof. World empirical p99 equals
+max at these low counts. rAF worsts before/candidate are150/166.6 versus166.7/
+149.8ms Electron,233.32/216.66 versus217.88/216.68ms Firefox; no reliable tail,
+presented-FPS/GPU or hitch-removal conclusion follows. Timed save snapshots0;
+explicit tail saves stay1,980,354B/1,948,809B by platform. Endpoint pending
+counters0 and bounded resource snapshots are not queue-peak or leak evidence.
+
+Candidate production web/Forge macOS-arm64 packaging, five-file static subpath
+smoke, Firefox runtime witnesses and packaged desktop/mobile smoke pass.
+Candidate Relief/mobile images were inspected; this is not all-scene visual,
+hardware-audio, physical-mobile, other-OS, installer/signing, long-soak or live
+deployment proof. The initial dirty-tree release wrapper correctly failed;
+after local preservation it passed its normal working-tree check, not remote
+release-range validation. No wrapper, release metadata or publication changed.
+
+Only the experiment's selectors and cost oracle are restored byte-exact to
+`6a792dd`, preserving the valid new characterization. Restored5files45/critical
+105/typecheck pass. The exact control ASAR/launcher and5/5 web files are restored
+in `release/` and `dist/`. Local reports preserve source/artifact identities,
+each repetition and the excluded sample. Dependency/configuration changes:
+NONE; upstream p5/Electron source modified:NO. Save formats, security, completed
+directives, gameplay order and deferred full-Foliage soaks are unchanged.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

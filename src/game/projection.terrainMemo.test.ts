@@ -100,9 +100,9 @@ describe("terrain projection receipt", () => {
         expect(project(current)).toEqual(expected);
         expect(signature.mock.calls.length).toBe(currentChecks);
         expect(currentChecks).toBeGreaterThan(0);
-        // The current owner still validates its cache. Only distinct candidate
-        // admission pays one additional signature check at each selector.
-        expect(cloneChecks).toBe(currentChecks + 1);
+        // BEFORE characterization: both selectors repeat the same signature
+        // check despite choosing the already current object in either branch.
+        expect(cloneChecks).toBe(currentChecks);
       }
       expect(projectGameView(world, player, options)).toEqual(renderExpected);
     } finally { signature.mockRestore(); }
