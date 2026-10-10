@@ -2061,3 +2061,266 @@ describe("ordinary runtime resident rest execution", () => {
     // rendered-play, performance or long-session closure certificate.
   }, 180_000);
 });
+
+describe("native skill-qualified occupied-source water egress", () => {
+  it("selects real native service, waits, and leaves bounded moving water through ordinary fixed steps", async () => {
+    const { ORDINARY_FOOT_MAX_WATER_DEPTH, waterContactPressure } = await import("./footing");
+    const { deriveWaterFlowProfile } = await import("./waterFlow");
+    const { surfaceCurrentDirection } = await import("./currentDirection");
+    const originalAdvance = residentActivityExecution.advanceResidentRestActivities;
+    type NativeWorld = ReturnType<typeof deserializeWorld>;
+    const taskFor = (human: ResidentState) => human.activity?.restTask
+      ?? human.activity?.rationTask ?? human.activity?.materialTask ?? human.activity?.inspectionTask ?? null;
+    const nativeSources = new Map<string, WorldPosition>();
+    const waits = new Map<string, { tick: number; phase: number; depth: number; position: WorldPosition; target: WorldPosition }>();
+    const summaries: unknown[] = [];
+    let seed = "";
+    let motionIntervalStartRecord: SaveRecord | undefined;
+    let motionIntervalClosedRecord: SaveRecord | undefined;
+    let opportunity: {
+      seed: string; tick: number; phase: number; actorId: string; source: WorldPosition;
+      position: WorldPosition; target: WorldPosition; kind: string; depth: number;
+      aptitude: number; reserve: number; capacity: number; pressure: number;
+      movement: { x: number; y: number }; current: { x: number; y: number };
+      profile: ReturnType<typeof deriveWaterFlowProfile>; tide: NativeWorld["tide"];
+      weather: NativeWorld["weather"]; needs: ResidentState["needs"];
+      condition: ResidentState["condition"]; targetDry: boolean; nativeSource: WorldPosition | undefined;
+      priorWait: ReturnType<typeof waits.get>;
+    } | undefined;
+    const observer = vi.spyOn(residentActivityExecution, "advanceResidentRestActivities").mockImplementation((...args) => {
+      const [world, phase] = args;
+      const pending = world.residents.flatMap((human) => {
+        const activity = human.activity;
+        const task = taskFor(human);
+        const source = activity?.poses.at(-1)?.position;
+        if (activity?.version !== RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION || source === undefined
+          || task === null || human.activeContractId !== null
+          || (task.kind === "settlement-rest" && task.origin !== "selected")) return [];
+        const x = Math.floor(source.localX / WORLD_POSITION_UNITS_PER_TILE);
+        const y = Math.floor(source.localY / WORLD_POSITION_UNITS_PER_TILE);
+        const tile = world.terrain.tiles[y * world.terrain.width + x];
+        if (tile === undefined || tile.terrain === "deep-water") return [];
+        const depth = waterDepthAt(tile, world.tide);
+        if (depth <= ORDINARY_FOOT_MAX_WATER_DEPTH) return [];
+        return [{ actorId: human.identity.stableId, source, task, tile, depth,
+          targetDry: residentRestTargetHasDrySupport(world, task.target),
+          aptitude: human.identity.skills.find(({ kind }) => kind === "swimming")?.aptitude ?? 0,
+          needs: structuredClone(human.needs), condition: structuredClone(human.condition) }];
+      });
+      // Observe the single original production call; never execute a parallel
+      // movement pipeline, provision a source, or author a body/task/result.
+      const result = originalAdvance(...args);
+      if (result === null) return result;
+      for (const before of pending) {
+        const human = world.residents.find(({ identity }) => identity.stableId === before.actorId)!;
+        const position = human.activity!.poses.at(-1)!.position;
+        const task = taskFor(human);
+        const movement = worldPositionDelta(before.source, position);
+        if (movement.x === 0 && movement.y === 0) {
+          if (task?.phase === "waiting" && !waits.has(before.actorId)) {
+            waits.set(before.actorId, { tick: world.meta.completedTick, phase, depth: before.depth,
+              position: before.source, target: before.task.target });
+          }
+          continue;
+        }
+        if (opportunity !== undefined) continue;
+        const reserve = FIXED_POINT - Math.max(before.needs.rest, before.condition.exhaustion);
+        const capacity = Math.floor(ORDINARY_FOOT_MAX_WATER_DEPTH
+          * Math.floor(before.aptitude * reserve / FIXED_POINT) / FIXED_POINT);
+        const profile = deriveWaterFlowProfile({ waterDepth: before.depth, bedRoughness: before.tile.roughness,
+          tideLevel: world.tide.level, weatherIntensity: world.weather.intensity });
+        const direction = surfaceCurrentDirection(world.tide.direction, world.weather.windY);
+        const current = { x: Math.trunc(direction.x * profile.strength / FIXED_POINT),
+          y: Math.trunc(direction.y * profile.strength / FIXED_POINT) };
+        const pressure = waterContactPressure({ moving: true, movement, current,
+          waterDepth: before.depth, roughness: before.tile.roughness, surface: "water" });
+        const priorWait = waits.get(before.actorId);
+        opportunity = { seed, tick: world.meta.completedTick, phase, actorId: before.actorId,
+          source: before.source, position, target: before.task.target, kind: before.task.kind,
+          depth: before.depth, aptitude: before.aptitude, reserve, capacity, pressure, movement, current, profile,
+          tide: { ...world.tide }, weather: { ...world.weather }, needs: before.needs, condition: before.condition,
+          targetDry: before.targetDry, nativeSource: nativeSources.get(before.actorId), priorWait };
+      }
+      return result;
+    });
+    try {
+      // Existing native seeds only. Stop at the first real action; no arbitrary
+      // seed scan, pressure/clock/terrain/skill override or deadline stretching.
+      for (seed of ["settlement keeper home night continuity", "runtime baseline estuary",
+        "resident activity executable rest approach"]) {
+        const repository = new MemoryRepository();
+        const runtime = await open(repository);
+        runtime.dispatchUI({ type: "new-world", seed, posture: "gale", sessionShape: "wander" });
+        await runtime.save();
+        const initial = deserializeWorld(decode(repository.snapshot()).world);
+        expect(initial.meta.completedTick).toBe(420);
+        expect(initial.residents.every((human) => !Object.hasOwn(human, "activity"))).toBe(true);
+        const terrain = stableStringify(initial.terrain);
+        nativeSources.clear();
+        waits.clear();
+        for (const human of initial.residents) {
+          const source = resolveResidentWorldPlacement(initial, human)?.position;
+          if (source !== undefined) nativeSources.set(human.identity.stableId, source);
+        }
+        let latest = initial;
+        for (let interval = 0; interval < 60 && opportunity === undefined; interval += 1) {
+          const intervalStartRecord = repository.snapshot();
+          advanceOrdinaryFixedSteps(runtime, 10);
+          await runtime.save();
+          const intervalClosedRecord = repository.snapshot();
+          latest = deserializeWorld(decode(intervalClosedRecord).world);
+          assertWorldInvariants(latest);
+          expect(latest.meta.completedTick).toBe(421 + interval);
+          expect(latest.tide).toEqual(tideAtTick(latest.meta.completedTick));
+          expect(stableStringify(latest.terrain)).toBe(terrain);
+          if (opportunity !== undefined) {
+            motionIntervalStartRecord = intervalStartRecord;
+            motionIntervalClosedRecord = intervalClosedRecord;
+          }
+        }
+        summaries.push({ seed, tick: latest.meta.completedTick,
+          waiting: [...waits].slice(0, 4), found: opportunity !== undefined });
+        close(runtime);
+        if (opportunity !== undefined) break;
+      }
+    } finally {
+      observer.mockRestore();
+    }
+    if (opportunity === undefined) {
+      throw new Error(`No actual current-v8 skill-qualified source egress in bounded native play: ${JSON.stringify(summaries)}`);
+    }
+    const action = opportunity;
+    expect(opportunity.targetDry).toBe(true);
+    expect(opportunity.source).toEqual(opportunity.nativeSource);
+    expect(opportunity.aptitude).toBeGreaterThan(0);
+    expect(opportunity.depth).toBeLessThanOrEqual(ORDINARY_FOOT_MAX_WATER_DEPTH + opportunity.capacity);
+    expect(opportunity.pressure).toBeLessThanOrEqual(opportunity.capacity);
+    expect(Math.hypot(opportunity.movement.x, opportunity.movement.y)).toBeLessThanOrEqual(RESIDENT_REST_APPROACH_STEP_UNITS);
+    expect(opportunity.priorWait).toBeDefined();
+    expect(opportunity.priorWait!.position).toEqual(opportunity.source);
+    expect(opportunity.priorWait!.target).toEqual(opportunity.target);
+    expect(opportunity.tick).toBeGreaterThan(opportunity.priorWait!.tick);
+    console.info("Native source-egress action evidence", JSON.stringify(opportunity));
+    expect(opportunity.phase).toBe(1);
+    expect(motionIntervalStartRecord).toBeDefined();
+    expect(motionIntervalClosedRecord).toBeDefined();
+    const before = decode(motionIntervalStartRecord!);
+    const closed = decode(motionIntervalClosedRecord!);
+    const sourceWorld = deserializeWorld(before.world);
+    expect(sourceWorld.meta.completedTick).toBe(opportunity.tick);
+    expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    expect(resident(before, opportunity.actorId).activity!.poses[0]!.position).toEqual(opportunity.source);
+
+    // Replay only the discovered real interval. Retain its native action prefix
+    // and all other roots; no mid-step save search, authored task or clock patch.
+    soundscapePlay.mockClear();
+    const prefixRepository = new MemoryRepository(motionIntervalStartRecord);
+    const prefixRuntime = await open(prefixRepository);
+    await prefixRuntime.save();
+    expect(authoritativeRoots(decode(prefixRepository.snapshot()))).toEqual(authoritativeRoots(before));
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advanceOrdinaryFixedSteps(prefixRuntime, 4);
+    await prefixRuntime.save();
+    const phase4Record = prefixRepository.snapshot();
+    const phase4 = decode(phase4Record);
+    expect(phase4.perceptionCarry.playerStepsSinceWorldTick).toBe(4);
+    const firstPrefix = resident(phase4, opportunity.actorId);
+    expect(firstPrefix.activity!.poses).toHaveLength(5);
+    expect(worldPositionDelta(opportunity.source, firstPrefix.activity!.poses.at(-1)!.position))
+      .toEqual({ x: opportunity.movement.x * 4, y: opportunity.movement.y * 4 });
+    expect(taskFor(firstPrefix)).toMatchObject({ kind: opportunity.kind, phase: "approaching", target: opportunity.target });
+    expect(firstPrefix.condition).toEqual(opportunity.condition);
+    const sourceTile = sourceWorld.terrain.tiles[Math.floor(opportunity.source.localY / WORLD_POSITION_UNITS_PER_TILE)
+      * sourceWorld.terrain.width + Math.floor(opportunity.source.localX / WORLD_POSITION_UNITS_PER_TILE)]!;
+    expect(waterDepthAt(sourceTile, deserializeWorld(phase4.world).tide)).toBe(opportunity.depth);
+    expect(deserializeWorld(phase4.world).meta.completedTick).toBe(opportunity.tick);
+    for (const { position } of firstPrefix.activity!.poses) {
+      expect(Math.floor(position.localX / WORLD_POSITION_UNITS_PER_TILE))
+        .toBe(Math.floor(opportunity.source.localX / WORLD_POSITION_UNITS_PER_TILE));
+      expect(Math.floor(position.localY / WORLD_POSITION_UNITS_PER_TILE))
+        .toBe(Math.floor(opportunity.source.localY / WORLD_POSITION_UNITS_PER_TILE));
+    }
+    advanceOrdinaryFixedSteps(prefixRuntime, 5);
+    await prefixRuntime.save();
+    const phase9Record = prefixRepository.snapshot();
+    const phase9 = decode(phase9Record);
+    const terminalPrefix = resident(phase9, opportunity.actorId);
+    expect(phase9.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    expect(terminalPrefix.activity!.poses).toHaveLength(10);
+    expect(taskFor(terminalPrefix)).toMatchObject({ kind: opportunity.kind, phase: "approaching", target: opportunity.target });
+    for (let phase = 1; phase <= 9; phase += 1) {
+      const delta = worldPositionDelta(terminalPrefix.activity!.poses[phase - 1]!.position,
+        terminalPrefix.activity!.poses[phase]!.position);
+      expect(Math.hypot(delta.x, delta.y)).toBeLessThanOrEqual(RESIDENT_REST_APPROACH_STEP_UNITS);
+    }
+    for (const prefix of [phase4, phase9]) {
+      const world = deserializeWorld(prefix.world);
+      expect(world.terrain).toEqual(sourceWorld.terrain);
+      expect(world.ledger).toEqual(sourceWorld.ledger);
+      expect(world.settlements.map(({ id, inventory, project }) => ({ id, inventory, project })))
+        .toEqual(sourceWorld.settlements.map(({ id, inventory, project }) => ({ id, inventory, project })));
+      assertWorldInvariants(world);
+    }
+    advanceOrdinaryFixedSteps(prefixRuntime, 1);
+    await prefixRuntime.save();
+    expect(authoritativeRoots(decode(prefixRepository.snapshot()))).toEqual(authoritativeRoots(closed));
+    expect(resident(closed, opportunity.actorId).activity!.poses[0]!.position).toEqual(opportunity.target);
+    expect(taskFor(resident(closed, opportunity.actorId))).toMatchObject({ kind: opportunity.kind, phase: "arrived" });
+    assertWorldInvariants(deserializeWorld(closed.world));
+    close(prefixRuntime);
+
+    // An economical cold chain: phase4 joins exact phase9; detached phase9 then
+    // joins the actual uninterrupted closure, comparing every saved root.
+    for (const [record, prefix, steps, expected] of [
+      [phase4Record, phase4, 5, phase9], [phase9Record, phase9, 1, closed],
+    ] as const) {
+      soundscapePlay.mockClear();
+      const coldRepository = new MemoryRepository(record);
+      const cold = await open(coldRepository);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(prefix));
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      advanceOrdinaryFixedSteps(cold, steps);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(expected));
+      close(cold);
+    }
+
+    const failedRepository = new MemoryRepository(phase9Record);
+    const failed = await open(failedRepository);
+    const attemptedArrival: Array<{ position: WorldPosition; phase: string | undefined }> = [];
+    const arrival = vi.spyOn(residentActivityExecution, "advanceResidentRestActivities").mockImplementation((...args) => {
+      const result = originalAdvance(...args);
+      if (result !== null && args[0].meta.completedTick === action.tick && args[1] === 10) {
+        const human = args[0].residents.find(({ identity }) => identity.stableId === action.actorId)!;
+        attemptedArrival.push({ position: human.activity!.poses.at(-1)!.position, phase: taskFor(human)?.phase });
+      }
+      return result;
+    });
+    const closure = vi.spyOn(situatedExpressionChannelBank, "closeSituatedExpressionChannelBankInterval")
+      .mockReturnValueOnce(null);
+    soundscapePlay.mockClear();
+    advanceOrdinaryFixedStepsForExpectedFailure(failed, 1);
+    expect(attemptedArrival).toContainEqual({ position: opportunity.target, phase: "arrived" });
+    expect(closure).toHaveBeenCalledTimes(1);
+    expect(failed.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+    expect(soundscapePlay.mock.calls).toEqual([["warning", 1]]);
+    await failed.save();
+    const rolledBackRecord = failedRepository.snapshot();
+    expect(authoritativeRoots(decode(rolledBackRecord))).toEqual(authoritativeRoots(phase9));
+    closure.mockRestore();
+    arrival.mockRestore();
+    close(failed);
+    soundscapePlay.mockClear();
+    const retryRepository = new MemoryRepository(rolledBackRecord);
+    const retry = await open(retryRepository);
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advanceOrdinaryFixedSteps(retry, 1);
+    await retry.save();
+    expect(authoritativeRoots(decode(retryRepository.snapshot()))).toEqual(authoritativeRoots(closed));
+    close(retry);
+    // Bounded native action/cold/rollback evidence only. No wet destination,
+    // general crossing, loaded transit, gear, injury, manual visual acceptance,
+    // long-session liveness or performance claim is implied.
+  }, 180_000);
+});

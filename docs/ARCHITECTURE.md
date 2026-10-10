@@ -2701,11 +2701,38 @@ shallow-source adapter proves approach without premature closure; its
 constructed keeper/store binding remains foundation-only, not native bootstrap
 autonomy or consummated shallow-origin inspection. Research owns exact evidence
 and limits.
-This remains partial capability, not ordinary untouched crowd/visual proof,
-general wading/crossing, meaningful current-force response or animal evacuation.
-Shared flow is zero within this foot band; the35k bound must not be cited as a
-current-resistance test. Water contact sound remains outside the narrow
-dry-contact producer rather than being fabricated from this new access.
+Current local construction additionally consumes actual persisted swimming
+aptitude and condition for a **source-only** escape above that unchanged foot
+band. This is a bounded resident action policy, not general swimming or a
+catalog-wide water locomotion capability. Reserve is `1-max(rest,exhaustion)`;
+the extra depth and unmitigated contact-pressure ceiling are both
+`floor(35000*floor(aptitude*reserve/1000000)/1000000)`, bounded to35,000.
+Missing or invalid capability supplies no extra reserve. Depth must fit its
+independent ceiling, and every prospective polyline segment while touching the
+occupied source must pass `footing.ts:waterContactPressure`. That extracted
+quote preserves the player's exact current/rough-bed arithmetic and uses the
+same `deriveWaterFlowProfile` and `surfaceCurrentDirection`. The actual solver
+trajectory, not a goal bearing or terminal chord, supplies movement direction.
+Failed contact publishes no pose, progress, wear or sounding; it retains the
+existing bounded waiting/reassessment. No aid benefit, rated capacity, visible
+kit or ADRIFT permission is inferred. Wet destinations, all other wet cells,
+deep-water terrain, cargo commitments and frozen protocols remain closed.
+
+The existing v8/current58 protocol remains unchanged. Only future accepted
+work uses this quote; saved prefixes are never reappraised or rewritten when
+condition changes. Native ordinary fixed-step play now proves a real material
+task waiting at its generated source, then leaving positive-current water for
+dry arrival, with exact phase4/9 cold continuation and late-closure rollback.
+Adapter counterfactuals change movement to waiting by removing aptitude or
+reserve, exceeding the depth ceiling, or changing only the wind's transverse
+current at equal depth. These are bounded source-escape proofs, not complete
+current knowledge, turbulence/support policy, ordinary crowd/visual proof,
+general wading/crossing or animal evacuation. Shared flow is zero in the
+unchanged35k band; that older band alone is not a current-resistance test.
+Water contact sound remains outside the narrow dry-contact producer rather
+than being fabricated from this access; applicable wet contact/support and
+broader observed-current responses remain with the existing-human integration
+owner. Research owns commands, exact native inputs and evidence limits.
 
 ### Observed settlement-rest support
 

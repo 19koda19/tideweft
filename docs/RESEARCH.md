@@ -6454,6 +6454,70 @@ This proves a real flowing-water encounter under the current conservative
 wet/dry policy, not current-force-sensitive appraisal, loaded water access,
 complete journey, rendered play, performance, cumulative or directive closure.
 
+### Current-sensitive occupied-source egress — 2026-10-09
+
+Unpublished construction from parent56ede53 adds a bounded consumer of real
+human aptitude/condition and the exact shared water-contact quote. The
+[Architecture source-egress owner](./ARCHITECTURE.md#unladen-rest-and-service-shallow-source-egress)
+defines its two independent gates and unchanged old/save boundaries; this is
+not general swimming, water entry, equipment, injury or a new physics system.
+`footing.ts` extracts the original current/rough-bed arithmetic without changing
+player behavior. `residentActivityExecution.ts` quotes actual prospective
+source-contact trajectory segments before committing movement, progress or wear.
+
+One additive case in `runtime.residentRest.integration.test.ts` uses normal
+fixed-step runtime play, with no authored task, need, body, skill, weather,
+terrain or tide. Fresh `settlement keeper home night continuity` starts420.
+Human84 (`H-v1-p0p0-1d9rhmy-2-1kt45xu`) actually selects material service,
+waits at native(88.5,47.5) depth64,391 at420/phase1, then first moves east105
+at445/phase1 while the same source still has depth41,474. Aptitude384,955,
+rest404,468 and actual runtime exhaustion82,483 yield reserve595,532 and
+capacity8,023; shared flow223,243/contact pressure5,199 passes. Its unchanged
+dry service target is(89.5,47.5). Actual dry arrival at446 is approach completion,
+not a claim that hourly medicine debit/project use already occurred.
+
+The discovered actual445 phase-zero record resumes to real phases4/9 and
+uninterrupted446 closure. Detached4→9 and9→closure match every saved root
+apart from established session recap/envelope integrity exclusions; initial
+loads are silent. Observed actual phase10 arrival followed by a late channel-
+closure failure rolls every root back to9, releases only the existing warning,
+and cold retry matches446. The original nineteen cases are byte-preserved.
+
+Selected command:
+
+```sh
+npx vitest run src/game/runtime.residentRest.integration.test.ts \
+  -t 'selects real native service, waits, and leaves bounded moving water through ordinary fixed steps' \
+  --maxWorkers=1
+```
+
+Result:1PASS/19unselected,19.724s case/21.50s wall. The corresponding ignored
+JSON retains exact evidence. Focused contact domain6files105, activity domain
+12files434, runtime compatibility/publication/circadian/sound4files55,
+critical `npm run test:smoke`6files105 and the existing late-introduction
+rollback case1PASS/97unselected pass. The complete resident-rest file then
+passes all20 cases in222.59s, including native hourly ration/material use,
+old-format continuation, real rest recovery and the new native water case;
+typecheck, context selftest28 and documentation-reuse45 also pass.
+Lower-owner adapter tests retain genuine
+generated445 material selection but explicitly activate protocol8; they are
+not a second ordinary-runtime witness. Equal-depth transverse wind, removed
+aptitude/reserve and independent depth-limit counterfactuals change motion to
+waiting; phase4/9 cold continuation and later reserve reduction retain old poses.
+The old service35001 foundation now explicitly has full exhaustion/no reserve,
+preserving all its original boundary assertions under the new capability law.
+A newly attempted direct tide-direction edit was rejected by the unchanged
+clock invariant and removed from the new fixture, not accepted as world truth.
+
+Inheritance: shared locomotion, physical current, existing actor/body/task,
+fixed-step transactions and current persistence are INTEGRATED; physical gear,
+new cargo and broad health are NOT APPLICABLE. Wet-contact acoustics, applicable
+wet support, richer current knowledge/turbulence response and general crossings
+remain DEFERRED to the existing-human integration owner. Unheard numeric state
+never becomes belief. No cat-water, whole-population liveness, normal visual,
+performance, new release or full cumulative certificate follows from these
+bounded checks. Dependencies/upstream source/schema/support set are unchanged.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

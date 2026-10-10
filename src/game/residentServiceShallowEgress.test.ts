@@ -13,7 +13,7 @@ import {
 import { prepareResidentRationUse, revokeResidentRationUse } from "../sim/residentRationUse";
 import { prepareResidentTravelAdvance, revokeResidentTravelAdvance } from "../sim/residentTravelAdvance";
 import { waterDepthAt } from "../sim/terrain";
-import type { WorldState } from "../sim/types";
+import { FIXED_POINT, type WorldState } from "../sim/types";
 import { createCoreEcologyAggregatePatch } from "./coreEcology";
 import { deriveCoreEcologyHarborEdgeHabitatAssemblage } from "./coreEcologyHabitat";
 import { ORDINARY_FOOT_MAX_WATER_DEPTH } from "./footing";
@@ -227,9 +227,12 @@ describe("unladen service shallow-source egress", () => {
     assertWorldInvariants(world);
   });
 
-  it.each([ORDINARY_FOOT_MAX_WATER_DEPTH, ORDINARY_FOOT_MAX_WATER_DEPTH + 1])("uses the existing ordinary-foot bound at source depth%s", (depth) => {
+  it.each([ORDINARY_FOOT_MAX_WATER_DEPTH, ORDINARY_FOOT_MAX_WATER_DEPTH + 1])("preserves the ordinary-foot bound without reserve at source depth%s", (depth) => {
     const { world, source } = fixture();
-    // Explicit physical foundation after genuine body/task capture.
+    // Explicit physical/condition foundation after genuine body/task capture.
+    // WORLD0 now consumes swimming reserve above35k; full fatigue supplies
+    // none. Keep the old bound and every assertion for the zero-reserve case.
+    residentAt(world).condition.exhaustion = FIXED_POINT;
     tileAt(world, source).elevation = world.tide.level - depth;
     advance(world, 1, 1);
     if (depth <= ORDINARY_FOOT_MAX_WATER_DEPTH) {

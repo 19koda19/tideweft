@@ -6,6 +6,7 @@ import {
   FOOTING_VERSION,
   TERRAIN_DRAG_PERMILLE,
   evaluateFooting,
+  waterContactPressure,
   type FootingInput,
 } from "./footing";
 
@@ -67,6 +68,105 @@ const evaluate = (overrides: Partial<FootingInput> = {}) => evaluateFooting({
   movement: overrides.movement ?? BASE.movement,
   current: overrides.current ?? BASE.current,
   wind: overrides.wind ?? BASE.wind,
+});
+
+describe("shared water-contact pressure quote", () => {
+  const contact = (overrides: Partial<FootingInput> = {}) => ({
+    ...BASE,
+    surface: "water" as const,
+    waterDepth: 700_000,
+    roughness: 0,
+    current: { x: 800_000, y: 0 },
+    ...overrides,
+  });
+
+  it.each([
+    { name: "following", current: { x: 800_000, y: 0 }, expected: 70_000 },
+    { name: "crossing", current: { x: 0, y: 800_000 }, expected: 560_000 },
+    { name: "opposing", current: { x: -800_000, y: 0 }, expected: 560_000 },
+  ])("retains the exact $name travel quote", ({ current, expected }) => {
+    const input = contact({ current });
+    expect(waterContactPressure(input)).toBe(expected);
+    expect(evaluateFooting(input).causes.find(({ code }) => code === "cross-current"))
+      .toMatchObject({ pressure: expected, contribution: expected });
+  });
+
+  it("uses standing force without interpreting a facing vector as travel", () => {
+    const input = contact({ moving: false });
+    expect(waterContactPressure(input)).toBe(280_000);
+    expect(waterContactPressure({ ...input, movement: { x: 0, y: -FIXED_POINT } })).toBe(280_000);
+    expect(waterContactPressure({ ...input, movement: { x: Number.NaN, y: Infinity } })).toBe(280_000);
+  });
+
+  it("unions the exact rough-bed pressure only for water contact", () => {
+    const input = contact({ current: { x: 0, y: 800_000 }, roughness: 900_000 });
+    expect(waterContactPressure(input)).toBe(712_460);
+    expect(waterContactPressure({ ...input, current: { x: 0, y: 0 } })).toBe(346_500);
+    for (const surface of ["firm", "soft", "rock"] as const) {
+      expect(waterContactPressure({ ...input, surface })).toBe(560_000);
+      expect(waterContactPressure({ ...input, surface, current: { x: 0, y: 0 } })).toBe(0);
+    }
+  });
+
+  it("preserves pressure on both sides of the separate ordinary-depth gate", () => {
+    for (const waterDepth of [34_999, 35_000, 35_001]) {
+      const input = contact({ current: { x: 0, y: 800_000 }, waterDepth });
+      const expected = Math.trunc(800_000 * waterDepth / FIXED_POINT);
+      expect(waterContactPressure(input)).toBe(expected);
+      expect(evaluateFooting(input).causes.find(({ code }) => code === "cross-current")?.pressure)
+        .toBe(expected);
+      expect(evaluateFooting(input).causes.some(({ code }) => code === "deep-water"))
+        .toBe(waterDepth > 35_000);
+    }
+    expect(waterContactPressure(contact({ current: { x: 0, y: 0 }, roughness: 900_000, waterDepth: 35_000 })))
+      .toBe(17_325);
+    expect(waterContactPressure(contact({ waterDepth: 0, roughness: FIXED_POINT }))).toBe(0);
+  });
+
+  it("matches the frozen pre-extraction arithmetic including hostile scalar clamps", () => {
+    // Independent quotation of the original local expression, not a second
+    // production evaluator or a new capability/depth policy.
+    const legacy = (input: ReturnType<typeof contact>) => {
+      const unit = (value: number) => !Number.isFinite(value) || value <= 0 ? 0
+        : value >= FIXED_POINT ? FIXED_POINT : Math.trunc(value);
+      const signed = (value: number) => Number.isFinite(value)
+        ? Math.max(-FIXED_POINT, Math.min(FIXED_POINT, Math.trunc(value))) : 0;
+      const product = (left: number, right: number) => Math.trunc(unit(left) * unit(right) / FIXED_POINT);
+      const forceX = signed(input.current.x);
+      const forceY = signed(input.current.y);
+      const magnitude = Math.min(FIXED_POINT, Math.trunc((Math.abs(forceX) + Math.abs(forceY)) / 2));
+      let transverse = magnitude;
+      if (input.moving === true) {
+        const size = Math.max(1, Math.abs(signed(input.movement.x)), Math.abs(signed(input.movement.y)));
+        const moveX = Math.trunc(signed(input.movement.x) * FIXED_POINT / size);
+        const moveY = Math.trunc(signed(input.movement.y) * FIXED_POINT / size);
+        const cross = Math.min(FIXED_POINT, Math.trunc(Math.abs(forceX * moveY - forceY * moveX) / FIXED_POINT));
+        const opposition = Math.max(0, -Math.trunc((forceX * moveX + forceY * moveY) / FIXED_POINT));
+        transverse = Math.min(FIXED_POINT, Math.max(magnitude / 4, cross, opposition));
+      }
+      const relative = product(transverse, unit(input.waterDepth));
+      const bed = input.surface === "water" ? product(product(unit(input.roughness), unit(input.waterDepth)), 550_000) : 0;
+      return FIXED_POINT - product(FIXED_POINT - unit(relative), FIXED_POINT - unit(bed));
+    };
+    const hostile = [Number.NaN, Infinity, -Infinity, -1, 0, 0.9, 35_000.9, FIXED_POINT, Number.MAX_VALUE];
+    for (const value of hostile) {
+      for (const moving of [true, false]) {
+        const input = contact({ moving, roughness: value, waterDepth: value,
+          current: { x: value, y: -value }, movement: { x: -value, y: value } });
+        const quote = waterContactPressure(input);
+        expect(quote).toBe(legacy(input));
+        expect(Number.isSafeInteger(quote)).toBe(true);
+        expect(quote).toBeGreaterThanOrEqual(0);
+        expect(quote).toBeLessThanOrEqual(FIXED_POINT);
+        expect(evaluateFooting(input).causes.find(({ code }) => code === "cross-current")?.pressure ?? 0)
+          .toBe(quote);
+        expect(waterContactPressure(structuredClone(input))).toBe(quote);
+      }
+    }
+    const fractional = contact({ roughness: 123_481.9, waterDepth: 74_217.8,
+      current: { x: 280_933.9, y: -420_199.1 }, movement: { x: 670_319.6, y: -103_127.9 } });
+    expect(waterContactPressure(fractional)).toBe(legacy(fractional));
+  });
 });
 
 describe("terrain-reactive footing v2", () => {

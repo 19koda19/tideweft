@@ -1,16 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { assertWorldInvariants, createWorld, deserializeWorld, serializeWorld, stepWorld } from "../sim/public";
+import { assertWorldInvariants, createWorld, deserializeWorld, runTicks, serializeWorld, stepWorld } from "../sim/public";
 import { replaceResidentActivity, type ResidentActivity } from "../sim/residentActivity";
 import { canonicalResidentActivityForWorld, residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
 import { prepareResidentTravelAdvance, revokeResidentTravelAdvance } from "../sim/residentTravelAdvance";
 import { waterDepthAt } from "../sim/terrain";
-import type { WorldState } from "../sim/types";
+import { FIXED_POINT, type WorldState } from "../sim/types";
+import { surfaceCurrentDirection } from "./currentDirection";
+import { ORDINARY_FOOT_MAX_WATER_DEPTH, waterContactPressure } from "./footing";
 import { PLAYER_FOOT_MAX_WATER_DEPTH } from "./player";
 import { adoptResidentActivities, advanceResidentRestActivities, prepareResidentRestActivities } from "./residentActivityExecution";
 import { residentActivitiesMatchPerceptionInterval, residentActivitySaveExtensionsValid } from "./residentActivitySaveBoundary";
 import { resolveResidentWorldPlacement } from "./residentSpatial";
 import { worldPositionDelta, type WorldPosition } from "./worldPosition";
+import { deriveWaterFlowProfile } from "./waterFlow";
 
 const SEED = "resident activity executable rest approach";
 const ACTOR_ID = "H-v1-p0p0-1v5oh60-5-0vrsmbu";
@@ -195,5 +198,151 @@ describe("selected-rest shallow-source egress", () => {
     }
     expect(serializeWorld(branches[1]!)).toBe(serializeWorld(world));
     expect(serializeWorld(branches[2]!)).toBe(serializeWorld(world));
+  });
+});
+
+// Native lower-world source opportunity, with explicit current-protocol adapter
+// activation. This is not a fresh-runtime or player/rendering witness: the
+// preceding25 civil minutes use the existing lower-world coarse authority.
+function currentSourceFixture() {
+  const world = createWorld("settlement keeper home night continuity", "wild");
+  runTicks(world, 25);
+  const actorId = "H-v1-p0p0-1d9rhmy-2-1kt45xu";
+  const chosen = world.residents.find(({ identity }) => identity.stableId === actorId)!;
+  const source = resolveResidentWorldPlacement(world, chosen)!.position;
+  const target = residentSettlementRestTarget(world, chosen)!;
+  const identity = structuredClone(chosen.identity);
+  const needs = { ...chosen.needs };
+  const condition = { ...chosen.condition };
+  expect(chosen.id).toBe(84);
+  expect(chosen.activeContractId).toBeNull();
+  expect(chosen.intention).toBe("work");
+  expect(world.meta.completedTick).toBe(445);
+  expect(source).toMatchObject({ localX: 88_500, localY: 47_500 });
+  expect(target).toMatchObject({ localX: 89_500, localY: 47_500 });
+  expect(waterDepthAt(tileAt(world, source), world.tide)).toBe(41_474);
+  expect(residentRestTargetHasDrySupport(world, target)).toBe(true);
+  expect(adoptResidentActivities(world)).toBe(true);
+  world.residents = world.residents.map((resident) => replaceResidentActivity(resident, exactProtocol(resident.activity!, 8)));
+  expect(prepareResidentRestActivities(world)).toBe(true);
+  const current = world.residents.find(({ identity: entry }) => entry.stableId === actorId)!;
+  expect(current.identity).toEqual(identity);
+  expect(current.needs).toEqual(needs);
+  expect(current.condition).toEqual(condition);
+  expect(current.activity!.materialTask).toMatchObject({ kind: "settlement-material", phase: "approaching", projectId: 15, resource: "medicine", target });
+  expect(world.settlements.find(({ id }) => id === 4)).toMatchObject({ inventory: { medicine: 110 }, project: { progress: 0, target: 36 } });
+  assertWorldInvariants(world);
+  return { world, source, target, actorId };
+}
+
+function sourceResident(fixture: ReturnType<typeof currentSourceFixture>) {
+  return fixture.world.residents.find(({ identity }) => identity.stableId === fixture.actorId)!;
+}
+
+function sourceCapacity(fixture: ReturnType<typeof currentSourceFixture>) {
+  const resident = sourceResident(fixture);
+  const skill = resident.identity.skills.find(({ kind }) => kind === "swimming")!.aptitude;
+  const reserve = FIXED_POINT - Math.max(resident.needs.rest, resident.condition.exhaustion);
+  return Math.floor(ORDINARY_FOOT_MAX_WATER_DEPTH * Math.floor(skill * reserve / FIXED_POINT) / FIXED_POINT);
+}
+
+function sourceAdvance(fixture: ReturnType<typeof currentSourceFixture>, from: number, to: number) {
+  for (let phase = from; phase <= to; phase += 1) {
+    const result = advanceResidentRestActivities(fixture.world, phase, WINDOW);
+    expect(result).not.toBeNull();
+    expect(result!.maximumSurfaceCells).toBeLessThanOrEqual(16 * 16);
+    assertWorldInvariants(fixture.world);
+  }
+}
+
+describe("current-sensitive occupied-source egress adapter", () => {
+  it("uses genuine aptitude and condition to leave native flowing water for a real material service", () => {
+    const fixture = currentSourceFixture();
+    const { world, source } = fixture;
+    const depth = waterDepthAt(tileAt(world, source), world.tide);
+    const tile = tileAt(world, source);
+    const flow = deriveWaterFlowProfile({ waterDepth: depth, bedRoughness: tile.roughness,
+      tideLevel: world.tide.level, weatherIntensity: world.weather.intensity });
+    const direction = surfaceCurrentDirection(world.tide.direction, world.weather.windY);
+    expect(flow.strength).toBeGreaterThan(0);
+    expect(sourceCapacity(fixture)).toBe(8_023);
+    const economy = structuredClone({ settlements: world.settlements, contracts: world.contracts, ledger: world.ledger, events: world.events });
+    const perception = structuredClone(sourceResident(fixture).perception);
+    sourceAdvance(fixture, 1, 1);
+    const actor = sourceResident(fixture);
+    const movement = worldPositionDelta(source, actor.activity!.poses[1]!.position);
+    expect(movement).toEqual({ x: 105, y: 0 });
+    expect(waterContactPressure({ moving: true, movement, waterDepth: depth, roughness: tile.roughness,
+      surface: "water", current: { x: Math.trunc(direction.x * flow.strength / FIXED_POINT),
+        y: Math.trunc(direction.y * flow.strength / FIXED_POINT) } })).toBe(5_199);
+    expect(actor.activity!.materialTask).toMatchObject({ phase: "approaching", usedAtTick: null });
+    expect(actor.perception).toEqual(perception); // Physical legality is not an exact sounding.
+    expect({ settlements: world.settlements, contracts: world.contracts, ledger: world.ledger, events: world.events }).toEqual(economy);
+  });
+
+  it.each(["cross-wind", "no-aptitude", "rest-exhausted", "physically-exhausted"] as const)("withholds the same native source displacement for %s", (cause) => {
+    const fixture = currentSourceFixture();
+    const { world, source } = fixture;
+    // Explicit single-cause physical/capability counterfactuals, never an
+    // authored task, alternate target, movement result or informed belief.
+    if (cause === "cross-wind") world.weather.windY = FIXED_POINT;
+    if (cause === "no-aptitude") sourceResident(fixture).identity.skills.find(({ kind }) => kind === "swimming")!.aptitude = 0;
+    if (cause === "rest-exhausted") sourceResident(fixture).needs.rest = FIXED_POINT;
+    if (cause === "physically-exhausted") sourceResident(fixture).condition.exhaustion = FIXED_POINT;
+    const perception = structuredClone(sourceResident(fixture).perception);
+    const economy = structuredClone({ settlements: world.settlements, contracts: world.contracts, ledger: world.ledger });
+    expect(waterDepthAt(tileAt(world, source), world.tide)).toBe(41_474);
+    sourceAdvance(fixture, 1, 4);
+    expect(sourceResident(fixture).activity!.poses.every(({ position }) => JSON.stringify(position) === JSON.stringify(source))).toBe(true);
+    expect(sourceResident(fixture).activity!.materialTask).toMatchObject({ phase: "waiting", waitReason: "no-traversable-route", usedAtTick: null });
+    expect(sourceResident(fixture).perception).toEqual(perception);
+    expect({ settlements: world.settlements, contracts: world.contracts, ledger: world.ledger }).toEqual(economy);
+  });
+
+  it.each([0, 1])("checks the independent depth ceiling at capacity plus%s without changing force policy", (extra) => {
+    const fixture = currentSourceFixture();
+    const { world, source } = fixture;
+    // Physical foundation: smooth following contact makes pressure below
+    // reserve, isolating the independent bounded-depth admission.
+    const tile = tileAt(world, source);
+    tile.elevation = world.tide.level - ORDINARY_FOOT_MAX_WATER_DEPTH - sourceCapacity(fixture) - extra;
+    tile.roughness = 0;
+    sourceAdvance(fixture, 1, 1);
+    expect(sourceResident(fixture).activity!.poses[1]!.position).toEqual(extra === 0
+      ? { ...source, localX: source.localX + 105 } : source);
+  });
+
+  it.each([4, 9])("retains exact current phase%s contact across cold continuation and real dry arrival", (phase) => {
+    const fixture = currentSourceFixture();
+    sourceAdvance(fixture, 1, phase);
+    const bytes = serializeWorld(fixture.world);
+    const branches = [fixture.world, structuredClone(fixture.world), deserializeWorld(bytes)];
+    for (const world of branches) {
+      expect(serializeWorld(world)).toBe(bytes);
+      expect(residentActivitiesMatchPerceptionInterval(world.residents, 445, phase)).toBe(true);
+      const branch = { ...fixture, world };
+      sourceAdvance(branch, phase + 1, 10);
+      closeInterval(world);
+      expect(sourceResident(branch).activity!.poses[0]!.position).toEqual(fixture.target);
+      expect(sourceResident(branch).activity!.materialTask).toMatchObject({ phase: "arrived", usedAtTick: null });
+    }
+    expect(serializeWorld(branches[1]!)).toBe(serializeWorld(branches[0]!));
+    expect(serializeWorld(branches[2]!)).toBe(serializeWorld(branches[0]!));
+  });
+
+  it("does not reinterpret retained wet-source work when reserve falls after a cold phase4", () => {
+    const fixture = currentSourceFixture();
+    sourceAdvance(fixture, 1, 4);
+    const bytes = serializeWorld(fixture.world);
+    const world = deserializeWorld(bytes);
+    expect(serializeWorld(world)).toBe(bytes);
+    const branch = { ...fixture, world };
+    const retained = structuredClone(sourceResident(branch).activity!.poses);
+    sourceResident(branch).condition.exhaustion = FIXED_POINT;
+    expect(canonicalResidentActivityForWorld(world, sourceResident(branch))).not.toBeNull();
+    sourceAdvance(branch, 5, 5);
+    expect(sourceResident(branch).activity!.poses.slice(0, 5)).toEqual(retained);
+    expect(sourceResident(branch).activity!.poses[5]).toEqual(retained[4]);
+    expect(sourceResident(branch).activity!.materialTask).toMatchObject({ phase: "waiting", waitReason: "no-traversable-route" });
   });
 });

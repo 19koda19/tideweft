@@ -174,6 +174,24 @@ function surface(value: FootingInput["surface"]): FootingSurface {
   return value === "soft" || value === "rock" || value === "water" ? value : "firm";
 }
 
+/** Unmitigated current and broken-bed pressure from the existing footing rule. */
+export function waterContactPressure(
+  input: Pick<FootingInput, "moving" | "movement" | "current" | "waterDepth" | "roughness" | "surface">,
+): number {
+  const moving = input.moving === true;
+  const footingSurface = surface(input.surface);
+  const roughness = clampUnit(input.roughness);
+  const depth = clampUnit(input.waterDepth);
+  const relativeCurrent = multiplyFixed(
+    transverseForce(input.current, input.movement, moving),
+    depth,
+  );
+  const brokenBedPressure = footingSurface === "water"
+    ? multiplyFixed(multiplyFixed(roughness, depth), 550_000)
+    : 0;
+  return unionFixed(relativeCurrent, brokenBedPressure);
+}
+
 /**
  * Resolves the balance supported by the current physical contact state.
  * Stability is not accumulated damage or a second stamina meter: identical
@@ -189,14 +207,7 @@ export function evaluateFooting(input: FootingInput): FootingEvaluation {
   const roughness = clampUnit(input.roughness);
   const moisture = clampUnit(input.moisture);
   const depth = clampUnit(input.waterDepth);
-  const relativeCurrent = multiplyFixed(
-    transverseForce(input.current, input.movement, moving),
-    depth,
-  );
-  const brokenBedPressure = footingSurface === "water"
-    ? multiplyFixed(multiplyFixed(roughness, depth), 550_000)
-    : 0;
-  const currentPressure = unionFixed(relativeCurrent, brokenBedPressure);
+  const currentPressure = waterContactPressure(input);
   const windPressure = multiplyFixed(
     transverseForce(input.wind, input.movement, moving),
     clampUnit(input.weatherIntensity),

@@ -135,7 +135,8 @@ perception; missing/pruned history is unknown.
 
 Applicable unladen human rest/ration/material/inspection also respects
 [source-only shallow egress](./ARCHITECTURE.md#unladen-rest-and-service-shallow-source-egress):
-ordinary-foot capability may open the occupied source, not wet destinations,
+ordinary-foot capability or authenticated aptitude/condition plus shared contact
+pressure may open the occupied source, not wet destinations,
 pickup/loaded travel or a general vessel/ADRIFT/equipment capability. Approach
 does not replace the existing arrival, finite-use or fresh-sight action owner.
 

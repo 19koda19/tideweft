@@ -54,7 +54,9 @@ import {
   residentTravelSegmentPose, residentTravelWindowInterval,
 } from "../sim/residentTravelRoute";
 import { residentTravelIntervalWorkUsed, residentTravelStepUnits } from "../sim/residentTravelAdvance";
-import { ORDINARY_FOOT_MAX_WATER_DEPTH, TERRAIN_DRAG_PERMILLE } from "./footing";
+import { ORDINARY_FOOT_MAX_WATER_DEPTH, TERRAIN_DRAG_PERMILLE, waterContactPressure } from "./footing";
+import { surfaceCurrentDirection } from "./currentDirection";
+import { deriveWaterFlowProfile } from "./waterFlow";
 import {
   applyWayknotServiceWear, queryWayknotEffects, MAX_WAYKNOT_CAPACITY,
   WAYKNOT_FULL_STRENGTH, WAYKNOT_PERMILLE, WAYKNOT_STATE_VERSION,
@@ -70,7 +72,7 @@ import type { SettlementEcologyState } from "./settlementEcology";
 import { settlementKeeperInspectionCauseForWorld } from "./settlementKeeperInspection";
 import { waterDepthAt } from "../sim/terrain";
 import { residentRestSurfaceKnowledge } from "../sim/residentSurfaceKnowledge";
-import { WORLD_HEIGHT, WORLD_WIDTH, type ResidentState, type WorldState } from "../sim/types";
+import { FIXED_POINT, WORLD_HEIGHT, WORLD_WIDTH, type ResidentState, type WorldState } from "../sim/types";
 import { createLivingActorAddress, headingFromRadians } from "./livingActor";
 import {
   createLivingActorTraversabilityCellsFromCodes,
@@ -86,6 +88,7 @@ import {
 import { resolveResidentWorldPlacement } from "./residentSpatial";
 import {
   createWorldPosition,
+  worldPositionDelta,
   WORLD_POSITION_UNITS_PER_TILE,
   type WorldPosition,
 } from "./worldPosition";
@@ -556,7 +559,8 @@ export function advanceResidentRestActivities(
             && ((task.kind === "settlement-rest" && task.origin === "selected")
               || task.kind === "settlement-ration" || task.kind === "settlement-material"
               || task.kind === "settlement-inspection");
-          const surface = restApproachSurface(world, resident, pose.position, task.target, shallowSourceEgress);
+          const sourceCapacity = shallowSourceEgress ? occupiedSourceWaterCapacity(resident) : null;
+          const surface = restApproachSurface(world, resident, pose.position, task.target, sourceCapacity);
           if (surface === null) task = waitForRest(task, tick, "outside-local-corridor");
           else {
             maximumSurfaceCells = Math.max(maximumSurfaceCells, surface.cells.length);
@@ -581,20 +585,29 @@ export function advanceResidentRestActivities(
               surface,
             });
             if (resolution.kind === "moved") {
-              if (contact !== null && contact.winningMatId !== null && nextWayknots !== undefined
-                && enteredContactTile(contact, resolution.actor.position)
-                && resolution.distanceUnits > contact.bareStepUnits) {
-                // Shared locomotion pays path distance, not a shortcut chord.
-                // Goal clipping or movement within the source tile is no use.
-                const service = applyWayknotServiceWear(nextWayknots, contact.winningMatId, tick,
-                  WAYKNOT_FULL_STRENGTH, pose.position.region);
-                if (!service.ok) return null;
-                nextWayknots = service.state;
+              // Quote the solver's actual contact segments, not the goal
+              // bearing or terminal chord: a single step can turn at a knot.
+              // No pose, wear or progress is committed until contact passes.
+              if (sourceCapacity !== null && !occupiedSourceWaterSupportsStep(
+                world, pose.position, resolution.trajectory, sourceCapacity,
+              )) {
+                task = waitForRest(task, tick, "no-traversable-route");
+              } else {
+                if (contact !== null && contact.winningMatId !== null && nextWayknots !== undefined
+                  && enteredContactTile(contact, resolution.actor.position)
+                  && resolution.distanceUnits > contact.bareStepUnits) {
+                  // Shared locomotion pays path distance, not a shortcut chord.
+                  // Goal clipping or movement within the source tile is no use.
+                  const service = applyWayknotServiceWear(nextWayknots, contact.winningMatId, tick,
+                    WAYKNOT_FULL_STRENGTH, pose.position.region);
+                  if (!service.ok) return null;
+                  nextWayknots = service.state;
+                }
+                pose = { position: resolution.actor.position, heading: resolution.actor.heading };
+                task = { ...task, lastProgressAtTick: tick };
+                movedActorIds.push(resident.identity.stableId);
+                if (samePosition(pose.position, task.target)) task = arriveAtRest(task, tick);
               }
-              pose = { position: resolution.actor.position, heading: resolution.actor.heading };
-              task = { ...task, lastProgressAtTick: tick };
-              movedActorIds.push(resident.identity.stableId);
-              if (samePosition(pose.position, task.target)) task = arriveAtRest(task, tick);
             } else {
               if (resolution.reason === "invalid-input") return null;
               // No-move/already-within is never an independent arrival proof.
@@ -736,12 +749,51 @@ function waitForRest<T extends ResidentRestTask | ResidentRationTask | ResidentM
   return { ...task, phase: "waiting", waitReason: reason, nextReassessmentAtTick: tick + 1 };
 }
 
+/** Bare-human escape reserve, not swimming, a rated pack or apparent gear. */
+function occupiedSourceWaterCapacity(resident: ResidentState): number {
+  const skill = resident.identity.skills.find(({ kind }) => kind === "swimming")?.aptitude ?? 0;
+  const fatigue = Math.max(resident.needs.rest, resident.condition.exhaustion);
+  if (![skill, fatigue].every((value) => Number.isSafeInteger(value) && value >= 0 && value <= FIXED_POINT)) return 0;
+  const aptitudeWithReserve = Math.floor(skill * (FIXED_POINT - fatigue) / FIXED_POINT);
+  return Math.floor(ORDINARY_FOOT_MAX_WATER_DEPTH * aptitudeWithReserve / FIXED_POINT);
+}
+
+/** A prospective contact check cannot create a sounding or historical pose. */
+function occupiedSourceWaterSupportsStep(
+  world: WorldState, source: WorldPosition, trajectory: readonly WorldPosition[], capacity: number,
+): boolean {
+  const x = Math.floor(source.localX / WORLD_POSITION_UNITS_PER_TILE);
+  const y = Math.floor(source.localY / WORLD_POSITION_UNITS_PER_TILE);
+  const tile = world.terrain.tiles[y * world.terrain.width + x];
+  if (tile === undefined || tile.x !== x || tile.y !== y || tile.terrain === "deep-water") return false;
+  const depth = waterDepthAt(tile, world.tide);
+  if (depth <= ORDINARY_FOOT_MAX_WATER_DEPTH) return true; // Preserve the existing foot band exactly.
+  if (depth > ORDINARY_FOOT_MAX_WATER_DEPTH + capacity) return false;
+  const profile = deriveWaterFlowProfile({ waterDepth: depth, bedRoughness: tile.roughness,
+    tideLevel: world.tide.level, weatherIntensity: world.weather.intensity });
+  const direction = surfaceCurrentDirection(world.tide.direction, world.weather.windY);
+  const current = { x: Math.trunc(direction.x * profile.strength / FIXED_POINT),
+    y: Math.trunc(direction.y * profile.strength / FIXED_POINT) };
+  for (let index = 1; index < trajectory.length; index += 1) {
+    const from = trajectory[index - 1]!;
+    // The shared route admits no other wet cell. Once the actual polyline
+    // leaves this source, the remaining contacts are dry and need no quote.
+    if (from.region.x !== source.region.x || from.region.y !== source.region.y
+      || Math.floor(from.localX / WORLD_POSITION_UNITS_PER_TILE) !== x
+      || Math.floor(from.localY / WORLD_POSITION_UNITS_PER_TILE) !== y) break;
+    const movement = worldPositionDelta(from, trajectory[index]!);
+    if (waterContactPressure({ moving: true, movement, waterDepth: depth,
+      roughness: tile.roughness, surface: "water", current }) > capacity) return false;
+  }
+  return true;
+}
+
 function restApproachSurface(
   world: WorldState,
   resident: ResidentState,
   position: WorldPosition,
   target: WorldPosition,
-  shallowSourceEgress: boolean,
+  sourceWaterCapacity: number | null,
 ): LivingActorTraversabilitySurface | null {
   if (position.region.x !== 0 || position.region.y !== 0
     || target.region.x !== 0 || target.region.y !== 0) return null;
@@ -764,12 +816,14 @@ function restApproachSurface(
       const tile = world.terrain.tiles[y * world.terrain.width + x];
       if (tile === undefined || tile.x !== x || tile.y !== y) return null;
       const depth = waterDepthAt(tile, world.tide);
-      // Current unladen rest/services may leave their occupied ordinary-foot
+      // Current unladen rest/services may leave their occupied bounded
       // shallows, never enter another wet cell. Target support stays dry.
       // Old protocols, pickup and travel retain their dry-only behavior;
       // this grants no wading, ADRIFT, boat, gear or injury capability.
-      const occupiedShallows = shallowSourceEgress && x === ax && y === ay
-        && depth <= ORDINARY_FOOT_MAX_WATER_DEPTH;
+      // Above the unchanged ordinary band this only prepares a route; the
+      // actual proposed movement still needs the shared contact-pressure check.
+      const occupiedShallows = sourceWaterCapacity !== null && x === ax && y === ay
+        && depth <= ORDINARY_FOOT_MAX_WATER_DEPTH + sourceWaterCapacity;
       codes.push(tile.terrain === "deep-water" || (depth > 0 && !occupiedShallows)
         ? -1 : Math.max(1, Math.min(1_000_000, tile.baseTravelCost)));
     }
