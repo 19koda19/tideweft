@@ -6804,6 +6804,43 @@ This is test/evidence work, not a production/schema/support/dependency change,
 performance measurement, population fairness, full lifecycle/normal-play
 acceptance, public release or directive closure.
 
+### Native civic request continuity across work opportunities — 2026-10-10
+
+The existing first-hour `runtime.residentRest.integration.test.ts` civic case
+now follows the untouched `runtime baseline estuary` through a second hourly
+opportunity at local parent `5c72585`. Ordinary START/RAF steps retain native
+needs, weather, offers, recipes, stocks, terrain, bodies and tasks. No worker,
+arrival or successful result is assigned. The existing complete first-hour
+accounting and cold assertions remain intact.
+
+At settlement3/project13, the actual post-needs selector admits at least two
+arrived contenders at480. The first equal-age winner contributes one real parts
+unit; another retains its older pending request. All60 intervening world
+closures retain that request and actual target position, while the successful
+worker genuinely reselects with a newer age. Both remain eligible at540 and the
+older waiter receives the next conserved contribution. This is one native
+site's two-opportunity runtime witness: one successful use ahead of the older
+request and60 civil ticks between uses, not a universal wall-time service
+guarantee or all-population/long-run starvation certification.
+
+Read-only wrappers return the original selector and step results. Independent
+recipe-order arithmetic checks parts stocks and the global produced/consumed
+ledger; the project advances1→2 and no contract transfer/cargo explains the
+change. Detached539/phase9→540 and consumed540→541 loads match all saved roots
+apart from the established session/envelope-integrity exclusions. The following
+minute preserves stock, ledger and project results directly; load emits no audio.
+
+The final native selection passes in48.977s; four adjacent lower-owner cases also
+pass in that selection. The complete material integration and codec selection
+(`npx vitest run src/game/residentMaterialActivity.integration.test.ts
+src/sim/residentMaterialActivity.test.ts --maxWorkers=1`) passes34 tests in19.85s.
+These cover the independent three-contender/intermittent-supply bound,
+source/priority revocation and cold nonreplay. Maintained critical smoke6/105
+and typecheck pass. Ignored `native-civic-fairness-final.json` and
+`native-civic-fairness-material-domain.json` retain exact results. This is
+test/evidence only: no runtime, schema, supported-reader, dependency, visual,
+performance, public-release or directive-closure change is claimed.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
