@@ -8129,6 +8129,23 @@ one flank opens. Characterization adds no application change or performance
 gain; any combined-walk candidate must retain full validation, independent
 policy outcomes, endpoint/supercover/light/range/signature and failure laws.
 
+The provisional application candidate shares Bresenham/supercover arithmetic
+between elevation-only terrain and obstruction-aware detail channels. It keeps
+the full snapshot validation/copy boundary; point sight and light transmission
+retain their single-channel validation and early exits. Diagonal blocking uses
+the intersection of independently evaluated flank channels, and target faces
+remain visible. Range, illumination, terrain strength, feather cleanup and
+all public interfaces remain unchanged. Native arithmetic calls fall to229,983/
+190,829 per evaluation; complete result and current-save bytes remain pinned.
+The initial two failures are retained BEFORE cost-oracle mismatches only;
+updating those arithmetic expectations does not change any behavior oracle.
+Final affected9files/145tests, original late-closure rollback1selected,
+typecheck and maintained critical105 pass. No schema, compatibility, dependency,
+upstream, platform configuration, timing or fidelity change occurs. This is a
+correctness-validated candidate, **not a retained performance improvement**:
+both products still require every fresh unsampled AFTER observation against
+the frozen BEFORE acceptance, followed by actual artifact checks.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

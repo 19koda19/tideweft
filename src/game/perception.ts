@@ -656,12 +656,27 @@ function hasLineOfSight(
   validateTraversedCells = false,
   validationState?: LineValidationState,
 ): boolean {
+  const channels = blockOnObstruction ? 2 : 1;
+  return (traceSightChannels(
+    grid, fromIndex, toIndex, channels, validateTraversedCells, validationState,
+  ) & channels) !== 0;
+}
+
+/** Bit1 is elevation-only terrain; bit2 also respects opaque detail cover. */
+function traceSightChannels(
+  grid: ValidatedGrid,
+  fromIndex: number,
+  toIndex: number,
+  requestedChannels: 1 | 2 | 3,
+  validateTraversedCells = false,
+  validationState?: LineValidationState,
+): number {
   const fromX = fromIndex % grid.columns;
   const fromY = Math.floor(fromIndex / grid.columns);
   const toX = toIndex % grid.columns;
   const toY = Math.floor(toIndex / grid.columns);
   const totalDistance = Math.hypot(toX - fromX, toY - fromY);
-  if (totalDistance === 0) return true;
+  if (totalDistance === 0) return requestedChannels;
 
   const rawOrigin = grid.cells[fromIndex];
   const rawTarget = grid.cells[toIndex];
@@ -669,7 +684,7 @@ function hasLineOfSight(
   const target = validateTraversedCells ? readPerceptionCell(rawTarget) : rawTarget;
   if (!origin || !target) {
     if (validationState) validationState.invalidCell = true;
-    return false;
+    return 0;
   }
   const originEye = origin.elevation + OBSERVER_EYE_HEIGHT;
   const targetEye = target.elevation + OBSERVER_EYE_HEIGHT;
@@ -681,18 +696,24 @@ function hasLineOfSight(
   const deltaY = -Math.abs(toY - fromY);
   const stepY = fromY < toY ? 1 : -1;
   let error = deltaX + deltaY;
+  let clearChannels: number = requestedChannels;
 
-  const cellBlocksRay = (cellX: number, cellY: number): boolean => {
+  const cellBlocksRay = (cellX: number, cellY: number): number => {
     const rawCell = grid.cells[cellY * grid.columns + cellX];
     const cell = validateTraversedCells ? readPerceptionCell(rawCell) : rawCell;
     if (!cell) {
       if (validationState) validationState.invalidCell = true;
-      return true;
+      return requestedChannels;
     }
-    if (blockOnObstruction && cell.obstruction >= OBSTRUCTION_BLOCKING_THRESHOLD) return true;
+    const blockedChannels = (requestedChannels & 2) !== 0
+      && cell.obstruction >= OBSTRUCTION_BLOCKING_THRESHOLD ? 2 : 0;
+    // Preserve obstruction-first short circuit for shape-only detail/light
+    // queries. Combined snapshot tracing still needs elevation for terrain.
+    if (blockedChannels === requestedChannels) return blockedChannels;
     const traveled = Math.hypot(cellX - fromX, cellY - fromY);
     const rayHeight = originEye + (targetEye - originEye) * (traveled / totalDistance);
-    return cell.elevation >= rayHeight - LINE_OF_SIGHT_EPSILON;
+    return cell.elevation >= rayHeight - LINE_OF_SIGHT_EPSILON
+      ? requestedChannels : blockedChannels;
   };
 
   while (x !== toX || y !== toY) {
@@ -716,12 +737,14 @@ function hasLineOfSight(
     if (moveX && moveY) {
       const horizontalFlankBlocks = cellBlocksRay(x, previousY);
       const verticalFlankBlocks = cellBlocksRay(previousX, y);
-      if (horizontalFlankBlocks && verticalFlankBlocks) return false;
+      clearChannels &= ~(horizontalFlankBlocks & verticalFlankBlocks);
+      if (clearChannels === 0) return 0;
     }
-    if (x === toX && y === toY) return true;
-    if (cellBlocksRay(x, y)) return false;
+    if (x === toX && y === toY) return clearChannels;
+    clearChannels &= ~cellBlocksRay(x, y);
+    if (clearChannels === 0) return 0;
   }
-  return true;
+  return clearChannels;
 }
 
 /**
@@ -980,7 +1003,21 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
     // built structures can conceal a person or parcel without erasing the larger ridge,
     // shoreline, or route shape behind it; elevation still creates a true
     // terrain horizon for both fields.
-    if (!hasLineOfSight(grid, playerTileIndex, index, false)) continue;
+    const targetIllumination = detailRangeScaleForIllumination(
+      detailIllumination?.[index] ?? 1,
+    );
+    const detailInPeripheralRange = distance
+      <= maximumDetailPeripheralRange * targetIllumination + LINE_OF_SIGHT_EPSILON;
+    const detailInDirectRange = distance
+      <= maximumDetailDirectRange * targetIllumination + LINE_OF_SIGHT_EPSILON;
+    const detailInForwardCone = bearingDistance <= detailHalfCone + LINE_OF_SIGHT_EPSILON;
+    const detailDirect = detailInDirectRange && detailInForwardCone;
+    // The copied, fully validated snapshot can share its exact ray walk, not
+    // its disclosure policy. Terrain and detail retain independent channels.
+    const sightChannels = traceSightChannels(
+      grid, playerTileIndex, index, detailDirect || detailInPeripheralRange ? 3 : 1,
+    );
+    if ((sightChannels & 1) === 0) continue;
     const inSoftTerrainEdge = featherTerrainEdge
       && direct
       && (
@@ -1008,19 +1045,10 @@ export function evaluatePerception(input: PerceptionInput): PerceptionResult {
         : VISIBILITY_PERIPHERAL;
     }
 
-    const targetIllumination = detailRangeScaleForIllumination(
-      detailIllumination?.[index] ?? 1,
-    );
-    const detailInPeripheralRange = distance
-      <= maximumDetailPeripheralRange * targetIllumination + LINE_OF_SIGHT_EPSILON;
-    const detailInDirectRange = distance
-      <= maximumDetailDirectRange * targetIllumination + LINE_OF_SIGHT_EPSILON;
-    const detailInForwardCone = bearingDistance <= detailHalfCone + LINE_OF_SIGHT_EPSILON;
-    const detailDirect = detailInDirectRange && detailInForwardCone;
     if (
       terrainStrength > 0
       && (detailDirect || detailInPeripheralRange)
-      && hasLineOfSight(grid, playerTileIndex, index, true)
+      && (sightChannels & 2) !== 0
     ) {
       detailVisibility[index] = detailDirect
         || (rawInput.closeDetailIsDirect === true && detailInPeripheralRange)

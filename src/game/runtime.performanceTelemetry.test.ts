@@ -570,11 +570,13 @@ describe("runtime performance telemetry", () => {
           .toEqual([[10, 0], [20, 1], [30, 2]]);
         for (const call of perceptionCalls) {
           expect(call).toMatchObject(seed === "runtime baseline estuary" ? {
-            hypotCalls: 323_681, detailVisibleNonplayer: 1791,
+            // The shared-walk candidate deliberately reduces arithmetic only;
+            // the BEFORE counts323681/255320 remain in retained evidence.
+            hypotCalls: 229_983, detailVisibleNonplayer: 1791,
             signature: "perception-v3:c3552d11",
             resultDigest: "3ad52fdaabf936e5c964be4dc03a12482196759fa8d13af630b542e0fcc97eac",
           } : {
-            hypotCalls: 255_320, detailVisibleNonplayer: 1176,
+            hypotCalls: 190_829, detailVisibleNonplayer: 1176,
             signature: "perception-v3:baaf234e",
             resultDigest: "c37a956207c4221541e02cae0bcbebfb53de8e238d0e64d4b868d128e0ddcfe5",
           });
@@ -664,7 +666,7 @@ describe("runtime performance telemetry", () => {
             advances: breadthParentCensus,
           },
           perceptionEvaluation: {
-            scope: "original-once evaluator inside31callbacks; complete result digests and scoped Math.hypot calls; not private-ray counts, CPU timing or removable cost; current detail-visible nonplayer cells prove a lower bound on twice-successful terrain/detail ray paths",
+            scope: "original-once evaluator inside31callbacks; complete result digests and scoped Math.hypot calls; not private-ray counts, CPU timing or removable cost; detail-visible nonplayer cells established a lower bound on twice-successful paths in the retained BEFORE algorithm",
             uniqueCellArrays: nextPerceptionCellArrayId,
             calls: perceptionCalls.map((call) => ({ ...call, bucket: frameBuckets.get(call.frame) })),
           },
