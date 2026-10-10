@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -75,6 +76,44 @@ function uncachedProjection(world: WorldView, player: PlayerState) {
 }
 
 describe("terrain projection receipt", () => {
+  it("preserves ordered terrain records, descriptors and cold projection bytes", () => {
+    const { world, mutableWorld, player } = createFixture("terrain records have one physical meaning", true);
+    const originalWorld = structuredClone(world);
+    const originalPlayer = structuredClone(player);
+    const first = projectGameView(world, player);
+    const uncached = projectGameView(mutableWorld, player);
+    const keys = [
+      "kind", "biome", "climate", "elevation", "moisture", "roughness", "waterDepth",
+      "depthKnown", "discovered", "currentVisibility", "currentDetailVisibility",
+      "currentLocalIllumination", "trace", "shelter", "blocked",
+    ];
+    expect(first.terrain.tiles).toHaveLength(14_400);
+    expect(JSON.stringify(first.terrain.tiles)).toBe(JSON.stringify(uncached.terrain.tiles));
+    for (const [tiles, frozen] of [[first.terrain.tiles, true], [uncached.terrain.tiles, false]] as const) {
+      expect(Object.isFrozen(tiles)).toBe(frozen);
+      for (const tile of tiles) {
+        expect(Object.keys(tile)).toEqual(keys);
+        expect(Object.getOwnPropertyDescriptors(tile)).toEqual(Object.fromEntries(keys.map((key) => [key, {
+          value: Reflect.get(tile, key), enumerable: true, writable: !frozen, configurable: !frozen,
+        }])));
+        expect(Object.isFrozen(tile)).toBe(frozen);
+        expect(Object.isFrozen(tile.climate)).toBe(true);
+      }
+    }
+    expect(projectGameView(world, player).terrain.tiles).toBe(first.terrain.tiles);
+    expect(first.terrain.tiles[0]?.climate).toBe(uncached.terrain.tiles[0]?.climate);
+    expect(world).toEqual(originalWorld);
+    expect(player).toEqual(originalPlayer);
+    // Frozen on the original constructor before the record-shape experiment.
+    expect(createHash("sha256").update(JSON.stringify(first.terrain.tiles)).digest("hex"))
+      .toBe("59cfe9fa30853e519d9b46090c15ef4c7b17434f3c19b054677fc312bfcabf5b");
+    if (process.env.TIDEWEFT_WORLD_ADVANCE_DIAGNOSTICS === "1") process.stdout.write(`terrain-record-characterization ${JSON.stringify({
+      tiles: first.terrain.tiles.length, keys,
+      sha256: createHash("sha256").update(JSON.stringify(first.terrain.tiles)).digest("hex"),
+      scope: "complete ordered projected terrain JSON, not save authority or an allocation measurement",
+    })}\n`);
+  });
+
   it.each([false, true])("characterizes current-reference selection and distinct-clone validation with sleeping=%s", (sleeping) => {
     const { world, player } = createFixture("a current selection is not a new admission", true);
     const session = createSessionState(world.seedText);

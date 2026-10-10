@@ -10,6 +10,7 @@ import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import * as canonicalUtil from "../sim/util";
 import * as coreEcology from "./coreEcology";
+import * as projectionOwner from "./projection";
 import type { CoreEcologyAggregatePatchState } from "./coreEcology";
 import { CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID } from "./coreEcologyBreadthHabitat";
 import { deserializeBio0Ecology } from "./bio0Ecology";
@@ -331,6 +332,16 @@ describe("runtime performance telemetry", () => {
         let nextInputId = 0;
         let beforeFixedSteps = 0;
         let beforeAdvances = 0;
+        const originalProject = projectionOwner.projectGameView;
+        const seenTerrain = new WeakSet<object>([runtime.getRenderView().terrain.tiles]);
+        const terrainProjections: Array<{ frame: number; newArray: boolean; cells: number }> = [];
+        const projector = vi.spyOn(projectionOwner, "projectGameView").mockImplementation((...args) => {
+          const result = originalProject(...args);
+          const newArray = !seenTerrain.has(result.terrain.tiles);
+          seenTerrain.add(result.terrain.tiles);
+          terrainProjections.push({ frame: currentFrame, newArray, cells: result.terrain.tiles.length });
+          return result;
+        });
         const materializer = vi.spyOn(coreEcology, "setCoreEcologyAggregatePatchMaterializedActors")
           .mockImplementation((value, input) => {
             // The native owner validates and executes exactly once. These
@@ -405,6 +416,7 @@ describe("runtime performance telemetry", () => {
         } finally {
           encoder.mockRestore();
           materializer.mockRestore();
+          projector.mockRestore();
         }
         const telemetry = runtime.getPerformanceTelemetry();
         expect(telemetry.fixedStep.totalCount).toBe(30);
@@ -417,6 +429,13 @@ describe("runtime performance telemetry", () => {
         const digest = createHash("sha256").update(worldJson).digest("hex");
         expect(materializationCalls.length).toBeGreaterThan(0);
         expect(materializationCalls.every(({ frame }) => frameBuckets.has(frame))).toBe(true);
+        expect(terrainProjections.length).toBeGreaterThan(0);
+        expect(terrainProjections.every(({ frame }) => frameBuckets.has(frame))).toBe(true);
+        expect(terrainProjections.every(({ cells }) => cells === 14_400)).toBe(true);
+        expect(terrainProjections).toHaveLength(30);
+        expect(terrainProjections.filter(({ newArray }) => newArray)).toHaveLength(3);
+        expect(terrainProjections.filter(({ newArray }) => newArray)
+          .every(({ frame }) => frameBuckets.get(frame) === "advancing-correlated")).toBe(true);
         expect(materializationCalls.filter(({ eligible }) => eligible).length).toBeGreaterThan(0);
         expect(materializationCalls.filter(({ eligible }) => eligible)
           .every(({ byteEqual }) => byteEqual === true)).toBe(true);
@@ -446,6 +465,16 @@ describe("runtime performance telemetry", () => {
           durableSignalEncodes, durableSignalCodeUnits, durableDerivationCodeUnits,
           uniqueDurableHabitats: durableHabitats.size,
           perDurableHabitatEncodes: [...durableHabitats.values()].sort((left, right) => left - right),
+          terrainProjection: {
+            scope: "successful original-once projections; first-seen arrays exclude setup/save; not CPU or heap allocation counts",
+            calls: terrainProjections.length,
+            newArrays: terrainProjections.filter(({ newArray }) => newArray).length,
+            newCells: terrainProjections.reduce((sum, { newArray, cells }) => sum + (newArray ? cells : 0), 0),
+            byCallback: ["zero-step", "accepted-nonadvancing", "advancing-correlated"].map((bucket) => ({
+              bucket, calls: terrainProjections.filter(({ frame }) => frameBuckets.get(frame) === bucket).length,
+              newArrays: terrainProjections.filter(({ frame, newArray }) => newArray && frameBuckets.get(frame) === bucket).length,
+            })),
+          },
           materialization: {
             scope: "successful native setter calls inside 31 callbacks; setup/save excluded; not a timed profile",
             calls: materializationCalls.length, uniqueInputs: nextInputId,
