@@ -12,8 +12,9 @@ import * as canonicalUtil from "../sim/util";
 import * as coreEcology from "./coreEcology";
 import * as projectionOwner from "./projection";
 import * as breadthHabitatOwner from "./coreEcologyBreadthHabitat";
+import * as breadthEcologyOwner from "./regionalBreadthEcology";
 import type { CoreEcologyAggregatePatchState } from "./coreEcology";
-import { CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID } from "./coreEcologyBreadthHabitat";
+import { CORE_ECOLOGY_BREADTH_DERIVATION_KIND, CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID } from "./coreEcologyBreadthHabitat";
 import { deserializeBio0Ecology } from "./bio0Ecology";
 import { LIVING_ACTOR_ADDRESS_VERSION } from "./livingActor";
 import { ORDINARY_FOOT_MAX_WATER_DEPTH } from "./footing";
@@ -313,6 +314,62 @@ describe("runtime performance telemetry", () => {
         runtime.setPerformanceTelemetryEnabled(true);
         runtime.resetPerformanceTelemetry();
         const originalEncoder = canonicalUtil.stableStringify;
+        const originalHasher = canonicalUtil.hashCanonical;
+        const breadthAdvances: Array<{
+          frame: number; accepted: boolean; outputChildren: readonly object[];
+          parents: Array<{
+            kind: "lineage-shaped-hash" | "complete-patch-encoding";
+            child: object; patchKey: string; completePatchCodeUnits: number;
+          }>;
+        }> = [];
+        let activeBreadthAdvance: (typeof breadthAdvances)[number] | null = null;
+        const recordBreadthParent = (
+          value: unknown,
+          kind: "lineage-shaped-hash" | "complete-patch-encoding",
+          result: string,
+        ) => {
+          if (activeBreadthAdvance === null || typeof value !== "object" || value === null) return;
+          const parent = value as Record<string, unknown>;
+          const expectedKeys = kind === "lineage-shaped-hash"
+            ? ["actorIds", "aggregates", "derivation", "groups", "originRegion", "patchKey", "populations"]
+            : ["aggregatePopulations", "carcasses", "derivation", "groups", "mortalityTransactions",
+              "nextMortalityOrdinal", "originRegion", "patchKey", "populations", "updatedAtTick", "version"];
+          const keys = Object.keys(parent).sort();
+          const child = parent.derivation;
+          if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])
+            || typeof parent.patchKey !== "string" || typeof child !== "object" || child === null
+            || !("kind" in child) || child.kind !== CORE_ECOLOGY_BREADTH_DERIVATION_KIND
+            || !Object.isFrozen(child)) return;
+          activeBreadthAdvance.parents.push({
+            kind, child, patchKey: parent.patchKey,
+            completePatchCodeUnits: kind === "complete-patch-encoding" ? result.length : 0,
+          });
+        };
+        const originalBreadthAdvance = breadthEcologyOwner.advanceRegionalBreadthEcologyActiveResidentsFromReceipt;
+        const breadthAdvancer = vi.spyOn(breadthEcologyOwner, "advanceRegionalBreadthEcologyActiveResidentsFromReceipt")
+          .mockImplementation((...args) => {
+            const prior = activeBreadthAdvance;
+            const observation: (typeof breadthAdvances)[number] = {
+              frame: currentFrame, accepted: false, outputChildren: [], parents: [],
+            };
+            activeBreadthAdvance = observation;
+            try {
+              const result = originalBreadthAdvance(...args);
+              observation.accepted = result !== null;
+              observation.outputChildren = result?.residents.map(({ patch }) => patch.derivation) ?? [];
+              breadthAdvances.push(observation);
+              return result;
+            } finally {
+              activeBreadthAdvance = prior;
+            }
+          });
+        const hasher = vi.spyOn(canonicalUtil, "hashCanonical").mockImplementation((value) => {
+          // The saved original performs its real lexical encoding exactly once.
+          // Observe the parent argument, not an invented recursive child call.
+          const result = originalHasher(value);
+          recordBreadthParent(value, "lineage-shaped-hash", result);
+          return result;
+        });
         const inputs = new Map<object, number>();
         let encodedCodeUnits = 0;
         let durableSignalEncodes = 0;
@@ -399,6 +456,7 @@ describe("runtime performance telemetry", () => {
           });
         const encoder = vi.spyOn(canonicalUtil, "stableStringify").mockImplementation((value) => {
           const encoded = originalEncoder(value);
+          recordBreadthParent(value, "complete-patch-encoding", encoded);
           if (typeof value === "object" && value !== null && "ownerId" in value
             && value.ownerId === CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID) {
             inputs.set(value, (inputs.get(value) ?? 0) + 1);
@@ -443,6 +501,8 @@ describe("runtime performance telemetry", () => {
           materializer.mockRestore();
           projector.mockRestore();
           worldBinder.mockRestore();
+          hasher.mockRestore();
+          breadthAdvancer.mockRestore();
         }
         const telemetry = runtime.getPerformanceTelemetry();
         expect(telemetry.fixedStep.totalCount).toBe(30);
@@ -453,6 +513,43 @@ describe("runtime performance telemetry", () => {
         // cannot change any world, custody, knowledge, session or integrity byte.
         await assertEqualUninstrumentedWork(seed, worldJson);
         const digest = createHash("sha256").update(worldJson).digest("hex");
+        // Posthoc child sizing is outside every observer and the world steps.
+        // Keep all matching parents, including durable-batch work; this scope
+        // does not identify individual private callers or measure CPU time.
+        const breadthParentCensus = breadthAdvances.map((observation) => {
+          const children = [...new Set(observation.parents.map(({ child }) => child))];
+          return {
+            frame: observation.frame, accepted: observation.accepted,
+            children: children.map((child) => {
+              const parents = observation.parents.filter((parent) => parent.child === child);
+              return {
+                patchKeys: [...new Set(parents.map(({ patchKey }) => patchKey))].sort(),
+                childCodeUnits: originalEncoder(child).length,
+                frozenHabitat: "habitat" in child && Object.isFrozen(child.habitat),
+                outputChild: observation.outputChildren.includes(child),
+                lineageParents: parents.filter(({ kind }) => kind === "lineage-shaped-hash").length,
+                completePatchParents: parents.filter(({ kind }) => kind === "complete-patch-encoding").length,
+                completePatchCodeUnits: parents.filter(({ kind }) => kind === "complete-patch-encoding")
+                  .reduce((sum, { completePatchCodeUnits }) => sum + completePatchCodeUnits, 0),
+              };
+            }),
+          };
+        });
+        expect(breadthParentCensus.map(({ frame }) => frame)).toEqual([10, 20, 30]);
+        expect(breadthParentCensus.every(({ frame }) => frameBuckets.has(frame))).toBe(true);
+        for (const { accepted, children } of breadthParentCensus) {
+          expect(accepted).toBe(true);
+          expect(children.every(({ patchKeys, frozenHabitat }) => patchKeys.length === 1 && frozenHabitat)).toBe(true);
+          // Density8 also includes two durable-batch children and extra parent
+          // encodes. Preserve those occurrences instead of selecting one pair.
+          const counts = children.map(({ outputChild, lineageParents, completePatchParents }) => (
+            `${outputChild}:${lineageParents}:${completePatchParents}`
+          )).sort();
+          expect(counts).toEqual((seed === "runtime baseline estuary"
+            ? Array<string>(15).fill("true:1:1")
+            : ["false:0:1", "false:0:1", ...Array<string>(8).fill("true:1:1"), "true:2:2", "true:2:2"]
+          ).sort());
+        }
         expect(worldBindings.length).toBeGreaterThan(0);
         expect(worldBindings.every(({ frame, accepted }) => frameBuckets.has(frame) && accepted)).toBe(true);
         // Retain the exact native pairs characterized before the discarded
@@ -496,6 +593,10 @@ describe("runtime performance telemetry", () => {
           durableSignalEncodes, durableSignalCodeUnits, durableDerivationCodeUnits,
           uniqueDurableHabitats: durableHabitats.size,
           perDurableHabitatEncodes: [...durableHabitats.values()].sort((left, right) => left - right),
+          breadthParents: {
+            scope: "original-once exported advance; exact-shape parent encoder arguments sharing a frozen derivation; all occurrences retained; not recursive child-call/private-caller/CPU counts",
+            advances: breadthParentCensus,
+          },
           worldBinding: {
             scope: "original-once exported habitat world-binding calls inside31callbacks; setup/save excluded; not a timed profile",
             calls: worldBindings.length,

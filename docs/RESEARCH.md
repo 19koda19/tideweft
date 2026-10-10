@@ -8056,6 +8056,30 @@ WORLD0 remains incomplete. Dependency/configuration changes:NONE; upstream
 p5/Electron modified:NO. Security, fidelity, cadence, completed directives and
 the full-Foliage Voice-soak deferral are unchanged.
 
+### Native breadth parent encoding census — 2026-10-10
+
+Test-only observers in `runtime.performanceTelemetry.test.ts` wrap the actual
+exported breadth receipt advance and saved-original hash/encoder exactly once.
+They match the seven-field lineage parent and eleven-field full patch, retain
+every occurrence within that same advance, and correlate the exact frozen
+derivation child. This is **parent-input evidence**, not recursive child-call
+counts, private admit/seed caller attribution, CPU timing or a retained repair.
+Observers are restored before posthoc child sizing and independent save work.
+
+Each native seed processes30 accepted steps with successful advances in
+callbacks10/20/30. Estuary records45 lineage/45 patch parents with15 output
+children per advance. Density8 records36 lineage/42 patch parents: per advance,
+8 output children appear once in each parent family,2 appear twice, and2
+distinct non-output children appear only in complete-patch encodes. Those
+additional occurrences are preserved, not flattened into a selected pair.
+Distinct-child posthoc sizes sum494,052/416,202 UTF16 code units across the
+three scopes; they are not saved CPU or an automatically removable-work total.
+Full current-save bytes/digests remain1,872,066/`922d9c80…` and
+1,902,647/`a7b713dd…`, equal to uninstrumented30-step work. Four telemetry cases,
+typecheck and critical105 pass. No application/artifact, trust, receipt, schema,
+dependency or cadence changes occur. Existing prepared lineage, V1 child reuse
+and V6 prepared patch substitution remain implemented owners, not new proposals.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
