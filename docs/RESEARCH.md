@@ -7398,6 +7398,27 @@ validation speculatively. Existing aggregate commit remains a separate479.964ms
 sampled owner, not evidence of a new resident-path repair. Frozen current
 transition criteria remain unmet. Dependencies and upstream sources unchanged.
 
+### Exact current resident integration cumulative checkpoint — 2026-10-10
+
+Clean `6f05591f63d73f38413bbdd70cd8463e9ca568d8` passes
+`npm run test:ci -- --reporter=default --reporter=json --outputFile.json=artifacts/validation/6f05591-cumulative.json`:
+419 files / 5,451 tests, zero failed, pending or todo; Vitest duration
+2,714.01s. The preceding context-index28, player-facing40 and documentation-
+reuse45 selftests also pass. The terminal JSON SHA256 is
+`d396e75f98fb16fc2805e56addb7cbde501368f0ed06afd8462303d822e66ff3`.
+Its suite counters include nested groups;419 is the actual file-result count.
+
+Source, tests, configuration and tracked documentation remain unchanged
+through the terminal result. All25 resident-rest cases pass at the previously
+recorded `628d36dd…` test bytes, including conditional civic fairness and the
+actual periodic-save boundary. Runtime98 retains the late interval-failure
+rollback of introduction facts, save and committed vocal audio. This certifies
+that exact local checkpoint, not a later changed executable or public release.
+The frozen production-performance failures and incomplete earned-alternative
+ordinary-play proof remain open; arranged admission fixtures do not become
+native gameplay merely because the cumulative suite passes. Extended Voice
+profiling and longitudinal evidence remain deferred to full Living Foliage.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
