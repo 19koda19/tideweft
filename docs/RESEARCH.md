@@ -8080,6 +8080,24 @@ typecheck and critical105 pass. No application/artifact, trust, receipt, schema,
 dependency or cadence changes occur. Existing prepared lineage, V1 child reuse
 and V6 prepared patch substitution remain implemented owners, not new proposals.
 
+A subsequent20.045s packaged CPU diagnostic at clean `7a22b61` uses unchanged
+ASAR`ca30899b…`/JS`37ba0db0…` and a separate byte-matching sourcemap with10
+current owner-source checks. The existing opt-in observer retains685 callbacks,
+19 one-tick advancing brackets and0 discarded records, with paired page/CDP
+clock bookends and conservative boundary exclusion. Requested sampling1ms,
+actual mean1.493ms;1,101 safely bracketed samples carry1,550.236ms of weight
+against1,709.800ms callback wall time. These are attribution weights, not
+unsampled durations or equal-work/repair proof. V6 util leaf caller weights are
+26.572ms beneath breadth receipt seeding and11.742ms beneath lineage hashing.
+Post-world `refreshViews` has197.641ms inclusive weight, including98.915ms
+under player-perception projection. Inclusive parents overlap and must not be
+added. Child-input repetition alone does not establish a worthwhile gain;
+remaining perception/publication work needs its own original-input census.
+No application optimization, browser attribution or standing-gate pass is
+claimed from this sampled diagnostic. Local observer parameters only choose
+new evidence/sourcemap paths; old captures remain untouched and no profiling
+flags, maps or private material enter the shipped artifact.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
