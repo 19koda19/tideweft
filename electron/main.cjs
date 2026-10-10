@@ -1731,7 +1731,10 @@ async function exerciseSmokeResidentAbout(
     const previousMode = renderer.mode();
     renderer.setMode('chart-2d');
     renderer.focusWorld(chosen.porter.position, 1.65);
-    return { id: chosen.porter.id, previousMode, distance: chosen.distance };
+    return {
+      id: chosen.porter.id, previousMode, distance: chosen.distance,
+      selectionAttemptLimit: Math.max(1, candidates.length + ${exclusions.length}),
+    };
   })()`, true);
   if (!target?.id) throw new Error('no nearby resident was available for a physical Chart selection');
   await waitForRenderer(
@@ -1761,7 +1764,32 @@ async function exerciseSmokeResidentAbout(
     const rect = canvas.getBoundingClientRect();
     return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
   })()`, true);
-  const canvasPoint = await sendPhysicalLeftClick(contents, chartTarget, 'resident Chart target');
+  const canvasAttempts = [];
+  let canvasPoint = null;
+  // An exact-position group can include an already greeted/excluded person.
+  // A view switch resets the ephemeral cursor, so use the real repeated-tap
+  // interaction instead of assuming this requested person wins the first hit.
+  // The bound comes from the current nearby public roster, not hidden actors.
+  for (let attempt = 0; attempt < target.selectionAttemptLimit; attempt += 1) {
+    canvasPoint = await sendPhysicalLeftClick(contents, chartTarget, 'resident Chart target');
+    const selected = await waitForRenderer(
+      contents,
+      (probe) => probe.residentAbout?.open === true && probe.residentAbout?.selectedId !== null,
+      SMOKE_TEST.timeoutMs,
+    );
+    canvasAttempts.push({ point: canvasPoint, selectedId: selected.residentAbout.selectedId });
+    if (selected.residentAbout.selectedId === target.id) break;
+    const close = selected.residentAbout.close;
+    if (!close?.visible || !close.insideViewport || close.disabled) {
+      throw new Error('non-target resident ABOUT could not be closed by physical input');
+    }
+    await sendPhysicalLeftClick(contents, close.rect, 'non-target resident ABOUT close');
+    await waitForRenderer(
+      contents,
+      (probe) => probe.residentAbout?.open === false && probe.residentAbout?.selectedId === null,
+      SMOKE_TEST.timeoutMs,
+    );
+  }
 
   const opened = await waitForRenderer(
     contents,
@@ -1807,7 +1835,7 @@ async function exerciseSmokeResidentAbout(
   return {
     id: target.id,
     distance: target.distance,
-    input: { canvasPoint, greetPoint, closePoint },
+    input: { canvasPoint, canvasAttempts, greetPoint, closePoint },
     opened,
     acquainted,
     scroll,
