@@ -76,6 +76,27 @@ function aggregatePatch() {
   });
 }
 
+function groupedAggregatePatch(tick: number) {
+  const habitat = harborHabitat();
+  const populations = individualInputs();
+  const deer = populations.find(({ species }) => species === "deer");
+  if (deer === undefined || deer.members.length < 2) {
+    throw new Error("Materialization characterization requires two deer representatives");
+  }
+  const group = createCoreEcologyGroup({
+    seed: SEED, species: "deer", originRegion: ORIGIN,
+    populationKey: deer.populationKey, groupOrdinal: 0,
+    memberOrdinals: deer.members.map(({ populationOrdinal }) => populationOrdinal),
+    anchor: deer.members[0]!.position,
+  });
+  return createCoreEcologyAggregatePatch({
+    seed: SEED, patchKey: "harbor-edge:materialization-characterization",
+    originRegion: ORIGIN, tick, populations,
+    derivation: { kind: "habitat-v2", habitat },
+    groups: createCoreEcologyGroupSet([group]),
+  });
+}
+
 describe("harbor-edge aggregate ecology", () => {
   it("adds rat area habitat and individual cats without changing Wave-A analyses", () => {
     const waveA = deriveCoreEcologyHabitatAssemblage({ rootSeed: SEED, originRegion: ORIGIN });
@@ -394,5 +415,119 @@ describe("harbor-edge aggregate ecology", () => {
     });
     expect(result?.patch.aggregatePopulations[0]?.evidence).toEqual(evidence);
     expect(result?.patch.aggregatePopulations[0]?.disturbances).toEqual([]);
+  });
+
+  it.each(["group-free", "not-due-group"])(
+    "preserves complete bytes for same-clock empty all-coarse materialization: %s",
+    (kind) => {
+      const state = kind === "group-free" ? aggregatePatch() : groupedAggregatePatch(0);
+      const encoded = serializeCoreEcologyAggregatePatch(state);
+      expect(state.populations.every(({ members }) => members.every(({ materialization }) => (
+        materialization === "coarse"
+      )))).toBe(true);
+      expect(state.groups.groups.every(({ nextCoarseTick }) => nextCoarseTick > state.updatedAtTick))
+        .toBe(true);
+      for (const input of [state, deserializeCoreEcologyAggregatePatch(encoded), structuredClone(state)]) {
+        const result = setCoreEcologyAggregatePatchMaterializedActors(input, {
+          atTick: state.updatedAtTick, actorIds: [],
+        });
+        expect(serializeCoreEcologyAggregatePatch(result)).toBe(encoded);
+        expect(result).toEqual(state);
+        expect(Object.isFrozen(result)).toBe(true);
+        expect(Object.isFrozen(result.populations)).toBe(true);
+        // Returned identity is not a gameplay promise. The runtime census
+        // separately records whether unchanged outputs are reconstructed.
+      }
+    },
+  );
+
+  it("still advances a due group when the requested tick already equals the root clock", () => {
+    const state = groupedAggregatePatch(8);
+    const encoded = serializeCoreEcologyAggregatePatch(state);
+    expect(state.groups.groups[0]).toMatchObject({ updatedAtTick: 0, nextCoarseTick: 8 });
+    const result = setCoreEcologyAggregatePatchMaterializedActors(state, { atTick: 8, actorIds: [] });
+    expect(result.groups.groups[0]).toMatchObject({ updatedAtTick: 8, nextCoarseTick: 16 });
+    expect(result.populations).toEqual(state.populations);
+    expect(result.aggregatePopulations).toEqual(state.aggregatePopulations);
+    expect(serializeCoreEcologyAggregatePatch(result)).not.toBe(encoded);
+    for (const input of [deserializeCoreEcologyAggregatePatch(encoded), structuredClone(state)]) {
+      expect(serializeCoreEcologyAggregatePatch(
+        setCoreEcologyAggregatePatchMaterializedActors(input, { atTick: 8, actorIds: [] }),
+      )).toBe(serializeCoreEcologyAggregatePatch(result));
+    }
+  });
+
+  it("still reconciles a lagged aggregate and activity clock at the current root tick", () => {
+    const initial = aggregatePatch();
+    const state = canonicalizeCoreEcologyAggregatePatch({ ...initial, updatedAtTick: 1 });
+    if (state === null) throw new Error("Valid trailing aggregate clock was rejected");
+    const expected = canonicalizeCoreEcologyAggregatePatch({
+      ...state,
+      aggregatePopulations: state.aggregatePopulations.map((population) => ({
+        ...population, updatedAtTick: 1,
+        activitySignal: { ...population.activitySignal, updatedAtTick: 1 },
+      })),
+    });
+    if (expected === null) throw new Error("Valid reconciled aggregate clock was rejected");
+    const encoded = serializeCoreEcologyAggregatePatch(state);
+    for (const input of [state, deserializeCoreEcologyAggregatePatch(encoded), structuredClone(state)]) {
+      const result = setCoreEcologyAggregatePatchMaterializedActors(input, { atTick: 1, actorIds: [] });
+      expect(serializeCoreEcologyAggregatePatch(result)).toBe(serializeCoreEcologyAggregatePatch(expected));
+      expect(result.populations).toEqual(state.populations);
+      expect(result.groups).toEqual(state.groups);
+      expect(result.aggregatePopulations[0]?.revision).toBe(state.aggregatePopulations[0]?.revision);
+      expect(result.aggregatePopulations[0]?.evidence).toEqual(state.aggregatePopulations[0]?.evidence);
+      expect(result.aggregatePopulations[0]?.disturbances).toEqual(state.aggregatePopulations[0]?.disturbances);
+    }
+  });
+
+  it("does not mistake actual dematerialization or a later clock for an empty no-op", () => {
+    const initial = groupedAggregatePatch(0);
+    const actorId = initial.populations[0]!.members[0]!.actor.identity.stableId;
+    const materialized = setCoreEcologyAggregatePatchMaterializedActors(initial, {
+      atTick: 0, actorIds: [actorId],
+    });
+    const dematerialized = setCoreEcologyAggregatePatchMaterializedActors(materialized, {
+      atTick: 0, actorIds: [],
+    });
+    expect(serializeCoreEcologyAggregatePatch(dematerialized))
+      .not.toBe(serializeCoreEcologyAggregatePatch(materialized));
+    expect(dematerialized.populations.every(({ members }) => members.every(({ materialization }) => (
+      materialization === "coarse"
+    )))).toBe(true);
+    const later = setCoreEcologyAggregatePatchMaterializedActors(initial, { atTick: 1, actorIds: [] });
+    expect(later.updatedAtTick).toBe(1);
+    expect(later.aggregatePopulations.every(({ updatedAtTick, activitySignal }) => (
+      updatedAtTick === 1 && activitySignal.updatedAtTick === 1
+    ))).toBe(true);
+    expect(serializeCoreEcologyAggregatePatch(later)).not.toBe(serializeCoreEcologyAggregatePatch(initial));
+  });
+
+  it("retains complete cold validation and exact input checks even for an otherwise empty no-op", () => {
+    const state = aggregatePatch();
+    const actorId = state.populations[0]!.members[0]!.actor.identity.stableId;
+    expect(() => setCoreEcologyAggregatePatchMaterializedActors({ ...state, debug: true }, {
+      atTick: 0, actorIds: [],
+    })).toThrow();
+    const malformed = structuredClone(state);
+    expect(() => setCoreEcologyAggregatePatchMaterializedActors({
+      ...malformed,
+      aggregatePopulations: malformed.aggregatePopulations.map((population) => ({
+        ...population, activitySignal: { ...population.activitySignal, updatedAtTick: 1 },
+      })),
+    }, { atTick: 0, actorIds: [] })).toThrow();
+    for (const input of [
+      { atTick: -1, actorIds: [] },
+      { atTick: 0, actorIds: ["unknown-actor"] },
+      { atTick: 0, actorIds: [actorId, actorId] },
+      { atTick: 0, actorIds: [], debug: true },
+    ]) expect(() => setCoreEcologyAggregatePatchMaterializedActors(state, input)).toThrow();
+    const later = canonicalizeCoreEcologyAggregatePatch({ ...state, updatedAtTick: 1 });
+    if (later === null) throw new Error("Valid trailing aggregate clock was rejected");
+    expect(() => setCoreEcologyAggregatePatchMaterializedActors(later, {
+      atTick: 0, actorIds: [],
+    })).toThrow();
+    expect(serializeCoreEcologyAggregatePatch(state))
+      .toBe(serializeCoreEcologyAggregatePatch(aggregatePatch()));
   });
 });

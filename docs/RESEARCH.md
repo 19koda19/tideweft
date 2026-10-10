@@ -7747,6 +7747,39 @@ timeouts, dependencies, schema/support, fidelity or release policy changed.
 Short production performance gates remain unresolved; no publication, normal-
 play expansion, long-soak or whole-directive closure is certified.
 
+### Empty materialization reconstruction census — 2026-10-10
+
+**BEFORE characterization only; no new runtime repair or speed claim.**
+Executable `7f48b48` is unchanged at documentation HEAD `92719bd`. The existing
+two-seed runtime fixture observes the native aggregate-materialization setter
+without replacing its arguments, execution or return. Thirty accepted steps /
+three advances over31 native callbacks exclude setup and explicit save work.
+Estuary has180 successful calls/180 exact input objects; density8 has150/150.
+Every exact input-and-tick appears once, so this is not evidence for an identity
+memoization cache. All calls occur in the three advancing-correlated callbacks,
+which include both world work and subsequent publication.
+
+165 estuary /111 dense outputs are byte-identical despite reconstruction:
+55/37 per advance. Eligibility requires empty requested IDs, all members coarse,
+equal root/requested clocks, no due group and no lagging aggregate clock.
+None of these outputs preserves input identity. Canonical byte comparisons
+bypass the separate encoder spy, and the complete equal-work save digests remain
+`922d9c80…` / `a7b713dd…`, also matching an uninstrumented continuation. Per-source
+member/group/aggregate counts describe the first observed call, not maxima.
+
+Focused tests retain warm/serialized/clone validation, due groups at an already
+equal root clock, lagged aggregate/activity clocks, actual dematerialization,
+later ticks, malformed nested state and stale/duplicate/unknown input rejection.
+This supports testing one narrow unchanged-result fast return **after** complete
+input validation; root-clock equality alone is unsafe. Existing sampled setter
+weight is an attribution lead, not an exact duration or promised gain. Matched
+production desktop/browser runs must decide retention. No cadence, cap, schema,
+support, dependency, publication or full-Foliage soak policy changes.
+
+The final characterization passes2 files/18 tests in20.52s; typecheck, the
+maintained6-file/105-test critical smoke and45 documentation-reuse checks pass.
+Local raw log `7a0548fe…` and report `ba0d2dae…` bind the exact test inputs.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

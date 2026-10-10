@@ -9,6 +9,8 @@ import { waterDepthAt } from "../sim/terrain";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import * as canonicalUtil from "../sim/util";
+import * as coreEcology from "./coreEcology";
+import type { CoreEcologyAggregatePatchState } from "./coreEcology";
 import { CORE_ECOLOGY_BREADTH_HABITAT_OWNER_ID } from "./coreEcologyBreadthHabitat";
 import { deserializeBio0Ecology } from "./bio0Ecology";
 import { LIVING_ACTOR_ADDRESS_VERSION } from "./livingActor";
@@ -92,14 +94,20 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function advancePlayerSteps(runtime: TideweftRuntime, count: number): void {
+function advancePlayerSteps(
+  runtime: TideweftRuntime,
+  count: number,
+  observeFrame?: (frame: number, phase: "before" | "after") => void,
+): void {
   runtime.start();
   let now = 100;
   for (let frame = 0; frame <= count; frame += 1) {
     const callback = scheduledFrame;
     if (callback === undefined) throw new Error("runtime did not schedule its next frame");
     scheduledFrame = undefined;
+    observeFrame?.(frame, "before");
     callback(now);
+    observeFrame?.(frame, "after");
     now += 100;
   }
   runtime.stop();
@@ -309,6 +317,57 @@ describe("runtime performance telemetry", () => {
         let durableSignalCodeUnits = 0;
         let durableDerivationCodeUnits = 0;
         const durableHabitats = new Map<object, number>();
+        const originalMaterializer = coreEcology.setCoreEcologyAggregatePatchMaterializedActors;
+        const inputIds = new WeakMap<object, number>();
+        const materializationCalls: Array<{
+          frame: number; inputId: number; patchKey: string; patchTick: number;
+          requestedTick: number; memberCount: number; aggregateCount: number;
+          groupCount: number; dueGroups: number; laggingAggregates: number;
+          sameClock: boolean; emptyIds: boolean; allCoarse: boolean;
+          eligible: boolean; byteEqual: boolean | null; sameObject: boolean;
+        }> = [];
+        const frameBuckets = new Map<number, "zero-step" | "accepted-nonadvancing" | "advancing-correlated">();
+        let currentFrame = -1;
+        let nextInputId = 0;
+        let beforeFixedSteps = 0;
+        let beforeAdvances = 0;
+        const materializer = vi.spyOn(coreEcology, "setCoreEcologyAggregatePatchMaterializedActors")
+          .mockImplementation((value, input) => {
+            // The native owner validates and executes exactly once. These
+            // observations neither replace its result nor authenticate input.
+            const result = originalMaterializer(value, input);
+            const patch = value as CoreEcologyAggregatePatchState;
+            let inputId = inputIds.get(patch);
+            if (inputId === undefined) {
+              inputId = nextInputId++;
+              inputIds.set(patch, inputId);
+            }
+            const sameClock = input.atTick === patch.updatedAtTick;
+            const emptyIds = input.actorIds.length === 0;
+            const allCoarse = patch.populations.every(({ members }) => (
+              members.every(({ materialization }) => materialization === "coarse")
+            ));
+            const dueGroups = patch.groups.groups.filter(({ nextCoarseTick }) => (
+              nextCoarseTick <= input.atTick
+            )).length;
+            const laggingAggregates = patch.aggregatePopulations.filter(({ updatedAtTick }) => (
+              updatedAtTick !== input.atTick
+            )).length;
+            materializationCalls.push({
+              frame: currentFrame, inputId, patchKey: patch.patchKey,
+              patchTick: patch.updatedAtTick, requestedTick: input.atTick,
+              memberCount: patch.populations.reduce((sum, { members }) => sum + members.length, 0),
+              aggregateCount: patch.aggregatePopulations.length, groupCount: patch.groups.groups.length,
+              dueGroups, laggingAggregates, sameClock, emptyIds, allCoarse,
+              eligible: sameClock && emptyIds && allCoarse && dueGroups === 0 && laggingAggregates === 0,
+              // Bypass the encoder spy so diagnostic reads do not inflate the
+              // existing real habitat/durable-signal encoding census.
+              byteEqual: sameClock && emptyIds && allCoarse
+                ? originalEncoder(patch) === originalEncoder(result) : null,
+              sameObject: result === patch,
+            });
+            return result;
+          });
         const encoder = vi.spyOn(canonicalUtil, "stableStringify").mockImplementation((value) => {
           const encoded = originalEncoder(value);
           if (typeof value === "object" && value !== null && "ownerId" in value
@@ -330,9 +389,22 @@ describe("runtime performance telemetry", () => {
           return encoded;
         });
         try {
-          advancePlayerSteps(runtime, 30);
+          advancePlayerSteps(runtime, 30, (frame, phase) => {
+            const counts = runtime.getPerformanceTelemetry();
+            if (phase === "before") {
+              currentFrame = frame;
+              beforeFixedSteps = counts.fixedStep.totalCount;
+              beforeAdvances = counts.worldAdvanceStep.totalCount;
+            } else {
+              frameBuckets.set(frame, counts.worldAdvanceStep.totalCount > beforeAdvances
+                ? "advancing-correlated"
+                : counts.fixedStep.totalCount > beforeFixedSteps ? "accepted-nonadvancing" : "zero-step");
+              currentFrame = -1;
+            }
+          });
         } finally {
           encoder.mockRestore();
+          materializer.mockRestore();
         }
         const telemetry = runtime.getPerformanceTelemetry();
         expect(telemetry.fixedStep.totalCount).toBe(30);
@@ -343,6 +415,29 @@ describe("runtime performance telemetry", () => {
         // cannot change any world, custody, knowledge, session or integrity byte.
         await assertEqualUninstrumentedWork(seed, worldJson);
         const digest = createHash("sha256").update(worldJson).digest("hex");
+        expect(materializationCalls.length).toBeGreaterThan(0);
+        expect(materializationCalls.every(({ frame }) => frameBuckets.has(frame))).toBe(true);
+        expect(materializationCalls.filter(({ eligible }) => eligible).length).toBeGreaterThan(0);
+        expect(materializationCalls.filter(({ eligible }) => eligible)
+          .every(({ byteEqual }) => byteEqual === true)).toBe(true);
+        const repeatedInputs = new Map<string, number>();
+        const sourceCounts = new Map<string, {
+          calls: number; eligible: number; eligibleBytesEqual: number; sameObjects: number;
+          memberCount: number; aggregateCount: number; groupCount: number;
+        }>();
+        for (const call of materializationCalls) {
+          const repetitionKey = `${call.inputId}:${call.requestedTick}`;
+          repeatedInputs.set(repetitionKey, (repeatedInputs.get(repetitionKey) ?? 0) + 1);
+          const counts = sourceCounts.get(call.patchKey) ?? {
+            calls: 0, eligible: 0, eligibleBytesEqual: 0, sameObjects: 0,
+            memberCount: call.memberCount, aggregateCount: call.aggregateCount, groupCount: call.groupCount,
+          };
+          counts.calls += 1;
+          counts.eligible += Number(call.eligible);
+          counts.eligibleBytesEqual += Number(call.eligible && call.byteEqual);
+          counts.sameObjects += Number(call.sameObject);
+          sourceCounts.set(call.patchKey, counts);
+        }
         if (process.env.TIDEWEFT_WORLD_ADVANCE_DIAGNOSTICS === "1") process.stdout.write(`world-advance-characterization ${JSON.stringify({
           seed, acceptedSteps: 30, advances: 3, saveBytes: Buffer.byteLength(worldJson), digest,
           habitatEncodes: [...inputs.values()].reduce((sum, count) => sum + count, 0),
@@ -351,6 +446,20 @@ describe("runtime performance telemetry", () => {
           durableSignalEncodes, durableSignalCodeUnits, durableDerivationCodeUnits,
           uniqueDurableHabitats: durableHabitats.size,
           perDurableHabitatEncodes: [...durableHabitats.values()].sort((left, right) => left - right),
+          materialization: {
+            scope: "successful native setter calls inside 31 callbacks; setup/save excluded; not a timed profile",
+            calls: materializationCalls.length, uniqueInputs: nextInputId,
+            perExactInputAndTickCalls: [...repeatedInputs.values()].sort((left, right) => left - right),
+            eligible: materializationCalls.filter(({ eligible }) => eligible).length,
+            sameClockEmptyCoarseButDue: materializationCalls.filter((call) => (
+              call.sameClock && call.emptyIds && call.allCoarse && !call.eligible
+            )).length,
+            byCallback: ["zero-step", "accepted-nonadvancing", "advancing-correlated"].map((bucket) => ({
+              bucket, calls: materializationCalls.filter(({ frame }) => frameBuckets.get(frame) === bucket).length,
+              eligible: materializationCalls.filter(({ frame, eligible }) => eligible && frameBuckets.get(frame) === bucket).length,
+            })),
+            sources: [...sourceCounts].sort(([left], [right]) => left.localeCompare(right)),
+          },
         })}\n`);
         const envelope = JSON.parse(worldJson) as Record<string, unknown>;
         expect(envelope.version).toBe(CURRENT_GAME_SAVE_VERSION);
