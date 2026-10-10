@@ -974,7 +974,10 @@ export function projectGameView(
   const settlementTiles = new Set(world.settlements.map((settlement) => settlement.tileIndex));
   const suppliedPerception = options.perception;
   const currentPerception = projectPerception(world, player);
-  const ordinaryPerception = isCurrentPerceptionSnapshot(
+  // Query the current owner first. If both branches would select that same
+  // object, candidate admission adds no information; distinct copies still
+  // require the complete snapshot check below.
+  const ordinaryPerception = suppliedPerception === currentPerception || isCurrentPerceptionSnapshot(
     suppliedPerception,
     currentPerception,
     world.terrain.width,

@@ -386,12 +386,12 @@ export function projectUIView(
     ? undefined
     : projectPerception(world, player);
   const ordinaryPerception = currentPerception
-    && isCurrentPerceptionSnapshot(
+    && (options.perception === currentPerception || isCurrentPerceptionSnapshot(
       options.perception,
       currentPerception,
       world.terrain.width,
       world.terrain.height,
-    )
+    ))
     ? options.perception
     : currentPerception;
   let perception: PerceptionResult | undefined = ordinaryPerception;
