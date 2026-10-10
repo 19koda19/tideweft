@@ -2114,6 +2114,50 @@ async function bindSmokeWayknot(contents) {
   return { target, arrival, bound };
 }
 
+/** Capture a real closed, quiet interval before a smoke-only player relocation.
+ * Partial body histories and pending sounds belong to their original listener
+ * pose; a fabricated empty carry cannot make them a valid phase-zero save.
+ * This only waits/saves through the existing runtime, never advances it itself.
+ */
+async function captureSmokeRelocationSave(runtime, readRecord, expectedSaveVersion, timeoutMs) {
+  const startedAt = Date.now();
+  const observedPhases = new Set();
+  const empty = (value) => Array.isArray(value) && value.length === 0;
+  for (let attempts = 1; attempts <= 80 && Date.now() - startedAt < timeoutMs; attempts += 1) {
+    await runtime.save();
+    const record = await readRecord();
+    if (!record || typeof record.worldJson !== 'string') {
+      throw new Error('smoke relocation did not capture a persisted save');
+    }
+    const envelope = JSON.parse(record.worldJson);
+    if (envelope?.format !== 'tideweft-session' || envelope.version !== expectedSaveVersion ||
+        record.payloadVersion !== expectedSaveVersion) {
+      throw new Error('smoke relocation requires the current save format');
+    }
+    const carry = envelope.perceptionCarry;
+    const phase = carry?.playerStepsSinceWorldTick;
+    if (!Number.isSafeInteger(phase) || phase < 0 || phase >= 10) {
+      throw new Error('smoke relocation captured an invalid interval phase');
+    }
+    observedPhases.add(phase);
+    if (phase === 0 && envelope.player?.timeAction === null && carry.intervalStartWasSleeping === false &&
+        carry.nextPlayerSenseSampleOrdinal === 0 &&
+        empty(carry.playerSenseSamples) && empty(carry.playerStepStateSamples) &&
+        empty(carry.actorVocalizationSamples) && empty(carry.animalContactAcousticCarry?.records) &&
+        empty(carry.situatedExpressionChannels?.channels) &&
+        empty(carry.situatedExpressionAdmissions?.records) &&
+        empty(carry.situatedExpressionCausalAuthority?.records)) {
+      return { record, envelope, capture: {
+        attempts, observedPhases: [...observedPhases].sort((left, right) => left - right),
+        elapsedMs: Date.now() - startedAt,
+      } };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 60));
+  }
+  throw new Error('smoke relocation found no closed quiet interval: ' +
+    JSON.stringify({ observedPhases: [...observedPhases].sort((left, right) => left - right) }));
+}
+
 /**
  * The proven Harp fixture is intentionally installed through the smoke
  * profile's persisted save, then reloaded through the production validator.
@@ -2125,25 +2169,26 @@ async function installSmokeTideHarpFixture(contents) {
   const fixture = await contents.executeJavaScript(`(async () => {
     const runtime = window.__TIDEWEFT__?.runtime;
     if (!runtime?.save || !runtime?.getRenderView) return null;
-    await runtime.save();
 
     const openRequest = indexedDB.open('tideweft', 1);
     const database = await new Promise((resolve, reject) => {
       openRequest.addEventListener('success', () => resolve(openRequest.result), { once: true });
       openRequest.addEventListener('error', () => reject(openRequest.error), { once: true });
     });
-    const readTransaction = database.transaction('saves', 'readonly');
-    const getRequest = readTransaction.objectStore('saves').get('autosave');
-    const record = await new Promise((resolve, reject) => {
-      getRequest.addEventListener('success', () => resolve(getRequest.result), { once: true });
-      getRequest.addEventListener('error', () => reject(getRequest.error), { once: true });
-    });
-    if (!record || typeof record.worldJson !== 'string') {
+    let captured;
+    try {
+      captured = await (${captureSmokeRelocationSave.toString()})(runtime, () => {
+        const getRequest = database.transaction('saves', 'readonly').objectStore('saves').get('autosave');
+        return new Promise((resolve, reject) => {
+          getRequest.addEventListener('success', () => resolve(getRequest.result), { once: true });
+          getRequest.addEventListener('error', () => reject(getRequest.error), { once: true });
+        });
+      }, ${SMOKE_EXPECTED_SAVE_VERSION}, ${Math.min(SMOKE_TEST.timeoutMs, 15_000)});
+    } catch (error) {
       database.close();
-      return null;
+      throw error;
     }
-
-    const envelope = JSON.parse(record.worldJson);
+    const { record, envelope, capture } = captured;
     const player = envelope?.player;
     const knots = player?.wayknots?.wayknots;
     const promiseJourney = envelope?.promiseJourney;
@@ -2215,29 +2260,19 @@ async function installSmokeTideHarpFixture(contents) {
     const playerRegionX = Math.floor(playerGlobalX / ${SMOKE_COMPATIBILITY_COLUMNS * 1_000});
     const playerRegionY = Math.floor(playerGlobalY / ${SMOKE_COMPATIBILITY_ROWS * 1_000});
     envelope.perceptionCarry = {
-      version: 14,
+      ...envelope.perceptionCarry,
       intervalStartPosition: {
         region: { x: playerRegionX, y: playerRegionY },
         localX: playerGlobalX - playerRegionX * ${SMOKE_COMPATIBILITY_COLUMNS * 1_000},
         localY: playerGlobalY - playerRegionY * ${SMOKE_COMPATIBILITY_ROWS * 1_000},
       },
       intervalStartFacingMilliRadians: player.facingMilliRadians,
-      intervalStartWasSleeping: false,
-      playerStepsSinceWorldTick: 0,
-      playerSenseSamples: [],
-      playerStepStateSamples: [],
       playerStepStateAnchor: {
         version: 1,
         sampleOrdinal: 0,
         stamina: player.stamina,
         mode: player.mode,
       },
-      actorVocalizationSamples: [],
-      animalContactAcousticCarry: { version: 1, records: [] },
-      situatedExpressionChannels: { version: 1, channels: [] },
-      situatedExpressionAdmissions: { version: 1, records: [] },
-      situatedExpressionCausalAuthority: { version: 1, records: [] },
-      nextPlayerSenseSampleOrdinal: 0,
     };
 
     // The current production loader seals the complete envelope. This smoke-only
@@ -2302,6 +2337,7 @@ async function installSmokeTideHarpFixture(contents) {
       gameplayContractVersion: ${SMOKE_EXPECTED_GAMEPLAY_CONTRACT_VERSION},
       activeRegion: { x: activeRegion.x, y: activeRegion.y },
       promiseJourney: { ...envelope.promiseJourney },
+      capture,
     };
   })()`, true);
 
@@ -2443,28 +2479,33 @@ async function installSmokeTideHarpFixture(contents) {
 async function installSmokeAdriftFixture(contents) {
   const fixture = await contents.executeJavaScript(`(async () => {
     const runtime = window.__TIDEWEFT__?.runtime;
-    const view = runtime?.getRenderView?.();
-    if (!runtime?.save || !view?.terrain || !view?.player?.position) return null;
-    await runtime.save();
+    if (!runtime?.save || !runtime?.getRenderView) return null;
 
     const openRequest = indexedDB.open('tideweft', 1);
     const database = await new Promise((resolve, reject) => {
       openRequest.addEventListener('success', () => resolve(openRequest.result), { once: true });
       openRequest.addEventListener('error', () => reject(openRequest.error), { once: true });
     });
-    const readTransaction = database.transaction('saves', 'readonly');
-    const getRequest = readTransaction.objectStore('saves').get('autosave');
-    const record = await new Promise((resolve, reject) => {
-      getRequest.addEventListener('success', () => resolve(getRequest.result), { once: true });
-      getRequest.addEventListener('error', () => reject(getRequest.error), { once: true });
-    });
-    if (!record || typeof record.worldJson !== 'string') {
+    let captured;
+    try {
+      captured = await (${captureSmokeRelocationSave.toString()})(runtime, () => {
+        const getRequest = database.transaction('saves', 'readonly').objectStore('saves').get('autosave');
+        return new Promise((resolve, reject) => {
+          getRequest.addEventListener('success', () => resolve(getRequest.result), { once: true });
+          getRequest.addEventListener('error', () => reject(getRequest.error), { once: true });
+        });
+      }, ${SMOKE_EXPECTED_SAVE_VERSION}, ${Math.min(SMOKE_TEST.timeoutMs, 15_000)});
+    } catch (error) {
       database.close();
-      return null;
+      throw error;
     }
-
+    const { record, envelope, capture } = captured;
+    const view = runtime.getRenderView();
+    if (!view?.terrain || !view?.player?.position || view.tick !== record.playTicks) {
+      database.close();
+      throw new Error('smoke ADRIFT terrain no longer matches its captured world tick');
+    }
     const backup = JSON.parse(JSON.stringify(record));
-    const envelope = JSON.parse(record.worldJson);
     const player = envelope?.player;
     const activeRegion = envelope?.physicalCargo?.activeRegion;
     const terrain = view.terrain;
@@ -2558,29 +2599,19 @@ async function installSmokeAdriftFixture(contents) {
     const playerRegionX = Math.floor(playerGlobalX / ${SMOKE_COMPATIBILITY_COLUMNS * 1_000});
     const playerRegionY = Math.floor(playerGlobalY / ${SMOKE_COMPATIBILITY_ROWS * 1_000});
     envelope.perceptionCarry = {
-      version: 14,
+      ...envelope.perceptionCarry,
       intervalStartPosition: {
         region: { x: playerRegionX, y: playerRegionY },
         localX: playerGlobalX - playerRegionX * ${SMOKE_COMPATIBILITY_COLUMNS * 1_000},
         localY: playerGlobalY - playerRegionY * ${SMOKE_COMPATIBILITY_ROWS * 1_000},
       },
       intervalStartFacingMilliRadians: player.facingMilliRadians,
-      intervalStartWasSleeping: false,
-      playerStepsSinceWorldTick: 0,
-      playerSenseSamples: [],
-      playerStepStateSamples: [],
       playerStepStateAnchor: {
         version: 1,
         sampleOrdinal: 0,
         stamina: player.stamina,
         mode: player.mode,
       },
-      actorVocalizationSamples: [],
-      animalContactAcousticCarry: { version: 1, records: [] },
-      situatedExpressionChannels: { version: 1, channels: [] },
-      situatedExpressionAdmissions: { version: 1, records: [] },
-      situatedExpressionCausalAuthority: { version: 1, records: [] },
-      nextPlayerSenseSampleOrdinal: 0,
     };
 
     const stableStringify = (value) => {
@@ -2639,6 +2670,7 @@ async function installSmokeAdriftFixture(contents) {
       depth: candidate.depth,
       deepNeighbors: candidate.deepNeighbors,
       stamina: player.stamina / 1_000_000,
+      capture,
       restore: {
         tileIndex: Math.floor(backupPlayer.y / 1_000) * backupPlayer.worldWidth +
           Math.floor(backupPlayer.x / 1_000),
