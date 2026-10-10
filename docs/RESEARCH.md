@@ -7982,6 +7982,80 @@ is claimed. Dependency/configuration changes:NONE; upstream p5/Electron modified
 Save formats, security, simulation cadence/fidelity, completed directives and
 the full-Foliage Voice-soak deferral remain unchanged. WORLD0 is still incomplete.
 
+### Exact habitat world-binding retrial — 2026-10-10
+
+**DISCARD: lower world cost did not satisfy the desktop no-regression rule.**
+This retries the previously discarded authenticated-habitat identity candidate;
+it is not a new cache or trust mechanism. Test-only `a96a01f` characterizes the
+actual exported binding invocation, rather than pairing adjacent global encoder
+calls. An original-once wrapper restores nested scope in `finally`; all spies
+are removed before saving and comparing independent uninstrumented work.
+Across30 accepted steps/3 advances, estuary/density8 have180/126 bindings and
+360/252 complete-habitat encodes, totaling3,937,656/2,916,840 UTF16 code units.
+Every final comparison pair is the same owner object. These are scoped counts,
+not CPU timing. Current-save SHA256 digests remain `922d9c80…`/`a7b713dd…`.
+
+Provisional `6460a9c` adds only an identity return **after** canonicalization,
+seed/signed-region/cohort validation and actual derivation, including existing
+LRU effects. Native encodes become0; clone/load/eviction/reset/foreign inputs
+retain complete comparison. Durable-signal encodes114/86, full save bytes,
+independent equal-work results and the retained terrain constructor stay exact.
+Candidate8files/91tests, selected original late-interval rollback, typecheck and
+critical6files/105tests pass. No encoder ordering/hash/UTF8 rule, schema, cache,
+receipt lifetime, RNG, event order, authority or save-policy change occurs.
+
+The pre-edit acceptance pins both exact `6e4572f` controls per platform and
+requires world gain≥2ms,≥2%, above the larger repetition range, with no material
+regression. Initial2 BEFORE/2 AFTER runs show world benefit but worse Electron
+draw/callback means. Before further profiling, a finite confirmation plan adds
+exactly2 Electron controls and2 candidates, alternating candidate/control then
+control/candidate. All4 controls/4 candidates and the original2 Firefox pairs
+remain included. The conservative confirmation requires candidate draw mean
+not above control and callback rate not below control; no further repeats.
+
+All windows are unsampled15s estuary Relief, unchanged runners/quality,
+1440×900/DPR1,30-frame warm-up, AC M4/16GiB and Low Power Mode0, without a
+competing game/test/profiler. The isolated control build reproduces frozen
+ASAR`ca30899b…` and all5 web files byte-exact; candidate ASAR`56bbfe82…`/
+JS`1358e1b5…`. New control reports record main's invocation HEAD`6460a9c`,
+**not** their actual `6e4572f` executable source. Build and ASAR evidence retain
+that distinction. Local comparison records retain all12 raw hashes and both
+predeclared plans; none is a published release attestation.
+
+| Platform / windows per group | World mean BEFORE→AFTER, ms | Gain / larger range, ms | Draw mean BEFORE→AFTER, ms | Renderer callbacks/s BEFORE→AFTER |
+| --- | --- | --- | --- | --- |
+| Electron44.1.0 /4 | 90.463→86.836 | 3.627 /1.843 | 24.281→25.118 | 33.861→32.847 |
+| Firefox157.0.1 /2 | 165.333→155.800 | 9.533 /1.333 | 21.032→20.524 | 29.952→30.918 |
+
+Equal-weight means include every declared window. All6 standing scalar limits
+pass for the candidate, but Electron draw+3.448% and callbacks−2.995% fail the
+separate confirmation rule. Independent read-only recalculation agrees:
+**discard**, without changing budgets. World/callback tails improve; Electron
+draw worst reaches41.7ms. Fourteen–fifteen world observations/window make
+empiricalp99=max; unavailable raw samples do not support inventedp50/p95.
+Electron149 steps/14 advances420→434 throughout; Firefox controls152 steps
+versus candidate150, each15 advances420→435. Different wall-window saves are
+not terminal-work equality proof; the separate30-step full-save witnesses are.
+Scene/render counts/resources match, pending counters0, declared caps pass,
+DOM3747. Unforced heap points are GC-sensitive, not growth/retention evidence.
+
+`5b6040f` removes only the candidate return and its count expectations;
+production owner bytes again match `6e4572f`. Scoped characterization and
+stronger exact-reference checks remain. Restored2files/17tests, typecheck and
+critical105 pass. Normal restored packaging and static5-file smoke pass;
+ASAR and all5 served files again match the frozen control byte-exact. Its prior
+normal desktop/Firefox evidence remains scoped to those identical artifacts,
+not a new relaunch or timing result. Candidate production web, static nested-path smoke, Firefox
+witnesses, host packaging and normal macOS-arm64 desktop smoke pass within
+their actual scopes; desktop/mobile/title images were inspected. Controlled
+Harp/ADRIFT smoke scenes are not untouched autonomous gameplay. No new
+cumulative, robust-tail, travel/autosave/long-soak, physical-mobile, hardware
+audio, installation/signing/other-OS, CI/Pages or live-build proof is claimed.
+Earlier V1/terrain repairs remain. Restored Firefox standing gates still fail;
+WORLD0 remains incomplete. Dependency/configuration changes:NONE; upstream
+p5/Electron modified:NO. Security, fidelity, cadence, completed directives and
+the full-Foliage Voice-soak deferral are unchanged.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
