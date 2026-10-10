@@ -8143,8 +8143,56 @@ Final affected9files/145tests, original late-closure rollback1selected,
 typecheck and maintained critical105 pass. No schema, compatibility, dependency,
 upstream, platform configuration, timing or fidelity change occurs. This is a
 correctness-validated candidate, **not a retained performance improvement**:
-both products still require every fresh unsampled AFTER observation against
-the frozen BEFORE acceptance, followed by actual artifact checks.
+At that provisional checkpoint, both products still required every fresh
+unsampled AFTER observation against the frozen BEFORE acceptance. The completed
+comparison below supersedes that pending disposition, not its correctness proof.
+
+### Shared sight-ray experiment discarded — 2026-10-10
+
+**DISCARD: fewer arithmetic calls did not meet either product's frozen gain
+criteria.** Test-only `6b4f1d0` precedes provisional executable `d668c78`.
+The pre-edit plan `5690af06…` requires world-mean gain≥2ms,≥2%, and greater
+than the larger two-run range on **both** products, without material rendering,
+authority or resource regression. No extra favorable repeats or relaxed budgets.
+All8 observations remain included in the local source-linked comparison.
+
+Fresh2 BEFORE/2 AFTER unsampled15s estuary Relief windows per product run
+sequentially on AC M4/16GiB, Low Power Mode0, 1440×900/DPR1, unchanged quality
+and30-frame warm-up, without another game, test or CPU sampler. BEFORE uses
+exact `6e4572f` ASAR`ca30899b…`/JS`37ba0db0…`; AFTER uses
+ASAR`30c843b1…`/JS`7887032b…`. The capture repository HEAD and executable
+identity are recorded separately. All5 served files match their packaged bytes.
+
+| Product | World mean BEFORE→AFTER, ms | Gain / larger paired range, ms | Draw mean BEFORE→AFTER, ms | Renderer callbacks/s BEFORE→AFTER |
+| --- | --- | --- | --- | --- |
+| Electron44.1.0 | 90.054→88.711 | 1.343 /0.879 | 24.044→24.718 | 34.097→33.413 |
+| Firefox157.0.1 | 165.867→166.533 | −0.667 /0.400 | 20.615→20.568 | 30.329→30.283 |
+
+Electron's1.49% gain fails the2ms/2% requirement; Firefox's world step is
+slower. Numerical draw/callback paired-range checks do not override those
+failures or establish absence of every material regression. Electron passes
+its three standing scalar limits, while Firefox still fails world/callback
+limits. Scene/resource endpoints, caps and six zero pending counters agree.
+Separate30-step native full-result/current-save digests remain exact to
+uninstrumented work; wall-window endpoints alone do not prove equal authority.
+Each window has14–15 world observations: empiricalp99=max, not a robust
+population tail. Unforced desktop heap points are not retention/GC evidence;
+timed saves0 do not exercise autosave. These windows establish neither
+GPU/presented FPS, input latency, visual saturation nor long-session stability.
+
+Only the owned shared traversal and arithmetic expectations are reversed.
+The production perception owner again byte-equals `6b4f1d0`/`6e4572f`;
+original-once census, complete disclosure/save oracles and mixed-flank test
+remain. Earlier accepted V1 encoding and terrain construction repairs remain.
+Candidate affected9files/145tests, original selected late rollback, typecheck,
+critical105, production packaging/static smoke and guarded browser witnesses
+passed within their stated scopes. No candidate normal functional desktop
+smoke, installation/signing/other OS, new cumulative, travel/autosave/long-soak,
+CI/Pages or live-build proof is claimed. Restored validation and artifact
+identity belong to their own retained receipts, not this discarded candidate.
+No dependency/configuration/upstream, schema/support, security, fidelity,
+cadence, completed-directive or full-Foliage Voice-soak policy change occurs.
+WORLD0 remains incomplete; restored Firefox standing gates remain unresolved.
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
