@@ -201,6 +201,62 @@ function closeCurrentInterval(world: WorldState, frame?: ResidentPerceptionFrame
 }
 
 describe("resident origin pickup commit-time eligibility", () => {
+  it("rejects carried resident cancellation without abandoning custody or changing equal physical work", () => {
+    // Existing declared weather/need/exclusivity fixture controls, not a new
+    // cancellation UI or an automatic NPC abandonment/return-cargo policy.
+    const { world, actorId, contract, origin, store } = arrivedFixture();
+    closeCurrentInterval(world);
+    expect(contract).toMatchObject({ status: "in-transit", cargoQuantity: contract.quantity });
+    expect(residentAt(world, actorId).activity?.travelTask).toMatchObject({ mode: "physical", contractId: contract.id });
+    expect(prepareResidentRestActivities(world, [], store)).toBe(true);
+    for (let phase = 1; phase <= 10; phase += 1) {
+      expect(advanceResidentRestActivities(world, phase)).not.toBeNull();
+    }
+    // A genuine physical interval may hold at its source when the next
+    // support is unsuitable. Do not assign movement to manufacture coverage.
+    expect(residentAt(world, actorId).activity?.poses).toHaveLength(11);
+    const control = deserializeWorld(serializeWorld(world));
+    const cold = deserializeWorld(serializeWorld(world));
+    const command = { id: "native-carried-cancel-rejected", type: "cancel-contract" as const,
+      contractId: contract.id, returnSettlementId: origin.id };
+    for (const candidate of [world, cold]) {
+      const admission = prepareResidentTravelAdvance(candidate, null);
+      expect(admission).not.toBeNull();
+      try {
+        stepWorld(candidate, [command], undefined, undefined, admission!);
+      } finally { revokeResidentTravelAdvance(admission!); }
+      assertWorldInvariants(candidate);
+      const carried = candidate.contracts.find(({ id }) => id === contract.id)!;
+      expect(carried).toMatchObject({ status: "in-transit", cargoQuantity: contract.quantity,
+        assignedResidentId: contract.assignedResidentId });
+      const human = residentAt(candidate, actorId);
+      expect(human.activeContractId).toBe(contract.id);
+      expect(human.activity?.pickupTask).toBeNull();
+      expect(human.activity?.travelTask).toMatchObject({ mode: "physical", contractId: contract.id });
+      expect(candidate.events.filter(({ type, subjectId }) => subjectId === contract.id
+        && (type === "contract-cancelled" || type === "contract-expired"))).toHaveLength(0);
+    }
+    closeCurrentInterval(control);
+    assertWorldInvariants(control);
+    expect(serializeWorld(cold)).toBe(serializeWorld(world));
+    const rejection = world.events.filter(({ type, data }) => type === "command-rejected"
+      && data.commandId === command.id);
+    expect(rejection).toHaveLength(1);
+    expect(rejection[0]!.data.reason).toBe("contract can no longer be released");
+    expect(residentAt(world, actorId)).toEqual(residentAt(control, actorId));
+    // Only the processed command ID, explicit rejection and its one
+    // event-sequence increment differ.
+    // Ordinary body/cursor/cargo/stock/RNG/knowledge/clock work must all match.
+    const normalized = structuredClone(world);
+    expect(normalized.processedCommandIds).toEqual([...control.processedCommandIds, command.id]);
+    normalized.processedCommandIds = normalized.processedCommandIds.filter(id => id !== command.id);
+    normalized.events = normalized.events.filter(({ sequence }) => sequence !== rejection[0]!.sequence)
+      .map(event => event.sequence > rejection[0]!.sequence
+        ? { ...event, sequence: event.sequence - 1 } : event);
+    normalized.meta.nextEventSequence -= 1;
+    expect(serializeWorld(normalized)).toBe(serializeWorld(control));
+  });
+
   it("admits fresh strong perception before debit and preserves the arrived body without creating cargo", () => {
     const current = arrivedFixture();
     const { world, actorId, contract, origin, stock, target, store } = current;

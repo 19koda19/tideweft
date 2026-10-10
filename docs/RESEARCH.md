@@ -7471,6 +7471,31 @@ was removed, restoring the exact committed integration-test bytes. This is
 coarse-source diagnosis, not current pickup, informed departure, visual play,
 performance, or directive-completion evidence.
 
+### Carried resident cancellation boundary — 2026-10-10
+
+At parent `1ab3519`, an additive `residentPickupUse.test.ts` case reaches
+actual native127 pickup and conserved in-transit parts8 through the existing
+declared weather/need/exclusivity fixture. A real cancellation command with
+an origin return target is rejected by the existing player-only carried-return
+guard. The resident retains the same physical task and cargo. Warm and inner-
+world cold continuations match exactly; a no-command sibling processes the
+same physical interval. Full serialized authority differs only by the checked
+processed command ID, single reason-checked rejection and its event-sequence
+bookkeeping. No body, cargo, stock, knowledge, RNG or clock delta is omitted.
+
+The first selected attempt incorrectly required movement in a genuine interval
+that holds at its source. That unsupported assertion was removed, not a runtime
+rule or an existing test. Final selected case PASS; complete pickup/advance
+domain2files85PASS (10.27s), maintained critical6files105PASS (4.81s), typecheck
+PASS. Test SHA256 `65d3a5a6…`; local domain/smoke reports `1335ed96…` /
+`c0722c44…` in `artifacts/validation/world0-liveness-plan/`.
+
+This is a controlled lower-engine/inner-world cold negative guard, not a public
+cancellation UI, outer-save relaunch, abandonment, cargo-return or mortality
+producer. Supported interrupted completion remains the real logistics path;
+unsupported resident abandonment is not a missing mechanic to invent. No
+production, schema, reader, dependency, performance or release change is made.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
