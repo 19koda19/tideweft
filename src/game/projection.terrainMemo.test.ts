@@ -14,7 +14,14 @@ import {
 } from "./regionalCartography";
 import { createTerrainRegionStreamingState } from "./regionStreaming";
 import { createRegionalTerrainWindow } from "./regionalTravel";
-import { createRegionalWorldView } from "./regionalWorldView";
+import {
+  createRegionalWorldView,
+  regionalCompatibilityWorldForWorld,
+  regionalWindowForWorld,
+  regionalWorldViewPhysicalPublication,
+  replaceRegionalWorldViewResidents,
+} from "./regionalWorldView";
+import { adoptResidentActivities } from "./residentActivityExecution";
 
 interface ProjectionFixture {
   readonly world: WorldView;
@@ -22,8 +29,9 @@ interface ProjectionFixture {
   readonly player: PlayerState;
 }
 
-function createFixture(seed = "the chart remembers only what was seen"): ProjectionFixture {
+function createFixture(seed = "the chart remembers only what was seen", currentBodies = false): ProjectionFixture {
   const state = createWorld(seed, "standard");
+  if (currentBodies && !adoptResidentActivities(state)) throw new Error("Native body adoption failed");
   const compatibility = createWorldView(state);
   const stream = createTerrainRegionStreamingState({ rootSeed: state.meta.rootSeed });
   const cartography = createRegionalCartography(state.meta.rootSeed);
@@ -55,7 +63,91 @@ function createFixture(seed = "the chart remembers only what was seen"): Project
   return { world, mutableWorld, player };
 }
 
+function uncachedProjection(world: WorldView, player: PlayerState) {
+  // Mutable regional views still need their real signed-window metadata; a
+  // spread copy is not a valid 120x120 legacy compatibility world.
+  const mutable = createRegionalWorldView(regionalCompatibilityWorldForWorld(world)!,
+    regionalWindowForWorld(world)!, { discovered: player.discovered, depthSoundings: player.depthSoundings });
+  return projectGameView(mutable, player);
+}
+
 describe("terrain projection receipt", () => {
+  it("reuses only unchanged terrain across resident-only physical-publication siblings", () => {
+    const { world, player } = createFixture("resident publication does not redraw the same terrain", true);
+    const first = projectGameView(world, player);
+    const visible = first.porters.find(porter => porter.quickLabel !== undefined);
+    if (visible === undefined) throw new Error("Fixture needs one directly visible resident");
+    expect(visible.conditionLabels).not.toContain("Soaked");
+    const residents = structuredClone(world.residents);
+    residents[0]!.needs.rest = 800_000;
+    // A projection contrast, not an invented gameplay wetting event.
+    residents.find(resident => String(resident.id) === visible.id)!.condition.wetness = FIXED_POINT;
+    const sibling = replaceRegionalWorldViewResidents(world, residents);
+    const secondSibling = replaceRegionalWorldViewResidents(sibling, sibling.residents);
+    const before = structuredClone(secondSibling);
+
+    for (const publication of [sibling, secondSibling]) {
+      expect(regionalWorldViewPhysicalPublication(publication)).toBe(world);
+      expect(publication.residents[0]?.activity).toEqual(world.residents[0]?.activity);
+      expect(publication.residents[0]?.needs.rest).toBe(800_000);
+      const current = projectGameView(publication, player);
+      const uncached = uncachedProjection(publication, player);
+      expect(current).not.toBe(first);
+      expect(current.porters).not.toBe(first.porters);
+      expect(current.porters.find(porter => porter.id === visible.id)?.conditionLabels).toContain("Soaked");
+      expect(current.terrain.tiles).toBe(first.terrain.tiles);
+      expect(current).toEqual(uncached);
+      expect(uncached.terrain.tiles).not.toBe(current.terrain.tiles);
+    }
+    expect(secondSibling).toEqual(before);
+  });
+
+  it("retains exact knowledge and perception invalidation across resident siblings", () => {
+    const { world, player } = createFixture("resident publication cannot preserve stale knowledge", true);
+    const sibling = replaceRegionalWorldViewResidents(world, world.residents);
+    let previous = projectGameView(world, player);
+    const tileIndex = Math.floor(world.terrain.tiles.length / 2) + 1;
+    const changes = [
+      () => { player.discovered[tileIndex] = player.discovered[tileIndex] === 0 ? FIXED_POINT : 0; },
+      () => { player.depthSoundings[tileIndex] = player.depthSoundings[tileIndex] === 0 ? FIXED_POINT : 0; },
+      () => { player.facingMilliRadians += 1_571; },
+    ];
+    for (const change of changes) {
+      change();
+      const current = projectGameView(sibling, player);
+      expect(current.terrain.tiles).not.toBe(previous.terrain.tiles);
+      expect(current).toEqual(uncachedProjection(sibling, player));
+      previous = current;
+    }
+    const sleeping = projectGameView(sibling, player, { suppressDetailPerception: true });
+    expect(sleeping.terrain.tiles).not.toBe(previous.terrain.tiles);
+    expect(sleeping.terrain.tiles.every(tile => tile.currentDetailVisibility === 0)).toBe(true);
+  });
+
+  it("does not extend resident-only reuse into a new physical publication or caller copy", () => {
+    const { world, player } = createFixture("changed weather owns a new physical publication", true);
+    const sibling = replaceRegionalWorldViewResidents(world, world.residents);
+    const first = projectGameView(sibling, player);
+    const window = regionalWindowForWorld(sibling)!;
+    const compatibility = regionalCompatibilityWorldForWorld(sibling)!;
+    const changed = createRegionalWorldView({
+      ...compatibility,
+      weather: { ...compatibility.weather, kind: "storm", intensity: FIXED_POINT },
+    }, window, { discovered: player.discovered, depthSoundings: player.depthSoundings }, { immutable: true });
+    expect(regionalWorldViewPhysicalPublication(changed)).toBe(changed);
+    const storm = projectGameView(changed, player);
+    expect(storm.terrain.tiles).not.toBe(first.terrain.tiles);
+    expect(storm).toEqual(uncachedProjection(changed, player));
+    const copied = { ...sibling };
+    expect(regionalWorldViewPhysicalPublication(copied)).toBe(copied);
+    expect(() => projectGameView(copied, player)).toThrow(/Local tile/);
+    const mutable = createRegionalWorldView(compatibility, window,
+      { discovered: player.discovered, depthSoundings: player.depthSoundings });
+    const uncachedFirst = projectGameView(mutable, player);
+    expect(uncachedFirst.terrain.tiles).not.toBe(first.terrain.tiles);
+    expect(projectGameView(mutable, player).terrain.tiles).not.toBe(uncachedFirst.terrain.tiles);
+  });
+
   it("reuses only the readonly terrain array while rebuilding the outer view", () => {
     const { world, mutableWorld, player } = createFixture();
 

@@ -76,6 +76,7 @@ import {
   regionalGlobalTileAt,
   isImmutableRegionalWorldView,
   regionalWindowForWorld,
+  regionalWorldViewPhysicalPublication,
   regionalWorldCenter,
 } from "./regionalWorldView";
 import {
@@ -187,7 +188,7 @@ interface BiomeTerrainCache {
 }
 
 interface TerrainProjectionReceipt {
-  readonly world: WorldView;
+  readonly physicalPublication: WorldView;
   readonly completedTick: number;
   readonly seedText: string;
   readonly seedKey: string;
@@ -1777,6 +1778,10 @@ function projectTerrainTiles(
   globalOrigin: { readonly x: number; readonly y: number },
 ): readonly RenderTerrainTileView[] {
   const count = world.terrain.tiles.length;
+  // Resident-only siblings have fresh people, not fresh physical terrain.
+  // The existing private publication owner grants this identity; caller copies
+  // and changed physical epochs still pass every ordinary invalidation guard.
+  const physicalPublication = regionalWorldViewPhysicalPublication(world);
   const seed = world.rootSeed ?? seedFromText(world.seedText);
   const seedKey = seed.join(",");
   const eligible = isImmutableRegionalWorldView(world)
@@ -1825,7 +1830,7 @@ function projectTerrainTiles(
   if (
     cached !== undefined
     && settlementTileIndices !== null
-    && cached.world === world
+    && cached.physicalPublication === physicalPublication
     && cached.completedTick === world.completedTick
     && cached.seedText === world.seedText
     && cached.seedKey === seedKey
@@ -1897,7 +1902,7 @@ function projectTerrainTiles(
 
   const frozenTiles = Object.freeze(tiles);
   const receipt: TerrainProjectionReceipt = Object.freeze({
-    world,
+    physicalPublication,
     completedTick: world.completedTick,
     seedText: world.seedText,
     seedKey,

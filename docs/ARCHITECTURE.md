@@ -2586,7 +2586,11 @@ replacement before returning all three roots. It advances no dog, cargo, event,
 clock or RNG state. Both full views and siblings use `createResidentView` for
 the same detached perception/circadian/activity snapshot rules. Siblings retain
 their original physical-publication identity, allowing existing geometry/light
-caches to reuse unchanged terrain and lamps; caller copies acquire no trust.
+caches and the terrain presentation receipt to reuse unchanged terrain and
+lamps; caller copies acquire no trust. The terrain receipt still validates its
+exact tick, seed, frame, weather, biome, light, perception, settlement and
+mutable discovery/sounding inputs. Only its physical component is reused;
+current people and the outer game view are projected afresh.
 The accepted-step owner must prove that only residents changed. Seed and tick
 alone cannot authenticate unchanged weather, projects, terrain or streaming;
 physical changes require full publication. Each accepted resident-only step

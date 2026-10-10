@@ -6980,6 +6980,92 @@ This is test/evidence only: a genuine priority reassessment and no-unearned-work
 proof, not positive medicine payoff, restorative rest, eventual service,
 whole-population liveness, normal visual play, performance or directive closure.
 
+### Resident-only terrain receipt experiment — 2026-10-10
+
+**Initial short regression check: FAIL; repair performance not yet verified.**
+Clean local `de37b40e8c8c6ec9316fac4d696526efe514a5ec` packages the current
+`55aced1` executable source. Its ASAR SHA256 is
+`dfee3bef860d7fe81fb57d7edbdd21e515d69aeba4fd57909dad38a539ce7f4a`;
+production JS is `72986c69a0fbb4fd1c41edc446f72f4d0b1ec5c300763e4d8012d76167bce54c`.
+Normal macOS arm64 packaged smoke and five-file static web smoke pass. The
+ordinary Firefox production witness completes140.644s/native420→560, with
+physical START, selection, GREET/acquaintance, close, both views and later
+project/ration labels. Source/dist fingerprints remain unchanged. One
+unguarded startup CSP eval-denial entry matches the existing harness's expected
+p5 capability probe; guarded errors are zero, but a raw caller stack was not
+retained. These checks do not prove a complete traveler loop or every physical
+transaction. The desktop smoke's console JSON was truncated by the observation
+tool; its terminal exit0/pass line and images survive, not a complete parsed
+console record. No successful process was rerun just to recapture it.
+
+Four fresh production measurements use the existing packaged/browser runners,
+two sequential15s estuary Relief windows per platform, unchanged quality and
+30-frame warmup. AC Apple M4/16GiB, macOS26.5.2, Low Power Mode off,
+Node22.20.0/npm10.9.3, Electron44.1.0 and Firefox157.0.1 match the known retained
+host/tooling conditions. No sampler, competing test/game or hitch trace runs
+during these samples. The comparison uses the arithmetic mean of two per-run
+means against the retained Alpha64 pair, not simultaneous alternated artifacts.
+Frozen draw+5%/callback-loss5% limits remain unchanged; before these AFTERs,
+the same allowance was explicitly applied to the inclusive world-step mean.
+
+| Paired metric | Electron BEFORE → current | Firefox BEFORE → current |
+| --- | ---: | ---: |
+| Draw CPU mean |25.215→24.607ms|20.459→21.355ms|
+| Renderer callback rate |33.308→31.227/s|32.152→28.728/s|
+| Inclusive world-step mean |90.153→100.239ms|156→174.100ms|
+| Maximum observed world step |117.5→134ms|184→210ms|
+
+Draw passes its own limits; callback rate and inclusive world cost fail on
+both platforms. Both repeated current world maxima raise the pre-frozen
+attribution flag. Current Electron counts149/149 accepted fixed steps and14/14
+world advances; Firefox151/151 and15/15. Historical counts differ, so matching
+seed and wall duration do not prove equal terminal work. Current23 visible
+actors/18 humans versus22/17 and one label versus seven are explicit workload
+differences;72 total/54 materialized/950 aggregate population units persist.
+Six pending counters end at zero, supplied resource caps hold, and explicit
+tail saves1,980,354/1,944,167B remain below4MiB. Those saves are outside the
+timed windows. Short low-count p99 is effectively the maximum, not population
+p99. No p50/p95, backlog, acoustic queue peaks, memory-growth, autosave,
+presented FPS, long-session or universal-platform claim follows.
+
+A separate20.185s sampled diagnostic reuses the opt-in packaged runner, paired
+page/profiler clocks and a separate sourcemap whose executable prefix exactly
+matches the production JS. Its13,593 samples include19 world advances. Nearest
+first-party charging assigns944.234ms to the terrain tile map; its enclosing
+terrain projection accumulates1,183.924ms inclusive. Inclusive ancestors
+overlap and are not summed; sample weights are neither exact durations nor call
+counts, and sampling changes cost. A separate unused attention parse is only
+19.522ms inclusive and is not the selected intervention.
+
+Source inspection identifies an exact terrain-receipt miss: resident-only
+publication already retains the registered physical-publication root, but the
+receipt compares the new outer resident view instead. The small candidate
+stores/compares that existing private physical identity. All eligibility,
+time/seed/frame/weather/biome/light/perception and exact mutable knowledge,
+mask and settlement guards remain. No whole view, actor, world outcome, save,
+schema, cache capacity, cadence or dependency is replaced.
+
+The first new reference fixture incorrectly spread a120×120 regional world
+without its signed metadata and failed the legacy coordinate boundary. That
+report is retained. Using a real mutable regional publication instead produces
+the intended identity-only RED, one failed/eight passed; original six cases
+remain intact. Candidate domain passes seven files/66 tests in36.57s, including
+native equal-accepted-work/current-save characterizations for estuary and dense
+seeds. Final strengthened terrain case updates a directly visible public
+condition while sharing terrain and retains complete uncached projection parity
+and nonmutation: all nine terrain cases pass in6.51s. Critical smoke6/105 in
+4.14s and typecheck pass. A precommit packaging attempt correctly stops at the
+dirty player-facing review gate; that release safeguard is not weakened, and
+no new player release/version is fabricated for this internal performance
+candidate. Production confirmation follows coherent local preservation.
+
+Ignored `world0-short-performance/de37b40/` holds frozen acceptance, four
+BEFORE hashes, four current captures, exact comparison, source-map/CPU evidence,
+red/final/domain reports and package identity. This is local/unpublished
+construction evidence, not hitch resolution, complete cumulative certification
+of later executable bytes, a release or directive closure. Existing extended
+profiling/soak deferrals remain unperformed; new regressions are not waived.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
