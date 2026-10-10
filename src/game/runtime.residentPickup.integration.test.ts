@@ -366,11 +366,37 @@ describe("ordinary runtime native traveler water response", () => {
       .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick });
     expect(current.human.activity?.poses[0]?.position).toEqual(fixture.target);
     const departure = current.human.activity!.poses[0]!.position;
+    const departureTask = current.human.activity?.travelTask;
+    if (departureTask?.mode !== "physical") throw new Error("Native pickup has no actual physical itinerary");
+    const departureContract = current.world.contracts.find(({ id }) => id === fixture.contractId)!;
+    const departureSegment = residentTravelSegment(current.world, departureContract, departureTask);
+    if (departureSegment === null) throw new Error("Native pickup lost its authenticated departure segment");
+    expect(departureSegment.end).not.toEqual(endpoint);
+    expect(residentRestSurfaceKnowledge(current.human.perception, endpoint, departedTick)).toBe("unknown");
+    expect(current.human.perception.beliefs.some(({ sourceObservationId }) => sourceObservationId === observationId)).toBe(false);
+    // A future wet point is already present in the unchanged loaded terrain.
+    // Loading it is not a receipt: actual travel must continue while it remains
+    // outside this actor's current authenticated endpoint observation.
+    let unknownFutureIntervals = 0;
+    let movedWithUnknownFuture = false;
     let firstBankTick: number | null = null;
     while (current.world.meta.completedTick < 449) {
       advance(runtime, 10);
       current = await save();
       const task = current.human.activity?.travelTask;
+      if (task?.mode === "physical") {
+        const carried = current.world.contracts.find(({ id }) => id === fixture.contractId)!;
+        const segment = residentTravelSegment(current.world, carried, task);
+        if (segment === null) throw new Error("Native approach lost its authenticated segment");
+        if (stableStringify(segment.end) !== stableStringify(endpoint)) {
+          expect(residentRestTargetHasDrySupport(current.world, endpoint)).toBe(false);
+          expect(residentRestSurfaceKnowledge(current.human.perception, endpoint, current.world.meta.completedTick)).toBe("unknown");
+          expect(current.human.perception.beliefs.some(({ sourceObservationId }) => sourceObservationId === observationId)).toBe(false);
+          expect(carried).toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity, departedTick });
+          unknownFutureIntervals += 1;
+          movedWithUnknownFuture ||= stableStringify(current.human.activity!.poses[0]!.position) !== stableStringify(departure);
+        }
+      }
       if (firstBankTick === null && task?.mode === "physical" && task.waypointIndex === 14) {
         const contract = current.world.contracts.find(({ id }) => id === fixture.contractId)!;
         const segment = residentTravelSegment(current.world, contract, task);
@@ -392,6 +418,8 @@ describe("ordinary runtime native traveler water response", () => {
           .toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity });
       }
     }
+    expect(unknownFutureIntervals).toBeGreaterThan(0);
+    expect(movedWithUnknownFuture).toBe(true);
     expect(firstBankTick).not.toBeNull();
     expect(firstBankTick).toBeLessThan(449);
     expect(departure).not.toEqual(bank);

@@ -8354,6 +8354,36 @@ The local `native-weather-service-full.json` retains the result. No cumulative,
 artifact, release or whole-expansion completion follows. Current outer58 and
 body8, deliberately supported readers, dependencies and cadence are unchanged.
 
+### Loaded future wet ground is not traveler knowledge — 2026-10-10
+
+**Additive test-only proof at parent `6f749d3`.** The existing native127
+observed/unobserved cases in `runtime.residentPickup.integration.test.ts`
+retain their actual pickup, carrying body, unchanged terrain and declared
+weather/need/exclusivity controls. The already-loaded wet point43.5,47.5 is
+not yet the departure segment's target. Its exact-locus knowledge remains
+unknown, with no retained ground-observation belief, across the earlier
+authenticated segments while the same cargo/body actually moves.
+
+Once that point becomes the current target, the original lawful wet-sight
+hold, receipt-withheld physical obstruction, fresh-dry resumption, phase4/9
+cold equality and later-failure rollback assertions remain intact. No extra
+advance, task, belief, pose or successful result is authored. Unknown does not
+mean safe: the physical executor continues checking actual ground. This proves
+the existing bounded task-target information boundary, not invisibility by
+distance, a general terrain awareness system, remote report transfer, broader
+crossing permission or ordinary rendered play.
+
+Command `npx vitest run src/game/runtime.residentPickup.integration.test.ts
+--maxWorkers=1 -t 'waits at a native tidal endpoint'` passes both modified
+cases in34.47s overall /32.785s tests;13 unrelated cases are unselected, not
+failed or newly skipped. Complete shared travel-environment and surface-
+knowledge owners pass2files/56tests in5.43s, typecheck and maintained
+critical6files/105tests pass4.18s. Exact pickup-test SHA256 is
+`93a2d62761744d357eb02dba5d4c464668d19d3d0e2e8371fc9b36ea06aa556c`;
+the local `future-endpoint-runtime.json` retains the result. Production,
+current/support schemas, dependencies and platform artifacts are unchanged.
+No performance, cumulative, release or whole-expansion closure is claimed.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
