@@ -7143,6 +7143,21 @@ tool self-tests28 and actual critical smoke6/105 pass. No dependency or upstream
 source changes occur. WORLD0 remains unfinished and unpublished; this is a
 useful internal repair, not a release or major-directive closure.
 
+The proper fixed-tree ordinary Firefox retry at
+`d53fed1529c1a9553b765dad5270507af67bdd97` passes140.547s/native420→560,
+276 public samples. Real selection/GREET423–424 establishes acquaintance and
+an introduction caption; closing425 permits the same resident's project label
+at480 in both Chart and Relief, with four ration labels at540. Root views the
+actual paired return screenshots. Complete source/dist/HEAD/dirty-diff identity
+is equal before/after; Firefox exits0 and its disposable profile is removed.
+One unguarded startup CSP eval denial is still reported under the existing
+expected-probe allowlist, with zero guarded errors/navigation/prompts/context
+destruction; no raw caller-stack attribution is invented. The retained report
+SHA256 is `0674a96d8cf00cb784e8c087a4e0572fa953c68bfefd6d0c0a9fce3b2e6c37d5`.
+This is ordinary public control/presentation proof, not an injected task, full
+transaction conservation, traveler wet-hold loop, audible hardware, performance,
+global fairness or long-session certification.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
