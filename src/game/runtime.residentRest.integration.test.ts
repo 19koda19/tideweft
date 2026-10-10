@@ -10,7 +10,7 @@ import {
   RESIDENT_SERVICE_ACTIVITY_OWNER_ID,
   RESIDENT_SERVICE_ACTIVITY_VERSION,
 } from "../sim/residentActivity";
-import { residentRestTargetHasDrySupport, residentSettlementRestTarget } from "../sim/residentActivityWorld";
+import { residentRestTargetHasDrySupport, residentSettlementRationTarget, residentSettlementRestTarget } from "../sim/residentActivityWorld";
 import { queryResidentAttentionState } from "../sim/residentAttention";
 import { stableStringify } from "../sim/util";
 import { deserializeBio0Ecology } from "./bio0Ecology";
@@ -19,6 +19,7 @@ import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
 import { PLAYER_FOOT_MAX_WATER_DEPTH, type PlayerState } from "./player";
 import { restorePlayerRegionalTravel } from "./regionalPlayerTravel";
 import * as residentActivityExecution from "./residentActivityExecution";
+import * as residentCircadian from "./residentCircadian";
 import * as humanPerception from "./humanPerception";
 import * as residentContactAcoustics from "./residentContactAcoustics";
 import { residentRestSurfaceObservationId, residentRestSurfaceKnowledge } from "../sim/residentSurfaceKnowledge";
@@ -247,6 +248,68 @@ async function firstNativeFixture(selection: "wet-source" | "keeper" | "nearby" 
     }
   }
   throw new Error(`bounded three-seed survey found no native ${selection} fixture; no terrain/task was injected`);
+}
+
+/** Controlled causes, native geometry/identity; the runtime must select all work. */
+async function civicContendersFixture(urgentFood = false) {
+  const repository = new MemoryRepository(), setup = await open(repository);
+  setup.dispatchUI({ type: "new-world", seed: "resident activity executable rest approach", posture: "journey", sessionShape: "wander" });
+  await setup.save();
+  const record = repository.snapshot(), envelope = decode(record), world = deserializeWorld(envelope.world);
+  close(setup);
+  const tick = world.meta.completedTick;
+  expect(tick).toBe(420);
+  expect(world.residents).toHaveLength(42);
+  expect(world.residents.every((human) => human.activity === undefined)).toBe(true);
+  expect(world.contracts.every((contract) => contract.status === "offered" && contract.cargoQuantity === 0)).toBe(true);
+  const keeperId = (JSON.parse(envelope.settlementEcology) as { identity: { keeperActorId: string } }).identity.keeperActorId;
+  const candidates = world.residents.filter((human) => {
+    if (human.identity.stableId === keeperId || human.intention !== "work" || human.activeContractId !== null
+      || human.location.kind !== "settlement") return false;
+    const source = resolveResidentWorldPlacement(world, human)?.position;
+    const target = residentSettlementRationTarget(world, human);
+    if (source === undefined || target === null) return false;
+    const delta = worldPositionDelta(source, target);
+    if (Math.abs(delta.x) + Math.abs(delta.y) > 2 * WORLD_POSITION_UNITS_PER_TILE) return false;
+    for (let offset = 0; offset <= 180; offset += 1) {
+      const current = { ...world, tide: tideAtTick(tick + offset) };
+      if (!residentRestTargetHasDrySupport(current, target)
+        || (offset <= 10 && !residentRestTargetHasDrySupport(current, source))) return false;
+    }
+    return true;
+  }).sort((left, right) => left.identity.stableId < right.identity.stableId ? -1 : 1);
+  const site = world.settlements.find((settlement) => settlement.project.status === "building"
+    && settlement.project.resource !== "food" && settlement.project.resource !== "freshWater"
+    && settlement.project.target - settlement.project.progress >= 3
+    && candidates.filter(({ location }) => location.kind === "settlement" && location.settlementId === settlement.id).length >= 3);
+  if (site === undefined) throw new Error("native civic fixture lacks three dry generated workers at one existing project");
+  const workers = candidates.filter(({ location }) => location.kind === "settlement" && location.settlementId === site.id).slice(0, 3);
+  expect(workers.some((human) => stableStringify(resolveResidentWorldPlacement(world, human)!.position)
+    !== stableStringify(residentSettlementRationTarget(world, human)))).toBe(true);
+  const workerIds = workers.map(({ identity }) => identity.stableId);
+  for (const human of world.residents) {
+    human.needs = { food: 100_000, rest: 900_000, belonging: 100_000 };
+    human.condition.exhaustion = 900_000;
+  }
+  for (const human of workers) {
+    human.needs = { food: 0, rest: 0, belonging: 400_000 };
+    human.condition.exhaustion = 100_000;
+  }
+  if (urgentFood) workers[0]!.needs.food = 740_000;
+  world.weather = { kind: "clear", intensity: 0, windX: 0, windY: 0, nextChangeTick: tick + 1_000 };
+  for (const settlement of world.settlements) for (const recipe of settlement.recipes) recipe.nextRunTick = tick + 1_000;
+  for (const contract of world.contracts) {
+    contract.playerExclusiveUntilTick = tick + 1_000;
+    contract.dueTick = tick + 2_000;
+  }
+  const resource = site.project.resource;
+  // Explicit synthetic supply, conserved by the existing fixture ledger law.
+  world.ledger.initial[resource] += 4 - site.inventory[resource];
+  site.inventory[resource] = 4;
+  assertWorldInvariants(world);
+  envelope.world = serializeWorld(world);
+  return { record: recordWith(record, envelope), workerIds, tick, settlementId: site.id,
+    projectId: site.project.id, resource, progress: site.project.progress, consumed: world.ledger.consumed[resource] };
 }
 
 function expectBoundedMotion(source: WorldPosition, poses: readonly { position: WorldPosition }[]): void {
@@ -1667,6 +1730,166 @@ describe("ordinary runtime resident rest execution", () => {
       .toEqual(livingActorAddressForResident(createWorldView(continuedWorld), continuedKeeper));
   }, 60_000);
 
+  it("serves every continuously eligible native civic contender within three real hourly opportunities", async () => {
+    const fixture = await civicContendersFixture();
+    const repository = new MemoryRepository(fixture.record), runtime = await open(repository);
+    const originalPrepare = residentActivityExecution.prepareResidentRestActivities;
+    const originalSelect = residentMaterialUse.selectResidentMaterialUser;
+    const originalStep = simulation.stepWorld;
+    const firstArrival = new Map<string, number>(), served = new Map<string, number>();
+    const competingUses = new Map(fixture.workerIds.map((id) => [id, 0]));
+    const actualUsers: string[] = [];
+    let selected: string | null = null;
+    const preparation = vi.spyOn(residentActivityExecution, "prepareResidentRestActivities").mockImplementation((...args) => {
+      const result = originalPrepare(...args);
+      expect(result).toBe(true);
+      const [world, sparseDuties = []] = args;
+      const duties = new Map(world.residents.map(({ identity }) => [identity.stableId,
+        sparseDuties.some(({ actorId }) => actorId === identity.stableId)]));
+      for (const id of fixture.workerIds) {
+        const human = world.residents.find(({ identity }) => identity.stableId === id)!;
+        const task = human.activity?.materialTask;
+        if (served.has(id)) {
+          if (world.meta.completedTick > served.get(id)!) expect(task?.selectedAtTick).toBeGreaterThan(fixture.tick);
+          continue;
+        }
+        expect(task).toMatchObject({ projectId: fixture.projectId, resource: fixture.resource, selectedAtTick: fixture.tick, usedAtTick: null });
+        if (task?.phase === "arrived" && !firstArrival.has(id)) firstArrival.set(id, world.meta.completedTick);
+        if (firstArrival.has(id)) {
+          expect(task?.phase).toBe("arrived");
+          expect(residentMaterialUse.residentMaterialUseEligible(world, human, duties, world.meta.completedTick)).toBe(true);
+          // Right-censored pending requests are checked too, not only successes.
+          expect(world.meta.completedTick - firstArrival.get(id)!).toBeLessThanOrEqual(180);
+          expect(competingUses.get(id)).toBeLessThanOrEqual(2);
+        }
+      }
+      return result;
+    });
+    const selection = vi.spyOn(residentMaterialUse, "selectResidentMaterialUser").mockImplementation((...args) => {
+      const [world, site, duties, tick] = args;
+      const result = originalSelect(...args);
+      if (site === fixture.settlementId) {
+        const eligible = world.residents.filter((human) => human.location.kind === "settlement"
+          && human.location.settlementId === site && residentMaterialUse.residentMaterialUseEligible(world, human, duties, tick));
+        // N=3 is an observed premise, not an exclusion of an inconvenient actor.
+        expect(eligible.map(({ identity }) => identity.stableId).sort()).toEqual(fixture.workerIds);
+        for (const id of fixture.workerIds.filter((id) => !served.has(id))) {
+          expect(firstArrival.has(id)).toBe(true);
+          expect(eligible.find(({ identity }) => identity.stableId === id)?.activity?.materialTask?.selectedAtTick).toBe(fixture.tick);
+        }
+        selected = result?.identity.stableId ?? null;
+        expect(selected).toBe(fixture.workerIds[actualUsers.length]);
+      }
+      return result;
+    });
+    const engine = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+      selected = null;
+      const before = args[0], tick = before.meta.completedTick + 1;
+      const project = before.settlements.find(({ id }) => id === fixture.settlementId)!;
+      const prior = { progress: project.project.progress, stock: project.inventory[fixture.resource],
+        consumed: before.ledger.consumed[fixture.resource], produced: before.ledger.produced[fixture.resource],
+        otherStocks: before.settlements.filter(({ id }) => id !== fixture.settlementId).map(({ inventory }) => inventory[fixture.resource]) };
+      const result = originalStep(...args);
+      if (tick % 60 === 0) {
+        expect(selected).not.toBeNull();
+        const human = result.residents.find(({ identity }) => identity.stableId === selected)!;
+        expect(human.activity?.materialTask).toMatchObject({ phase: "used", usedAtTick: tick, selectedAtTick: fixture.tick });
+        expect(served.has(human.identity.stableId)).toBe(false);
+        served.set(human.identity.stableId, tick);
+        actualUsers.push(human.identity.stableId);
+        for (const id of fixture.workerIds.filter((id) => !served.has(id))) competingUses.set(id, competingUses.get(id)! + 1);
+        expect(tick - firstArrival.get(human.identity.stableId)!).toBeLessThanOrEqual(180);
+        const after = result.settlements.find(({ id }) => id === fixture.settlementId)!;
+        expect(after.project).toMatchObject({ id: fixture.projectId, resource: fixture.resource, progress: prior.progress + 1 });
+        expect(after.inventory[fixture.resource]).toBe(prior.stock - 1);
+        expect(result.ledger.consumed[fixture.resource]).toBe(prior.consumed + 1);
+        expect(result.ledger.produced[fixture.resource]).toBe(prior.produced);
+        expect(result.settlements.filter(({ id }) => id !== fixture.settlementId).map(({ inventory }) => inventory[fixture.resource]))
+          .toEqual(prior.otherStocks);
+        expect(result.events.some(({ type, tick: eventTick }) => type === "contract-fulfilled" && eventTick === tick)).toBe(false);
+      }
+      assertWorldInvariants(result);
+      return result;
+    });
+    try {
+      advanceOrdinaryFixedSteps(runtime, 1_799);
+      await runtime.save();
+      const beforeRecord = repository.snapshot(), before = decode(beforeRecord);
+      expect(before.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+      expect(deserializeWorld(before.world).meta.completedTick).toBe(599);
+      advanceOrdinaryFixedSteps(runtime, 1);
+      await runtime.save();
+      const usedRecord = repository.snapshot(), after = decode(usedRecord), world = deserializeWorld(after.world);
+      expect(actualUsers).toEqual(fixture.workerIds);
+      expect(served.size).toBe(3);
+      expect(firstArrival.size).toBe(3);
+      expect(world.settlements.find(({ id }) => id === fixture.settlementId)!.inventory[fixture.resource]).toBe(1);
+      expect(world.settlements.find(({ id }) => id === fixture.settlementId)!.project.progress).toBe(fixture.progress + 3);
+      expect(world.ledger.consumed[fixture.resource]).toBe(fixture.consumed + 3);
+      for (const spy of [preparation, selection, engine]) spy.mockRestore();
+      advanceOrdinaryFixedSteps(runtime, 10);
+      await runtime.save();
+      const next = decode(repository.snapshot());
+      expect(deserializeWorld(next.world).ledger.consumed[fixture.resource]).toBe(fixture.consumed + 3);
+      close(runtime);
+      for (const [record, expectedBefore, steps, expectedAfter] of [
+        [beforeRecord, before, 1, after], [usedRecord, after, 10, next],
+      ] as const) {
+        soundscapePlay.mockClear();
+        const coldRepository = new MemoryRepository(record), cold = await open(coldRepository);
+        expect(soundscapePlay).not.toHaveBeenCalled();
+        await cold.save();
+        expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(expectedBefore));
+        advanceOrdinaryFixedSteps(cold, steps);
+        await cold.save();
+        expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(expectedAfter));
+        close(cold);
+      }
+    } finally {
+      for (const spy of [preparation, selection, engine]) spy.mockRestore();
+    }
+  }, 240_000);
+
+  it("revokes pending civic eligibility when the real hourly hunger pulse creates an urgent need", async () => {
+    const fixture = await civicContendersFixture(true);
+    const repository = new MemoryRepository(fixture.record), runtime = await open(repository);
+    const originalSelect = residentMaterialUse.selectResidentMaterialUser;
+    const urgentId = fixture.workerIds[0]!;
+    let observedPostNeeds = false;
+    const selection = vi.spyOn(residentMaterialUse, "selectResidentMaterialUser").mockImplementation((...args) => {
+      const [world, site, duties, tick] = args;
+      const result = originalSelect(...args);
+      if (site === fixture.settlementId) {
+        const human = world.residents.find(({ identity }) => identity.stableId === urgentId)!;
+        expect(tick).toBe(480);
+        expect(human.needs.food).toBe(740_000 + Math.trunc(34_000 * pressureMultiplier(world.meta.pressureMode) / FIXED_POINT));
+        expect(human.needs.food).toBeGreaterThanOrEqual(760_000);
+        expect(human.intention).toBe("eat");
+        expect(residentMaterialUse.residentMaterialUseEligible(world, human, duties, tick)).toBe(false);
+        expect(result?.identity.stableId).toBe(fixture.workerIds[1]);
+        observedPostNeeds = true;
+      }
+      return result;
+    });
+    try {
+      advanceOrdinaryFixedSteps(runtime, 599);
+      await runtime.save();
+      const before = decode(repository.snapshot()), human = resident(before, urgentId);
+      expect(human.needs.food).toBe(740_000);
+      expect(human.activity?.materialTask).toMatchObject({ phase: "arrived", selectedAtTick: fixture.tick, usedAtTick: null });
+      expect(human.activity?.rationTask).toBeNull();
+      advanceOrdinaryFixedSteps(runtime, 1);
+      await runtime.save();
+      expect(observedPostNeeds).toBe(true);
+      const after = decode(repository.snapshot()), world = deserializeWorld(after.world);
+      expect(resident(after, urgentId).activity?.materialTask).toBeNull();
+      expect(resident(after, urgentId).activity?.rationTask).toMatchObject({ kind: "settlement-ration", selectedAtTick: 480 });
+      expect(world.ledger.consumed[fixture.resource]).toBe(fixture.consumed + 1);
+      expect(world.settlements.find(({ id }) => id === fixture.settlementId)!.project.progress).toBe(fixture.progress + 1);
+      assertWorldInvariants(world);
+    } finally { selection.mockRestore(); }
+  }, 120_000);
+
   it("preserves native work and the entire roster through periodic autosave and cold lifecycle continuation", async () => {
     // Untouched native causes and ordinary accepted steps, not rendered play,
     // a benchmark, assigned successful tasks or universal starvation proof.
@@ -1686,6 +1909,7 @@ describe("ordinary runtime resident rest execution", () => {
     const originalSelect = residentMaterialUse.selectResidentMaterialUser;
     const originalStep = simulation.stepWorld;
     const originalPulse = residentRations.calculateResidentRationPulse;
+    const originalPlan = residentCircadian.planResidentCircadian;
     const originalSave = repository.save.bind(repository);
     type World = ReturnType<typeof deserializeWorld>;
     const pending = new Map<string, { key: string; firstEligibleTick: number }>();
@@ -1698,10 +1922,25 @@ describe("ordinary runtime resident rest execution", () => {
     let rationSite = 0;
     let expectedFood = new Map<string, number>();
     let civic: Array<{ site: number; project: number; progress: number }> = [];
+    const preparedTicks = new Set<number>();
+    let preparing: { tick: number; ids: Set<string> } | undefined;
+    const planning = vi.spyOn(residentCircadian, "planResidentCircadian").mockImplementation((input) => {
+      if (preparing !== undefined) {
+        expect(input.atTick).toBe(preparing.tick);
+        preparing.ids.add(input.resident.identity.stableId);
+      }
+      return originalPlan(input);
+    });
 
     const preparation = vi.spyOn(residentActivityExecution, "prepareResidentRestActivities").mockImplementation((...args) => {
-      const result = originalPrepare(...args);
-      if (!result) return result;
+      const considered = { tick: args[0].meta.completedTick, ids: new Set<string>() };
+      preparing = considered;
+      let result: boolean;
+      try { result = originalPrepare(...args); } finally { preparing = undefined; }
+      expect(result).toBe(true);
+      // Common body ticks alone do not prove the routine considered everyone.
+      expect([...considered.ids].sort()).toEqual(cohort.map(({ identity }) => identity.stableId).sort());
+      preparedTicks.add(considered.tick);
       const [world, duties = []] = args;
       // These sparse duties are the real higher owner's inputs. Omission is
       // null duty here, not inferred from apparent occupation or selection.
@@ -1821,6 +2060,8 @@ describe("ordinary runtime resident rest execution", () => {
       // not disable that real consumer to manufacture periodic-save evidence.
       expect(writes.at(-1)!.campaign).toBe(campaign);
       expect(closures).toBe(600);
+      expect([...preparedTicks].sort((left, right) => left - right))
+        .toEqual(Array.from({ length: 601 }, (_, index) => 420 + index));
       expect(moving.size).toBeGreaterThan(0);
       expect(materialUses).toBeGreaterThan(1);
       expect(rationUses).toBeGreaterThan(0);
@@ -1833,7 +2074,7 @@ describe("ordinary runtime resident rest execution", () => {
       expect(automatic.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
       expect(cohortOf(deserializeWorld(automatic.world))).toEqual(cohort);
       // Minute/commit continuity and real turns, not a universal service bound.
-      for (const spy of [preparation, selection, ration, engine, saving]) spy.mockRestore();
+      for (const spy of [planning, preparation, selection, ration, engine, saving]) spy.mockRestore();
       advanceOrdinaryFixedSteps(runtime, 4);
       await runtime.save();
       const record4 = repository.snapshot(), phase4 = decode(record4);
@@ -1877,7 +2118,7 @@ describe("ordinary runtime resident rest execution", () => {
       expect(authoritativeRoots(decode(titleRepository.snapshot()))).toEqual(authoritativeRoots(terminal));
       close(continued);
     } finally {
-      for (const spy of [preparation, selection, ration, engine, saving]) spy.mockRestore();
+      for (const spy of [planning, preparation, selection, ration, engine, saving]) spy.mockRestore();
     }
   }, 600_000);
 

@@ -7331,6 +7331,73 @@ current writer58/carry14, support set, dependencies and completed history are
 unchanged. No new performance, prolonged-soak, cumulative or release claim.
 `npm run test:smoke`6files105PASS, type checking and documentation-reuse45PASS.
 
+### Conditional civic fairness and whole-roster consideration — 2026-10-10
+
+**Local runtime correctness; native geometry with controlled causes, not
+untouched autonomy or universal task liveness.** Three generated workers at
+one existing building project retain native identities, positions, intention,
+terrain and target. Initial needs/exhaustion, weather, offer/recipe schedules
+and conserved four-unit supply are explicit fixture inputs; no task, arrival,
+pose, successful use or null keeper duty is assigned. Ordinary runtime steps
+select, approach and enact work through the original owners.
+
+Every initial pending request retains its age and actual arrived eligibility
+at each minute until service; the real post-needs selector verifies the complete
+three-person eligible cohort, including previously served workers. All three
+receive unique uses at480/540/600, behind at most two competing successes and
+within180 authoritative ticks of actual arrival. Exact project progress,
+stock and consumed-ledger changes are three units, leaving one; no recipe or
+delivery substitutes for labor. Full-root cold599phase9→600 and used600→601
+match continuous work without repeat credit or load-time audio.
+
+A separate initial740,000 food-need contrast uses real hourly hunger to create
+urgent food priority at480. The pending worker is genuinely ineligible after
+needs, loses its material request and selects ration service while another
+worker contributes. Eligibility loss is not misreported as scheduler starvation.
+The untouched estuary periodic-save case separately observes the original
+routine planner for all42 identities at every actual preparation420..1020;
+601 tick sets prove consideration, not a quota or successful service for all.
+
+At parent `c8fc16b`, test SHA256 `628d36dd…`, selected3PASS/22unselected
+(44.112s fairness,13.062s urgent,179.465s autosave); report SHA256 `dd84ead4…`.
+Exact selection: `npx vitest run src/game/runtime.residentRest.integration.test.ts -t 'serves every continuously eligible native civic contender|revokes pending civic eligibility|preserves native work and the entire roster' --maxWorkers=1`.
+Existing material/ration owners separately pass3files52, report `6cde8efa…`;
+`npm run test:smoke`6files105, typecheck and documentation-reuse45PASS.
+These are not a new complete cumulative certificate, visual proof, bounded
+delay under supply/priority loss, production performance or directive closure.
+Production code, schema/support set and dependencies are unchanged.
+
+### Current resident-path attribution check — 2026-10-10
+
+**Diagnostic attribution only; no additional optimization retained.** Clean
+`c8fc16b`, executable `908cead`, packaged ASAR SHA256 `4f5b37c8…` and exact
+shipped JavaScript `6f54f98b…` remain unchanged across the existing opt-in
+20-second Electron estuary capture. Separate production-map SHA256
+`74bbc6ff…` authenticates the shipped prefix; capture `9ff9fe71…` records
+paired page/profiler clocks. The command uses the existing
+`scripts/performance-baseline.cjs`, normal estuary Relief scenario and its
+local default-disabled CPU adapter, not another simulation loop.
+
+Actual window20.046s processes199 accepted steps/19 world advances420→439;
+world mean97.179ms, maximum134.5ms. With19 observations the reported empirical
+p99 equals the maximum, not a robust population tail. Sampling13,685 points
+over20.183s and competing host Ableton activity prevent matched baseline,
+improvement, presented-FPS, memory-soak or performance-gate claims, despite
+AC power and unchanged artifact identity. No synchronous save was sampled.
+
+Disjoint sampled call ancestry attributes255.691ms to resident publication,
+114.088ms to fine activity, and43.171ms to world body preparation. Publication
+includes ordinary and closing invocations; these are not world-only durations
+or call counts. Activity canonicalization within those respective owners is
+74.950/48.106/7.587ms; the latter is about0.40 sampled ms per advance, not a
+measured removable cost. Existing immutable-root authentication already has
+its fast path; fine append and detached publication still require their changed
+state and cold-boundary checks. No count of reusable prefix identities proves
+another cache worthwhile. Retain this negative finding rather than removing
+validation speculatively. Existing aggregate commit remains a separate479.964ms
+sampled owner, not evidence of a new resident-path repair. Frozen current
+transition criteria remain unmet. Dependencies and upstream sources unchanged.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
