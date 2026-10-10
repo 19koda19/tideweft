@@ -59,6 +59,33 @@ function sightInput(
 }
 
 describe("deterministic visual perception", () => {
+  it("keeps backward narrow-grid rays and changed cover or elevation exact", () => {
+    // The observer is last in row-major order: early rays need distances to
+    // intermediate cells that the outer scan has not reached yet.
+    const cells = flatCells(9);
+    const ranges = { closePeripheralRange: 0, directSightRange: 8, forwardConeRadians: Math.PI / 2 };
+    const input = sightInput(1, 9, 8, {
+      cells, facingRadians: -Math.PI / 2,
+      rangeOverrides: ranges, detailRangeOverrides: ranges,
+    });
+    const open = evaluatePerception(input);
+    expect([...open.visibilityGrades]).toEqual(Array(9).fill(VISIBILITY_DIRECT));
+    expect([...open.detailVisibilityGrades]).toEqual(Array(9).fill(VISIBILITY_DIRECT));
+    cells[4] = { elevation: 0, obstruction: 1 };
+    const covered = evaluatePerception(input);
+    expect([...covered.visibilityGrades]).toEqual([...open.visibilityGrades]);
+    expect([...covered.detailVisibilityGrades]).toEqual([0, 0, 0, 0, 2, 2, 2, 2, 2]);
+    cells[4] = { elevation: 1, obstruction: 0 };
+    const ridge = evaluatePerception(input);
+    expect([...ridge.visibilityGrades]).toEqual([0, 0, 0, 0, 2, 2, 2, 2, 2]);
+    expect([...ridge.detailVisibilityGrades]).toEqual([...ridge.visibilityGrades]);
+    for (const result of [open, covered, ridge]) {
+      expect(hasValidPerceptionSignature(result, 1, 9)).toBe(true);
+    }
+    cells[4] = { elevation: 0, obstruction: 0 };
+    expect(evaluatePerception(input)).toEqual(open);
+  });
+
   it("can withhold every detail channel while preserving sealed terrain awareness", () => {
     const ordinary = evaluatePerception(sightInput(9, 1, 4));
     const sleeping = suppressPerceptionDetail(ordinary, 9, 1);

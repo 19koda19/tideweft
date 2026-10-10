@@ -8194,6 +8194,30 @@ No dependency/configuration/upstream, schema/support, security, fidelity,
 cadence, completed-directive or full-Foliage Voice-soak policy change occurs.
 WORLD0 remains incomplete; restored Firefox standing gates remain unresolved.
 
+### Native observer-distance argument census — 2026-10-10
+
+A test-only extension to the retained original-once evaluator observer counts
+exact signed argument pairs, including negative zero, without retaining argument
+arrays or altering returned arithmetic. All observers restore before full-save
+comparison. Each of the three120×120 evaluations per seed has14,400 distinct
+two-argument pairs among323,681/255,320 calls; no other arity occurs. This
+includes frontier-offset work and the maximum-grid-distance call, so it is not
+a private-ray count or a CPU/removable-work estimate. Complete disclosure and
+full current-save digests remain exact to uninstrumented30-step work.
+
+Static inspection locates repeated observer-to-cell distances in the outer
+scan and both independent ray policies. A later per-evaluation distance table
+would need explicit misses for cells not yet visited by row-major scanning;
+zero cannot silently mean a computed distance. Point/light shape-only queries
+must retain their complete traversed validation, and frontier offsets are a
+separate calculation. No production cache or performance gain is established
+by this census. Any candidate still needs frozen both-product measurements,
+exact disclosure/save results, and unchanged failure/resource boundaries.
+Characterization passes4 native telemetry cases and35 perception cases,
+typecheck and maintained critical105. The added narrow bottom-origin oracle
+retains distinct cover/ridge outcomes and exact restoration after changing
+the same input cells; it catches uncomputed-distance and stale-storage errors.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

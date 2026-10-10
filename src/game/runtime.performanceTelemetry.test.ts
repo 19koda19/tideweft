@@ -409,7 +409,8 @@ describe("runtime performance telemetry", () => {
         let nextPerceptionCellArrayId = 0;
         const perceptionCalls: Array<{
           frame: number; cellArrayId: number; columns: number; rows: number;
-          valid: boolean; hypotCalls: number; detailVisibleNonplayer: number;
+          valid: boolean; hypotCalls: number; uniqueHypotPairs: number;
+          nonPairHypotCalls: number; detailVisibleNonplayer: number;
           signature: string; resultDigest: string;
         }> = [];
         const originalPerception = perceptionOwner.evaluatePerception;
@@ -417,10 +418,19 @@ describe("runtime performance telemetry", () => {
         const perceptionEvaluator = vi.spyOn(perceptionOwner, "evaluatePerception")
           .mockImplementation((input) => {
             let hypotCalls = 0;
-            // Count arithmetic only within this original-once pure evaluator.
-            // Do not retain argument arrays or claim private-ray call counts.
+            let nonPairHypotCalls = 0;
+            const hypotPairs = new Set<string>();
+            // Observe exact signed argument pairs only within this original-
+            // once evaluator. This includes frontier work, not just sight rays;
+            // it does not measure CPU time or removable work. No array retained.
             Math.hypot = (...values) => {
               hypotCalls += 1;
+              if (values.length === 2) {
+                const [x, y] = values;
+                hypotPairs.add(`${Object.is(x, -0) ? "-0" : x},${Object.is(y, -0) ? "-0" : y}`);
+              } else {
+                nonPairHypotCalls += 1;
+              }
               return originalHypot(...values);
             };
             let result: perceptionOwner.PerceptionResult;
@@ -436,7 +446,8 @@ describe("runtime performance telemetry", () => {
             }
             perceptionCalls.push({
               frame: currentFrame, cellArrayId, columns: input.columns, rows: input.rows,
-              valid: result.valid, hypotCalls,
+              valid: result.valid, hypotCalls, uniqueHypotPairs: hypotPairs.size,
+              nonPairHypotCalls,
               detailVisibleNonplayer: result.detailVisibleTileIndices.filter((index) => (
                 index !== result.playerTileIndex
               )).length,
@@ -565,6 +576,9 @@ describe("runtime performance telemetry", () => {
         expect(perceptionCalls.every(({ hypotCalls, detailVisibleNonplayer }) => (
           hypotCalls > 0 && detailVisibleNonplayer > 0
         ))).toBe(true);
+        expect(perceptionCalls.every(({ hypotCalls, uniqueHypotPairs, nonPairHypotCalls }) => (
+          nonPairHypotCalls === 0 && uniqueHypotPairs > 0 && uniqueHypotPairs < hypotCalls
+        ))).toBe(true);
         expect(nextPerceptionCellArrayId).toBe(3);
         expect(perceptionCalls.map(({ frame, cellArrayId }) => [frame, cellArrayId]))
           .toEqual([[10, 0], [20, 1], [30, 2]]);
@@ -572,11 +586,13 @@ describe("runtime performance telemetry", () => {
           expect(call).toMatchObject(seed === "runtime baseline estuary" ? {
             // The discarded shared-walk counts remain evidence, not current
             // authority. Preserve the original two-path arithmetic oracle.
-            hypotCalls: 323_681, detailVisibleNonplayer: 1791,
+            hypotCalls: 323_681, uniqueHypotPairs: 14_400,
+            nonPairHypotCalls: 0, detailVisibleNonplayer: 1791,
             signature: "perception-v3:c3552d11",
             resultDigest: "3ad52fdaabf936e5c964be4dc03a12482196759fa8d13af630b542e0fcc97eac",
           } : {
-            hypotCalls: 255_320, detailVisibleNonplayer: 1176,
+            hypotCalls: 255_320, uniqueHypotPairs: 14_400,
+            nonPairHypotCalls: 0, detailVisibleNonplayer: 1176,
             signature: "perception-v3:baaf234e",
             resultDigest: "c37a956207c4221541e02cae0bcbebfb53de8e238d0e64d4b868d128e0ddcfe5",
           });
