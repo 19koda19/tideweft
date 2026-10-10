@@ -7671,6 +7671,55 @@ digests `922d9c808e418f350cf9ad7f97a4544b8663080e0f328fc9eeea94b9d870ec56`
 Matched unsampled desktop/browser artifact pairs still decide retention under
 the frozen criteria; no hitch fix or transition-gate pass is claimed.
 
+### Prepared-snapshot encoding experiment — 2026-10-10
+
+**RETAIN the small local repair; overall performance gate remains unresolved.**
+Executable `7f48b48` has ASAR `92d235c9…` and shipped JS `07ee6a33…`; archive and
+`dist/` match exactly. The preceding characterization preserves all tested
+authoritative state and canonical bytes. The frozen control is executable
+`908cead`, using only the fresh clean controls, not the excluded competing-app
+sample or sampled CPU capture.
+
+Two sequential unsampled 15s estuary Relief windows per platform use the same
+AC M4 host, Low Power Mode off, 1440×900 viewport, quality/warm-up, native
+harness and initial projection `997e9992…`, without other games/tests/profilers.
+Electron 44.1.0 processes 149 fixed steps / 14 advances, 420→434, each time;
+Firefox 157.0.1 processes 152 / 15, 420→435. Paired inclusive world means are
+97.525→96.154ms desktop and 169.300→166.067ms browser. Gains 1.371/3.233ms
+narrowly exceed the predeclared larger within-pair ranges 1.007/2.933ms.
+Aggregate-commit means fall 39.279→38.100ms and 84.767→83.133ms. This is
+limited repeat evidence, not a statistical guarantee or an attribution of the
+entire world gain to the changed constructor.
+
+Draw means are 25.228→24.609ms desktop / 20.930→21.068ms Firefox; the latter
+increase is below its 0.179ms repeated-run range. Callback proxies change
+32.382→33.317/s and 29.872→29.995/s. AFTER world maxima are 127.7/128.2ms and
+185/191ms; renderer worst gaps 156.9/159.5ms and 206/214ms. With 14–15 world
+observations per run, empirical p99 equals maximum and is not robust tail
+evidence. Neither callback counts nor draw cost prove presented FPS/GPU or
+hitch removal. Frozen desktop world94.661ms, Firefox world163.8ms and callback
+30.545/s gates remain FAIL; no limit or waiver changed.
+
+Scene/population counts and within-platform save lengths remain equal; six
+endpoint pending counters remain zero, observed resource counts stay within
+their existing bounds and DOM count stays3747. Unforced Chromium heap points
+are noisy, not retained-memory/GC/soak proof; Firefox heap is unavailable.
+The independently passing full-save digests establish the characterized
+equal-work authority, not wall-window counts or save lengths. Timed save
+snapshots are zero; each explicit post-window save remains outside the sample.
+
+Web compilation/static nested-path smoke, actual production Firefox witnesses,
+macOS arm64 packaging and packaged desktop smoke PASS. Desktop/mobile Relief
+screenshots were inspected. The first Forge output replacement failed on a
+Finder-created `.DS_Store`; its generated leftover was moved recoverably and
+the unmodified retry passed. Runtime-only ASAR checks, guarded Firefox errors
+and rejected/unhandled counts pass. No new density/travel/autosave performance,
+long soak, hardware audio, real mobile/other OS, installer/signing, CI/Pages or
+live-build certification is claimed. Extended Voice soaks remain deferred.
+Local raw reports retain eight identities, exact commands, frozen acceptance
+and comparison. Dependency/configuration changes:NONE; upstream p5/Electron
+modified:NO. No gameplay, save schema/support or security boundary changes.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
