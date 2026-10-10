@@ -7449,6 +7449,28 @@ under `artifacts/validation/world0-liveness-plan/`. The earlier complete
 6f05591 certificate does not certify these new test bytes. No production,
 performance, normal-controls, release or complete-directive claim is made.
 
+### Bounded native reverse-offer probe — 2026-10-10
+
+At `2070b52`, a temporary additive case continues the genuine coarse128
+history and paid109 source through only demand opportunities1320/1380/1440.
+No contract, carrier, stock or report is assigned. Resident92 stays idle at2;
+destination5 water is5/3/2, actual donor2 water200/206/212, and its retained
+report111 has confidence709520/708512/707504. No compatible reverse offer is
+observed. All three snapshots have18 open Promises, the existing demand
+owner's first capacity gate; clearing that gate alone would not prove winning
+donor rank or wanted-resource selection. The existing destination offer155 is
+reed from3, not reverse water cargo. No information command or limit change
+is justified by this probe.
+
+The bounded result is **NOT OBSERVED**, not absence of the feature or a new
+Promise-manager requirement. Session84121 passes1selected/8unselected in170ms
+(886ms total); its opt-in console records are transcribed to the local
+`2070b52-native-reverse-opportunity-observations.json` beside the JSON test
+report under `artifacts/validation/world0-liveness-plan/`. The temporary probe
+was removed, restoring the exact committed integration-test bytes. This is
+coarse-source diagnosis, not current pickup, informed departure, visual play,
+performance, or directive-completion evidence.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
