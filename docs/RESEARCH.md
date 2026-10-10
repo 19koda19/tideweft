@@ -7650,6 +7650,27 @@ caches, omitted validation, changed hash lanes/size accounting or schema resets.
 The source-level four-view save-preparation lead is separate and unmeasured;
 it cannot explain these zero-save stationary advances. Dependencies unchanged.
 
+**Local candidate, not a measured repair yet.** The prepared V1 constructor now
+encodes only its own exact normalized frozen patch once and substitutes those
+bytes into the immediate parent's canonical encoding, using the existing
+segmented hash primitive. The parent still hashes every released UTF-16 code
+unit. No retained encoding/cache, reader trust, normalization, lineage, size,
+schema, RNG or update-order rule changes. This follows the existing V6
+same-child encoding pattern; foreign/cold inputs retain their full boundaries.
+The characterization changes its expected exact-child traversal from two to
+one, retaining independent ordinary child/parent hashes and cold byte equality.
+
+Candidate validation: V1+util 2 files / 30 tests; V2–V6, canonical seal,
+sibling collector and breadth 8 / 71; critical smoke 6 / 105; typecheck; original
+late-interval rollback case 1 selected; runtime perception/telemetry 2 / 33 all
+PASS. Identical 30 accepted steps / 3 advances preserve complete current-save
+digests `922d9c808e418f350cf9ad7f97a4544b8663080e0f328fc9eeea94b9d870ec56`
+(estuary) and
+`a7b713dd04b7e96e637c441c313ef6bc4b124715ff2ebf4fd39301c5dbbe2944`
+(density8). These are equal-work correctness witnesses, not speed measurements.
+Matched unsampled desktop/browser artifact pairs still decide retention under
+the frozen criteria; no hitch fix or transition-gate pass is claimed.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

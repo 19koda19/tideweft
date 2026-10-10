@@ -3,6 +3,8 @@ import type { RootSeed } from "../sim/rng";
 import {
   compareText,
   hashCanonical,
+  hashCanonicalEncoding,
+  hashCanonicalEncodingSegments,
   stableStringify,
 } from "../sim/util";
 import {
@@ -1104,16 +1106,31 @@ function createSnapshotFromPreparedStoragePatch(
     && patch.mortalityTransactions.length === 0
     && patch.carcasses.length === 0
   ) throw new RangeError("Honestly empty regional habitat must not create a hot snapshot");
+  const patchEncoding = stableStringify(patch);
   const base: Omit<RegionalEcologyResidentSnapshotV1, "integrity"> = {
     version: REGIONAL_ECOLOGY_STATE_SNAPSHOT_VERSION,
     kind,
     sourceKey,
     region: copyRegion(patch.originRegion),
-    patchHash: hashCanonical(patch),
+    patchHash: hashCanonicalEncoding(patchEncoding),
     lineageHash: sourceLineageHash(patch),
     patch,
   };
-  return deepFreeze({ ...base, integrity: hashCanonical(base) });
+  // Reuse only this call's exact normalized child. The parent still hashes
+  // every released UTF-16 code unit; no encoding or trust outlives this call.
+  const template = stableStringify({ ...base, patch: null });
+  const marker = `${JSON.stringify("patch")}:null`;
+  const markerIndex = template.indexOf(marker);
+  if (markerIndex < 0 || template.indexOf(marker, markerIndex + marker.length) >= 0) {
+    throw new RangeError("Prepared regional snapshot lost its patch encoding slot");
+  }
+  const valueIndex = markerIndex + marker.length - "null".length;
+  const integrity = hashCanonicalEncodingSegments([
+    template.slice(0, valueIndex),
+    patchEncoding,
+    template.slice(valueIndex + "null".length),
+  ]);
+  return deepFreeze({ ...base, integrity });
 }
 
 function isRegionalHabitatDerivation(patch: CoreEcologyAggregatePatchState): boolean {

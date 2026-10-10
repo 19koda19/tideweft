@@ -2088,7 +2088,7 @@ describe("regional ecology v25 owner substrate", () => {
     }
     // Count actual traversal of this exact normalized child, not all encoding
     // or validation in the transaction. These costs must not be conflated.
-    expect(patchVisits.get(state.settlementHome.patch)).toBe(2);
+    expect(patchVisits.get(state.settlementHome.patch)).toBe(1);
     const { integrity, ...unsealed } = state.settlementHome;
     expect(state.settlementHome.patchHash).toBe(hashCanonical(state.settlementHome.patch));
     expect(integrity).toBe(hashCanonical(unsealed));
