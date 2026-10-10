@@ -24,6 +24,7 @@ import * as residentContactAcoustics from "./residentContactAcoustics";
 import { residentRestSurfaceObservationId, residentRestSurfaceKnowledge } from "../sim/residentSurfaceKnowledge";
 import * as simulation from "../sim/public";
 import * as residentMaterialUse from "../sim/residentMaterialUse";
+import * as residentRations from "../sim/residentRations";
 import * as situatedExpressionChannelBank from "./situatedExpressionChannelBank";
 import * as residentIntroductionAuthority from "./residentIntroductionAdmissionAuthority";
 import { observableResidentRationUse, RESIDENT_CONVERSATION_RANGE_TILES } from "./projection";
@@ -42,7 +43,8 @@ import { WORLD_POSITION_UNITS_PER_TILE, worldPositionDelta, type WorldPosition }
 
 const soundscapePlay = vi.hoisted(() => vi.fn());
 
-vi.mock("../audio/soundscape", () => ({
+vi.mock("../audio/soundscape", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../audio/soundscape")>()),
   TideweftSoundscape: class {
     async unlock(): Promise<void> {}
     play(...args: unknown[]): void { soundscapePlay(...args); }
@@ -1664,6 +1666,220 @@ describe("ordinary runtime resident rest execution", () => {
     expect(deserializeBio0Ecology(continued.bio0Ecology)?.porterAddress)
       .toEqual(livingActorAddressForResident(createWorldView(continuedWorld), continuedKeeper));
   }, 60_000);
+
+  it("preserves native work and the entire roster through periodic autosave and cold lifecycle continuation", async () => {
+    // Untouched native causes and ordinary accepted steps, not rendered play,
+    // a benchmark, assigned successful tasks or universal starvation proof.
+    const repository = new MemoryRepository();
+    const runtime = await open(repository);
+    runtime.dispatchUI({ type: "new-world", seed: "runtime baseline estuary", posture: "journey", sessionShape: "wander" });
+    await runtime.save(); // Drain creation only; no manual save before1020.
+    const initial = decode(repository.snapshot());
+    const initialWorld = deserializeWorld(initial.world);
+    expect(initialWorld.meta.completedTick).toBe(420);
+    const cohortOf = (world: ReturnType<typeof deserializeWorld>) => world.residents.map(({ id, identity, homeSettlementId }) => ({
+      id, identity, homeSettlementId,
+    }));
+    const cohort = cohortOf(initialWorld);
+    expect(cohort).toHaveLength(42);
+    const originalPrepare = residentActivityExecution.prepareResidentRestActivities;
+    const originalSelect = residentMaterialUse.selectResidentMaterialUser;
+    const originalStep = simulation.stepWorld;
+    const originalPulse = residentRations.calculateResidentRationPulse;
+    const originalSave = repository.save.bind(repository);
+    type World = ReturnType<typeof deserializeWorld>;
+    const pending = new Map<string, { key: string; firstEligibleTick: number }>();
+    const moving = new Set<string>();
+    const turns = new Map<number, { chosen: string; waiting: string; age: number }>();
+    const writes: Array<{ tick: number; campaign: boolean; promise: Promise<void> }> = [];
+    let closures = 0, materialUses = 0, rationUses = 0;
+    let longestObservedEligibleDelay = 0;
+    let stepWorld: World | undefined;
+    let rationSite = 0;
+    let expectedFood = new Map<string, number>();
+    let civic: Array<{ site: number; project: number; progress: number }> = [];
+
+    const preparation = vi.spyOn(residentActivityExecution, "prepareResidentRestActivities").mockImplementation((...args) => {
+      const result = originalPrepare(...args);
+      if (!result) return result;
+      const [world, duties = []] = args;
+      // These sparse duties are the real higher owner's inputs. Omission is
+      // null duty here, not inferred from apparent occupation or selection.
+      const active = new Set(duties.map(({ actorId }) => actorId));
+      const complete = new Map(world.residents.map(({ identity }) => [identity.stableId, active.has(identity.stableId)]));
+      expect(cohortOf(world)).toEqual(cohort);
+      for (const human of world.residents) {
+        const activity = human.activity!;
+        expect(activity.version).toBe(RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION);
+        expect(activity.tick).toBe(world.meta.completedTick);
+        expect(activity.poses).toHaveLength(1);
+        expect([activity.restTask, activity.rationTask, activity.materialTask,
+          activity.inspectionTask, activity.pickupTask, activity.travelTask].filter((task) => task != null).length)
+          .toBeLessThanOrEqual(1);
+        const id = human.identity.stableId;
+        const task = activity.materialTask;
+        const eligible = residentMaterialUse.residentMaterialUseEligible(world, human, complete, world.meta.completedTick);
+        const key = task == null ? null : `${id}:${task.projectId}:${task.selectedAtTick}`;
+        const before = pending.get(id);
+        // Explicitly observed ineligibility/reselection ends this continuity
+        // interval. It is not labelled successful service or unexplained idle.
+        if (!eligible || before?.key !== key) pending.delete(id);
+        if (eligible && key !== null) pending.set(id, { key, firstEligibleTick: before?.key === key
+          ? before.firstEligibleTick : world.meta.completedTick });
+        const first = turns.get(480);
+        if (first !== undefined && id === first.waiting && world.meta.completedTick >= 480 && world.meta.completedTick < 540) {
+          expect(task).toMatchObject({ phase: "arrived", projectId: 13, selectedAtTick: first.age, usedAtTick: null });
+          expect(eligible).toBe(true);
+        }
+      }
+      expect(pending.size).toBeLessThanOrEqual(cohort.length);
+      assertWorldInvariants(world);
+      return result;
+    });
+    const selection = vi.spyOn(residentMaterialUse, "selectResidentMaterialUser").mockImplementation((...args) => {
+      const [world, site, duties, tick] = args;
+      const eligible = world.residents.filter((human) => human.location.kind === "settlement"
+        && human.location.settlementId === site && residentMaterialUse.residentMaterialUseEligible(world, human, duties, tick))
+        .sort((left, right) => left.activity!.materialTask!.selectedAtTick - right.activity!.materialTask!.selectedAtTick
+          || (left.identity.stableId < right.identity.stableId ? -1 : left.identity.stableId > right.identity.stableId ? 1 : 0));
+      // Actual post-needs eligibility can revoke a preceding minute's plan.
+      for (const human of world.residents.filter((human) => human.location.kind === "settlement" && human.location.settlementId === site)) {
+        if (!eligible.includes(human)) pending.delete(human.identity.stableId);
+      }
+      const chosen = originalSelect(...args);
+      expect(chosen?.identity.stableId ?? null).toBe(eligible[0]?.identity.stableId ?? null);
+      if (chosen !== null) {
+        materialUses += 1;
+        const task = chosen.activity!.materialTask!;
+        const observed = pending.get(chosen.identity.stableId);
+        if (observed !== undefined) longestObservedEligibleDelay = Math.max(longestObservedEligibleDelay, tick - observed.firstEligibleTick);
+        pending.delete(chosen.identity.stableId);
+        const project = world.settlements.find(({ id }) => id === site)!.project;
+        civic.push({ site, project: project.id, progress: project.progress });
+        if (site === 3 && tick === 480) {
+          expect(eligible.length).toBeGreaterThanOrEqual(2);
+          turns.set(480, { chosen: chosen.identity.stableId, waiting: eligible[1]!.identity.stableId,
+            age: eligible[1]!.activity!.materialTask!.selectedAtTick });
+        }
+        if (site === 3 && tick === 540) expect(chosen.identity.stableId).toBe(turns.get(480)?.waiting);
+        expect(task.phase).toBe("arrived");
+      }
+      return chosen;
+    });
+    const ration = vi.spyOn(residentRations, "calculateResidentRationPulse").mockImplementation((input) => {
+      const result = originalPulse(input);
+      const site = stepWorld!.settlements[rationSite++]!;
+      const present = stepWorld!.residents.filter(({ location }) => location.kind === "settlement" && location.settlementId === site.id)
+        .sort((left, right) => left.identity.stableId < right.identity.stableId ? -1 : left.identity.stableId > right.identity.stableId ? 1 : 0);
+      expect(input.foodNeeds).toEqual(present.map(({ needs }) => needs.food));
+      expect(input.uses).toHaveLength(present.length);
+      for (const [index, human] of present.entries()) expectedFood.set(human.identity.stableId, result.nextFoodNeeds[index]!);
+      if (result.foodConsumed > 0 || result.freshWaterConsumed > 0) rationUses += input.uses.filter(Boolean).length;
+      return result;
+    });
+    const engine = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+      stepWorld = args[0]; rationSite = 0; expectedFood = new Map(); civic = [];
+      for (const human of stepWorld.residents) if (human.activity!.poses.some((pose) =>
+        stableStringify(pose.position) !== stableStringify(human.activity!.poses[0]!.position))) moving.add(human.identity.stableId);
+      const result = originalStep(...args);
+      closures += 1;
+      expect(result.meta.completedTick).toBe(420 + closures);
+      for (const human of result.residents) if (expectedFood.has(human.identity.stableId)) {
+        expect(human.needs.food).toBe(expectedFood.get(human.identity.stableId));
+      }
+      for (const use of civic) {
+        const site = result.settlements.find(({ id }) => id === use.site)!;
+        expect(site.project.id).toBe(use.project);
+        // Any additional credit must come from a real delivery; global stock
+        // and ledger conservation are still checked by the independent owner.
+        expect(site.project.progress).toBeGreaterThanOrEqual(use.progress + 1);
+      }
+      assertWorldInvariants(result);
+      return result;
+    });
+    const saving = vi.spyOn(repository, "save").mockImplementation((record) => {
+      const saved = decode(record);
+      const promise = originalSave(record);
+      writes.push({ tick: record.playTicks, campaign: Boolean((saved.session as Record<string, unknown>).campaignCelebrated), promise });
+      return promise;
+    });
+    try {
+      advanceOrdinaryFixedSteps(runtime, 5_999);
+      // Await only already requested repository writes, not runtime.save().
+      await Promise.all(writes.map(({ promise }) => promise));
+      let campaign = Boolean((initial.session as Record<string, unknown>).campaignCelebrated);
+      for (const write of writes) {
+        expect(write.tick).toBeLessThan(1020);
+        expect(!campaign && write.campaign).toBe(true);
+        campaign = write.campaign;
+      }
+      const beforePeriodic = writes.length;
+      advanceOrdinaryFixedSteps(runtime, 1);
+      await Promise.all(writes.map(({ promise }) => promise));
+      expect(writes.slice(beforePeriodic).map(({ tick }) => tick)).toEqual([1020]);
+      // A coincident first campaign save would make origin inconclusive; do
+      // not disable that real consumer to manufacture periodic-save evidence.
+      expect(writes.at(-1)!.campaign).toBe(campaign);
+      expect(closures).toBe(600);
+      expect(moving.size).toBeGreaterThan(0);
+      expect(materialUses).toBeGreaterThan(1);
+      expect(rationUses).toBeGreaterThan(0);
+      expect(turns.get(480)).toBeDefined();
+      expect(longestObservedEligibleDelay).toBeGreaterThan(0);
+      expect(runtime.getUIView().saveWarning).toBeUndefined();
+      const automaticRecord = repository.snapshot();
+      const automatic = decode(automaticRecord);
+      expect(automaticRecord.playTicks).toBe(1020);
+      expect(automatic.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+      expect(cohortOf(deserializeWorld(automatic.world))).toEqual(cohort);
+      // Minute/commit continuity and real turns, not a universal service bound.
+      for (const spy of [preparation, selection, ration, engine, saving]) spy.mockRestore();
+      advanceOrdinaryFixedSteps(runtime, 4);
+      await runtime.save();
+      const record4 = repository.snapshot(), phase4 = decode(record4);
+      advanceOrdinaryFixedSteps(runtime, 5);
+      await runtime.save();
+      const record9 = repository.snapshot(), phase9 = decode(record9);
+      advanceOrdinaryFixedSteps(runtime, 1);
+      await runtime.save();
+      const terminal = decode(repository.snapshot());
+      expect(phase4.perceptionCarry.playerStepsSinceWorldTick).toBe(4);
+      expect(phase9.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+      expect(deserializeWorld(terminal.world).meta.completedTick).toBe(1021);
+      for (const [record, before, count, after] of [
+        [automaticRecord, automatic, 4, phase4], [record4, phase4, 5, phase9], [record9, phase9, 1, terminal],
+      ] as const) {
+        soundscapePlay.mockClear();
+        const coldRepository = new MemoryRepository(record), cold = await open(coldRepository);
+        expect(soundscapePlay).not.toHaveBeenCalled();
+        await cold.save();
+        expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(before));
+        advanceOrdinaryFixedSteps(cold, count);
+        await cold.save();
+        expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(after));
+        close(cold);
+      }
+      const titleSave = vi.spyOn(repository, "save");
+      runtime.dispatchUI({ type: "open-title" });
+      expect(titleSave).toHaveBeenCalledTimes(1);
+      await titleSave.mock.results[0]!.value;
+      const titleRecord = repository.snapshot();
+      expect(titleRecord.playTicks).toBe(1021);
+      expect(authoritativeRoots(decode(titleRecord))).toEqual(authoritativeRoots(terminal));
+      expect(runtime.getUIView().title.visible).toBe(true);
+      titleSave.mockRestore();
+      close(runtime);
+      soundscapePlay.mockClear();
+      const titleRepository = new MemoryRepository(titleRecord), continued = await open(titleRepository);
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      expect(continued.getUIView().title.visible).toBe(false);
+      await continued.save();
+      expect(authoritativeRoots(decode(titleRepository.snapshot()))).toEqual(authoritativeRoots(terminal));
+      close(continued);
+    } finally {
+      for (const spy of [preparation, selection, ration, engine, saving]) spy.mockRestore();
+    }
+  }, 600_000);
 
   it("uses native first-hour civic material without authored pressure, serves the older contender next and preserves exact cold closing work", async () => {
     // Unlike the controlled service fixtures above, this is untouched new-world

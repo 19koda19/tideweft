@@ -7295,6 +7295,42 @@ This is not a timing benchmark, hardware-audio proof, all-roster fairness,
 longitudinal resource soak, new cumulative certificate or directive closure.
 Dependency changes: NONE. Upstream p5/Electron source modified: NO.
 
+### Native periodic save and lifecycle continuity — 2026-10-10
+
+**Local whole-runtime correctness, not a rendering or resource-soak result.**
+The additive `runtime.residentRest.integration.test.ts` case starts untouched
+native estuary at420, with no assigned task, body, weather, need or stock.
+Its6000 ordinary accepted fixed steps close600 world intervals and reach the
+actual periodic repository write at1020. No manual save, title/lifecycle save,
+WAIT completion or cold-load interval reset substitutes for that boundary;
+any earlier campaign-resolution write is classified independently.
+
+Original preparation, material selection, ration arithmetic and world-step
+owners run unmodified. All42 stable identity/home records, exclusive current
+activity and world invariants survive. Real project contributions and benefited
+ration users occur; the native480→540 older civic contender retains its request
+until actual post-needs selection. Observed eligible delay is positive, but
+neither that sample nor preserved roster identity proves universal service
+latency or the whole directive's liveness acceptance.
+
+The automatic save then cold-continues phase0→4,4→9 and9→1021 against
+uninterrupted work. Every established authoritative saved root matches,
+excluding only session recap and envelope integrity. Actual title-return save
+and reload retain the same roots; loads release no incidental audio. This uses
+the real runtime with a synthetic in-memory repository, not proof of browser
+storage, packaged shutdown, hardware audio or normal visual play.
+
+At parent `fc831b5`, test SHA256
+`acd2c6322d1509cb7aa5e7047a8e114e23e806a2262edce47e5daec735a3e25d`:
+selected1PASS/22unselected172.787s; complete affected domain4files75PASS,
+zero failed/pending, including all23 runtime-rest cases. Exact command:
+`npx vitest run src/game/runtime.residentRest.integration.test.ts src/game/residentMaterialActivity.integration.test.ts src/sim/residentRations.test.ts src/sim/residentRationUse.test.ts --maxWorkers=1`.
+The audio test double preserves actual non-device exports, including spatial
+pan, rather than inventing an alternate acoustic calculation. Production code,
+current writer58/carry14, support set, dependencies and completed history are
+unchanged. No new performance, prolonged-soak, cumulative or release claim.
+`npm run test:smoke`6files105PASS, type checking and documentation-reuse45PASS.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
