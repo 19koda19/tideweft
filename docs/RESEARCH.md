@@ -7604,6 +7604,52 @@ each repetition and the excluded sample. Dependency/configuration changes:
 NONE; upstream p5/Electron source modified:NO. Save formats, security, completed
 directives, gameplay order and deferred full-Foliage soaks are unchanged.
 
+### Advancing-callback attribution and snapshot characterization — 2026-10-10
+
+**Diagnostic attribution and BEFORE characterization only; no new runtime
+optimization or transition pass.** Clean `af73d006` retains executable
+`908cead`, ASAR `4f5b37c8…`, shipped JavaScript `6f54f98b…` and matching separate
+production-map `74bbc6ff…`. A local opt-in adaptation of the existing desktop
+CPU observer authenticates the runtime frame's exact generated function prefix
+against that map, then brackets only those native callbacks. Registration IDs,
+callback receiver/timestamp/return, native scheduling and cancellation remain
+unchanged. Tick reads occur outside the timed brackets; the 1,024-record limit
+has explicit overflow rejection and the wrapper is restored after measurement.
+No diagnostic source or flag is shipped.
+
+The existing estuary Relief runner processes 199 accepted steps / 19 advances,
+420→439, over 20.048s on the same AC M4 host with Low Power Mode off and no other
+TIDEWEFT or test process. All 679 recorded runtime callbacks fit the bound and
+their positive tick deltas total exactly 19, matching runtime telemetry.
+Capture SHA256 `abc92188…` retains paired page/CDP/profiler clocks, exact source
+and artifact identities, 13,602 CPU samples and no capture failure. Conservative
+intersection of clock bookends plus an explicit 1ms boundary guard selects
+1,242 runtime-descendant samples / 1,663.199ms inside advancing callbacks;
+the advancing callback wall total is 1,840.100ms. The excluded boundary and
+non-runtime/native samples are not assigned to GC or rollback.
+
+Within this restricted scope, V6 commit is a 474.164ms inclusive sampled owner;
+subsequent presentation is a separate 300.470ms owner. These ancestors overlap
+their children and must not be summed with them. Util leaf work under the V6
+commit attributes 58.474ms to visitation comparison, 55.156ms to habitat binding,
+and 25.466ms to V1's prepared snapshot constructor. Sample weights are neither
+exact function durations nor call counts. A callback includes phase-ten body
+work, possible catch-up, world transaction, publication and audio release; this
+does not identify exact subphase boundaries. The diagnostic world mean96.842ms
+and maximum135ms are sampled observations, not comparable unsampled performance
+or robust tail/FPS/GPU evidence. No synchronous save was sampled.
+
+The existing private same-call snapshot constructor independently hashes a
+normalized frozen child patch and its immediate containing envelope. A focused
+test observes actual `Object.keys` traversal of that exact child under this
+constructor and confirms two encodings, while independently recomputing both
+ordinary hashes and preserving cold serialized equality. Complete V1+util
+validation passes 2 files / 30 tests, critical smoke 6 / 105 and typecheck.
+This identifies one small same-call reuse candidate, not permission for global
+caches, omitted validation, changed hash lanes/size accounting or schema resets.
+The source-level four-view save-preparation lead is separate and unmeasured;
+it cannot explain these zero-save stationary advances. Dependencies unchanged.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

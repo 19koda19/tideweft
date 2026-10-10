@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   ACTOR_PERCEPTION_SCALE,
@@ -2061,6 +2061,40 @@ describe("regional ecology v25 owner substrate", () => {
       settlementHome: null,
       residents: [],
     })).toBeNull();
+  });
+
+  it("characterizes duplicate patch encoding within the prepared snapshot constructor", () => {
+    const { root, home } = fixture();
+    const keys = Object.keys;
+    const patchVisits = new Map<object, number>();
+    const observer = vi.spyOn(Object, "keys").mockImplementation((value: object) => {
+      if (Object.hasOwn(value, "patchKey")
+        && new Error().stack?.includes("createSnapshotFromPreparedStoragePatch")
+        && new Error().stack?.includes("stableStringify")) {
+        patchVisits.set(value, (patchVisits.get(value) ?? 0) + 1);
+      }
+      return keys(value);
+    });
+    let state: RegionalEcologyStateV1;
+    try {
+      state = createRegionalEcologyState({
+        root,
+        settlementHome: { sourceKey: home.patchKey, patch: home },
+        activeRegions: [HOME_REGION],
+        activeResidents: [],
+      });
+    } finally {
+      observer.mockRestore();
+    }
+    // Count actual traversal of this exact normalized child, not all encoding
+    // or validation in the transaction. These costs must not be conflated.
+    expect(patchVisits.get(state.settlementHome.patch)).toBe(2);
+    const { integrity, ...unsealed } = state.settlementHome;
+    expect(state.settlementHome.patchHash).toBe(hashCanonical(state.settlementHome.patch));
+    expect(integrity).toBe(hashCanonical(unsealed));
+    const serialized = serializeRegionalEcologyState(state);
+    expect(serializeRegionalEcologyState(deserializeRegionalEcologyState(serialized)))
+      .toBe(serialized);
   });
 
   it("seals commit-prepared snapshots byte-identically to a loaded public reconstruction", () => {
