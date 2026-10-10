@@ -6982,7 +6982,8 @@ whole-population liveness, normal visual play, performance or directive closure.
 
 ### Resident-only terrain receipt experiment — 2026-10-10
 
-**Initial short regression check: FAIL; repair performance not yet verified.**
+**Initial short regression check: FAIL. The retained terrain repair below reduces
+fine-step presentation cost, but the overall world-cost gate remains FAIL.**
 Clean local `de37b40e8c8c6ec9316fac4d696526efe514a5ec` packages the current
 `55aced1` executable source. Its ASAR SHA256 is
 `dfee3bef860d7fe81fb57d7edbdd21e515d69aeba4fd57909dad38a539ce7f4a`;
@@ -7065,6 +7066,82 @@ red/final/domain reports and package identity. This is local/unpublished
 construction evidence, not hitch resolution, complete cumulative certification
 of later executable bytes, a release or directive closure. Existing extended
 profiling/soak deferrals remain unperformed; new regressions are not waived.
+
+#### Terrain receipt production confirmation
+
+Local `8f4f3aa4cda642a20c6d000558e2a4c1a64df1bc` preserves the correctness-
+validated candidate. Its rebuilt runtime-only ASAR has10 entries/5,108,625B,
+SHA256 `0094448def5d5a44105a43b8a9a72cd08feb02468c4742e5bfbec0d2a7c280cb`;
+production JS SHA256 is
+`6fd6b282289a9c0393d1331c79b4798984f2a82a565d8d3f34da734ee1e00056`.
+All seven packaged files exactly match checkout/dist. The unchanged package
+command's first attempt encounters a generated output containing only Finder
+metadata; moving that exact file aside and removing the now-empty directory
+permits the ordinary retry. No build/security/publication policy is bypassed.
+Web build, five-file static web smoke and generated macOS arm64 packaged smoke
+pass. Root inspects the actual desktop/mobile Relief screenshots; static
+images do not prove motion, every branch or low-end mobile performance.
+The packaged smoke enforces its complete internal result, but the observation
+tool again truncates its enormous console record; only the surviving terminal
+certificate, selected visible fields and images are retained independently.
+The first ordinary Firefox follow-up is invalidated by the investigator editing
+this research record during its window: the harness's complete tracked-diff
+identity check correctly fails. Runtime/source bundle fingerprints stay equal
+and public greeting/return labels are observed, but that is not a passed frozen-
+tree check. The unchanged runner is retried only after local evidence preservation
+with the entire tracked tree held fixed; no harness condition is weakened.
+
+Two new15s production windows per platform retain the exact frozen acceptance,
+host/power/quality/viewport/warmup and existing runners, with CPU sampling off
+and platforms sequential. Compare the immediately preceding `de37b40` pair
+for the repair effect, separately from the original Alpha64 regression limits:
+
+| Paired per-run mean | Electron de37 → candidate | Firefox de37 → candidate |
+| --- | ---: | ---: |
+| View projection CPU |10.071→5.552ms|10.288→8.092ms|
+| All accepted fixed-step CPU |20.503→16.002ms|29.066→26.878ms|
+| Draw CPU |24.607→23.990ms|21.355→20.710ms|
+| Renderer callback rate |31.227→33.843/s|28.728→29.875/s|
+| Inclusive world-step CPU |100.239→102.029ms|174.100→174.367ms|
+
+Each of the two repeats on each platform improves projection and fine-step
+cost: paired projection falls44.87%/21.34%, callback rates rise8.38%/3.99%.
+Retain the narrow removal of demonstrated redundant terrain work. There is
+**no demonstrated world-advance improvement**: its paired mean is effectively
+unchanged or slightly higher. The world-step frozen criterion still fails on
+both platforms; Firefox callback rate also remains below its frozen floor.
+Electron now passes its callback criterion; both pass draw. No gate is loosened,
+and lower fine-step cost is not described as fixing the synchronous hitch.
+
+Electron runs each accept149 steps/14 world advances/ticks420→434. Firefox
+accepts152/151 steps and15/15 world advances/ticks420→435; its first window is
+not exact-work comparable to the earlier151-step run. All four retain the
+immediate baseline's72 actors/54 materialized/23 visible/18 visible humans/
+950 aggregate population units. World maxima are133.2/131.5ms Electron and
+217/193ms Firefox. Callback p99 gaps are126.3/129.9ms and201/198ms; worst gaps
+155.7/153.9ms and242/214ms. These sparse tails provide no robust p99 or hitch-
+removal evidence. Wall-window throughput is not authoritative state equality;
+the independent native runtime/current-save characterizations and complete
+cached-versus-uncached projection parity are the behavior-preservation proof.
+
+All six endpoint pending counters remain zero and every supplied resource cap
+holds. Tail saves1,980,354B Electron and1,948,809/1,944,167B Firefox remain below
+4MiB. Snapshot CPU47.9/49ms and98/95ms, end-to-end91.5/92.2ms and146/140ms,
+are outside timed windows, not autosave proof. Electron's actual before/after/
+after-save heap observations are retained; they vary with collection and do
+not establish retained growth or convergence. Firefox does not expose them.
+No travel, saturation, full soak, GPU/presented-FPS, deployment, signing,
+installation or other-platform certification follows.
+
+The ignored `terrain-receipt-candidate` child retains package identity, exact
+four capture hashes, full immediate-before/after extraction, unchanged frozen
+budget verdict, heap observations and terminal desktop certificate. Architecture
+changes only the existing terrain receipt's physical identity. After reopening
+their unchanged source laws, the two acoustic/save context-summary review
+fingerprints are refreshed without changing summary text or status. Context
+tool self-tests28 and actual critical smoke6/105 pass. No dependency or upstream
+source changes occur. WORLD0 remains unfinished and unpublished; this is a
+useful internal repair, not a release or major-directive closure.
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
