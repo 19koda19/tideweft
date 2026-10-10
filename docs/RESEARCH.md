@@ -6880,6 +6880,42 @@ the exact scopes. This is test/evidence only, not a runtime, schema, supported-
 reader, dependency, visual, performance, public-release or directive-closure
 change. One native in-place closure does not certify all-keeper liveness.
 
+### Native receding-water endpoint arrival and cold continuation — 2026-10-10
+
+At local parent `9be003b`, the existing native flowing-endpoint case in
+`runtime.residentPickup.integration.test.ts` now follows its real released hold
+through actual waypoint arrival. The original declared need/weather/exclusivity
+controls, generated terrain, offer127, automatic carrier, source debit, wet/dry
+sight, retained cargo and phase4/9 assertions are unchanged. No dry surface,
+body, task, evidence or successful result is assigned.
+
+The actual route121 endpoint `(43500,46500)` is flowing and wet at453. Loss of
+flow at468 does not remove wetness or release the hold. Physical drying506
+still retains the previously admitted wet observation; fresh dry sight507
+permits movement. From507/phase4, ten further accepted steps reach the exact
+formerly blocked endpoint at508/phase4 and advance cursor15→16. Every measured
+fine displacement is bounded and remains on that cardinal edge. The same
+parts8 cargo, assigned resident, single departure and unfulfilled commitment
+persist throughout; no second pickup or premature destination handoff occurs.
+
+The first new oracle incorrectly treated the native5→1 journey as a forward
+stored path. Its failed report is retained. Actual endpoint arrival had passed;
+the corrected oracle uses the real reverse itinerary and exact complementary
+integer progress, without a production edit. Detached507/phase4 runs the same
+ten-step suffix and matches every saved root apart from the established session/
+integrity exclusions; loading emits no audio. Existing wet-hold cold chains and
+source-removal/rollback tests remain intact.
+
+`npx vitest run src/game/runtime.residentPickup.integration.test.ts
+src/sim/residentTravelRoute.test.ts src/sim/residentSurfaceKnowledge.test.ts
+--maxWorkers=1` passes three files/48 tests in189.40s, including the native case
+in43.795s. Maintained critical smoke6/105 and final typecheck pass. Ignored
+`native-dry-endpoint.json` retains the failed oracle and
+`native-dry-endpoint-final.json` the final result. This is test/evidence only,
+not a schema, supported-reader, dependency, performance, visual, public-release
+or directive-closure change. Receded-water dry arrival does not prove loaded
+water traversal, current-force appraisal, alternatives or a complete journey.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

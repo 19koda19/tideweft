@@ -675,6 +675,42 @@ describe("ordinary runtime native traveler water response", () => {
     expectBoundedMotion(bank, final.human.activity!.poses);
     expect(final.human.activity?.poses.at(-1)?.position).not.toEqual(bank);
     custody(final.world);
+    // A released hold is not a completed crossing. Continue the same native
+    // body until actual arrival advances the cursor beyond the formerly wet
+    // endpoint, without assigning support, movement or the resulting waypoint.
+    let crossed = final;
+    let crossingSteps = 0;
+    while (crossed.human.activity?.travelTask?.mode === "physical"
+      && crossed.human.activity.travelTask.waypointIndex === 15 && crossingSteps < 30) {
+      const previous = crossed.human.activity.poses.at(-1)!.position;
+      advance(runtime, 1);
+      crossingSteps += 1;
+      crossed = await save();
+      const position = crossed.human.activity!.poses.at(-1)!.position;
+      const movement = worldPositionDelta(previous, position);
+      expect(movement.x).toBe(0);
+      expect(movement.y).toBeLessThanOrEqual(0);
+      expect(Math.hypot(movement.x, movement.y)).toBeLessThanOrEqual(RESIDENT_REST_APPROACH_STEP_UNITS);
+      expect(residentRestTargetHasDrySupport(crossed.world, endpoint)).toBe(true);
+      custody(crossed.world);
+    }
+    expect(crossingSteps).toBeGreaterThan(0);
+    expect(crossed.human.activity?.travelTask).toMatchObject({ mode: "physical",
+      contractId: fixture.contractId, phase: "approaching", waitReason: null,
+      legIndex: 0, waypointIndex: 16 });
+    expect(crossed.human.activity?.poses.at(-1)?.position).toEqual(endpoint);
+    const crossedRoute = crossed.world.routes.find(({ id }) => id === 121)!;
+    const crossedContract = crossed.world.contracts.find(({ id }) => id === fixture.contractId)!;
+    expect(crossedContract.porterRouteIds[0]).toBe(crossedRoute.id);
+    expect(crossedContract.porterSettlementIds[0]).toBe(fixture.originId);
+    // Native5→1 runs opposite the stored ascending route. Body/cursor advance
+    // in travel order while membership remains in stored route orientation.
+    const reversed = crossedRoute.fromSettlementId !== crossedContract.porterSettlementIds[0];
+    expect(reversed).toBe(true);
+    expect(crossedRoute.path[reversed ? crossedRoute.path.length - 1 - 15 : 15]).toBe(tile.index);
+    const traveledProgress = Math.trunc(15 * 1_000_000 / (crossedRoute.path.length - 1));
+    expect(crossed.human.location).toEqual({ kind: "route", routeId: crossedRoute.id,
+      progress: reversed ? 1_000_000 - traveledProgress : traveledProgress });
     close(runtime);
 
     // One economical exact-work chain: cold4 joins the real9, then detached9
@@ -699,9 +735,23 @@ describe("ordinary runtime native traveler water response", () => {
     await cold9.save();
     expect(authoritativeRoots(decode(cold9Repository.snapshot()))).toEqual(authoritativeRoots(final.envelope));
     close(cold9);
+    // A separate cold copy starts after the already proved fresh-sight release
+    // and processes exactly the same accepted crossing suffix as warm play.
+    soundscapePlay.mockClear();
+    const coldCrossingRepository = new MemoryRepository(final.record);
+    const coldCrossing = await open(coldCrossingRepository);
+    await coldCrossing.save();
+    expect(authoritativeRoots(decode(coldCrossingRepository.snapshot()))).toEqual(authoritativeRoots(final.envelope));
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advance(coldCrossing, crossingSteps);
+    await coldCrossing.save();
+    expect(authoritativeRoots(decode(coldCrossingRepository.snapshot()))).toEqual(authoritativeRoots(crossed.envelope));
+    close(coldCrossing);
     console.info("Native tidal encounter evidence", JSON.stringify({ encounter, noFlowWet,
       departedTick, dryTick, freshDryTick: freshBoundary.world.meta.completedTick,
-      coldPhases: [4, 9], finalPhase: final.envelope.perceptionCarry.playerStepsSinceWorldTick }));
+      coldPhases: [4, 9], finalPhase: final.envelope.perceptionCarry.playerStepsSinceWorldTick,
+      crossingSteps, crossedTick: crossed.world.meta.completedTick,
+      crossedPhase: crossed.envelope.perceptionCarry.playerStepsSinceWorldTick }));
   }, 180_000);
 });
 
