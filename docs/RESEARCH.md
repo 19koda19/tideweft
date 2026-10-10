@@ -6720,6 +6720,44 @@ performance, broad crossings/animals or directive closure. Writer58/carry14,
 supported readers, dependencies and upstream source stay unchanged. The e9
 cumulative certificate above does not certify these subsequent executable edits.
 
+### Water-contact candidate artifact and ordinary interaction checks — 2026-10-10
+
+Executable `8e23288a0bac79e8d8b617272e8284e115107f68` is local/unpublished.
+`npm run package:desktop`, `npm run smoke:web`, and the maintained packaged
+desktop smoke pass on macOS arm64. The isolated-profile wrapper exercises
+current-save/relaunch, greeting, Harp, ADRIFT/recovery, pause, both views and
+mobile-sized layouts. Its complete stdout, parsed result and before/after
+package identity remain local. ASAR SHA256
+`3f1dc6059b35c6f705af9843e5ecdc2a1ed131011284f614e5c274a33acab991`
+is 5,108,583 bytes with ten entries; all seven packaged runtime files match
+their source/build bytes. Static web serves the actual five output files under
+`/tideweft/`; the existing large-chunk warning remains. No dependency changed.
+
+A separate normal Firefox 157.0.1 run at the same clean executable/artifact uses
+the untouched `runtime baseline estuary`, 1440×900 CSS/DPR1, real START/view,
+pointer selection, GREET and close controls, ordinary RAF and bounded 500ms
+public samples. No world/task/need/position/clock/save assignment or forced
+simulation step is used. The 140.479s run retains 252 samples, exact tick480 civic
+and tick540 ration labels, and unchanged tracked-source/build fingerprints. Visible
+human91 is lawfully greeted at423; at424 ABOUT becomes Acquainted and the
+restrained introduction identifies Oksana Ahmed. After physical close at424,
+that same public actor identity presents `tending the project` at480 in both
+Chart and Relief. Greeting and both return captures were inspected. The captures
+do not independently prove pixel-visible activity-label legibility or a complete
+stock/project transaction; lower-owner runtime tests own those consequences.
+No guarded console failure occurs; one expected pre-guard CSP eval refusal is
+retained. Browser exits normally and its disposable profile is removed.
+
+The earlier 141.373s attempt reached480/540 and later same-actor project activity
+but remained only Recognized: it is retained as incomplete greeting evidence.
+Rapid coincident-selection cycling can precede the UI's cached-view paint.
+The successful repeat waits two real UI RAF paints before pressing GREET,
+without a forced update or production change. This resolves that harness
+timing limitation, not an application defect claim. Public projection sampling
+is not a complete authoritative trace, hearing/audio measurement, all-human
+fairness, FPS/soak, hardware assistive/mobile or other-OS certification. No ZIP,
+installation, signing, CI/Pages, deployment or directive closure is claimed.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
