@@ -6367,10 +6367,45 @@ npm run test:smoke -- --reporter=default --reporter=json \
   --outputFile=artifacts/validation/world0-platform-current/wait-frontier-smoke.json
 ```
 
-Desktop correctness remains unverified at this checkpoint. There is no new
-save schema, reader/support retirement, dependency change, world-hitch result,
-longitudinal-soak result, distribution/signing claim, deployment or directive
-closure. The earlier exact c06124a cumulative pass does not certify later bytes.
+The repair is committed locally as
+`01506ee691e7d35ba68f4e31e38c052a3f24f4ac`. Fresh macOS arm64 packaging
+and actual packaged smoke now PASS, including both physical resident greetings,
+Harp relocation/reload, ADRIFT/recovery/exact autosave restoration, Chart/Relief,
+pause/recovery and portrait/short-landscape layout gates. The executable uses
+`app://bundle/index.html` and isolated disposable data, removed afterward. The
+desktop and landscape ABOUT screenshots were inspected; these are bounded
+functional gates, not complete visual QA, hardware-mobile or performance proof.
+The retained terminal console is truncated by the tool's output limit, not a
+complete structured event trace; the wrapper itself parses its full result,
+requires `ok:true` and exits0. No trace equality is inferred from that console.
+
+The new ASAR is5,106,002bytes, SHA256
+`606a66dd605170d4b3d7847b62b922be7979808d35013d6a9138c74b6dc1eeec`.
+An independent audit verifies all seven files/ten entries against the current
+main, package and five dist files, the exact runtime-only whitelist, embedded
+file/block hashes and Info.plist header integrity. Only packaged main changes;
+all five web files and all ten source/dependency/harness fingerprints in the
+retained346 Firefox identity match exactly. Its ordinary-browser proof remains
+applicable to those identical web inputs within its original limits, not a new
+browser run. Fresh `/tideweft/` static smoke also passes. Initial packaging hit
+ENOTEMPTY after Finder created a6,148byte `.DS_Store` in the replaced generated
+folder; moving that verified metadata-only remainder aside allowed the same
+unchanged build to package. No game data or dependency was altered.
+
+```sh
+npm run package:desktop
+npm run smoke:desktop -- \
+  --executable release/tideweft-darwin-arm64/tideweft.app/Contents/MacOS/tideweft \
+  --screenshot artifacts/validation/world0-platform-current/01506ee/desktop.png \
+  --title-screenshot artifacts/validation/world0-platform-current/01506ee/title.png \
+  --mobile-screenshot artifacts/validation/world0-platform-current/01506ee/mobile.png
+npm run smoke:web
+```
+
+There is no new save schema, reader/support retirement, dependency change,
+world-hitch result, longitudinal-soak result, ZIP/install/signing claim,
+Linux/Windows certification, deployment or directive closure. The earlier exact
+c06124a cumulative pass does not certify later bytes.
 
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
