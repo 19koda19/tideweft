@@ -13,6 +13,7 @@ import {
 } from "../sim/public";
 import * as simulation from "../sim/public";
 import * as rationPulse from "../sim/residentRations";
+import * as materialUse from "../sim/residentMaterialUse";
 import { pressureMultiplier } from "../sim/world";
 import {
   RESIDENT_REST_APPROACH_STEP_UNITS,
@@ -35,6 +36,8 @@ import { resolveResidentWorldPlacement } from "./residentSpatial";
 import { createTideweftRuntime, type TideweftRuntime } from "./runtime";
 import { CURRENT_GAME_SAVE_VERSION } from "./saveCompatibilityPolicy";
 import * as situatedExpressionChannelBank from "./situatedExpressionChannelBank";
+import * as weatherHoldExpression from "./residentWeatherHoldExpression";
+import type { SituatedExpressionAdmissionLedger } from "./situatedExpressionAdmissionLedger";
 import {
   createWorldPosition,
   worldPositionDelta,
@@ -468,6 +471,234 @@ async function nativeFixture(keepGeneratedNeeds = false) {
 }
 
 describe("ordinary runtime conserved resident travel", () => {
+  it("contrasts a real physical pickup under clear and storm weather through the next service pulse", async () => {
+    // Common fixture controls remain declared. Let production select, approach
+    // and pick up before the fork; never assign a courier, task or success.
+    const fixture = await nativeFixture(true);
+    const { runtime, repository } = fixture;
+    let picked: SaveRecord | undefined;
+    for (let interval = 0; interval < 5; interval += 1) {
+      advance(runtime, 10);
+      await runtime.save();
+      const record = repository.snapshot();
+      const world = deserializeWorld(decode(record).world);
+      if (contract(world, fixture.contractId).status === "in-transit") {
+        picked = record;
+        break;
+      }
+    }
+    if (picked === undefined) throw new Error("Native preflight has no real pickup; do not author one");
+    close(runtime);
+    const initial = decode(picked);
+    const initialWorld = deserializeWorld(initial.world);
+    const commitment = contract(initialWorld, fixture.contractId);
+    const courier = initialWorld.residents.find(({ id }) => id === commitment.assignedResidentId);
+    if (courier === undefined) throw new Error("Actual pickup has no existing courier");
+    expect(courier.activity?.travelTask).toMatchObject({ mode: "physical", phase: "approaching" });
+    expect(commitment).toMatchObject({ cargoQuantity: fixture.quantity, resource: "food" });
+    expect(initial.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    const pulseTick = Math.ceil((initialWorld.meta.completedTick + 1) / 60) * 60;
+    const results: {
+      weather: "clear" | "storm";
+      earlyDistance: number;
+      world: WorldState;
+      foodUsed: number;
+      waterUsed: number;
+      materialUsers: string[];
+      shelterEvents: number;
+      expressionTriggers: string[];
+      admittedHoldReceipts: string[];
+      onsetHoldReceipts: string[];
+    }[] = [];
+    for (const weather of ["clear", "storm"] as const) {
+      const envelope = structuredClone(initial);
+      const source = deserializeWorld(envelope.world);
+      source.weather = weather === "clear" ? { ...initialWorld.weather } : {
+        kind: "storm", intensity: 950_000, windX: 500_000, windY: -500_000,
+        nextChangeTick: initialWorld.weather.nextChangeTick,
+      };
+      expect({ ...source, weather: initialWorld.weather }).toEqual(initialWorld);
+      envelope.world = serializeWorld(source);
+      const branchRepository = new MemoryRepository(recordWith(picked, envelope));
+      const branch = await open(branchRepository);
+      const pulses: { input: rationPulse.ResidentRationPulseInput; output: rationPulse.ResidentRationsResult }[] = [];
+      const materialUsers: string[] = [];
+      const materialContributions: { settlementId: number; resource: string; progress: number }[] = [];
+      const expressionTriggers = new Set<string>();
+      let closing = false;
+      let beforePulse: WorldState | undefined;
+      let afterPulse: WorldState | undefined;
+      const originalPulse = rationPulse.calculateResidentRationPulse;
+      const pulseObserver = vi.spyOn(rationPulse, "calculateResidentRationPulse").mockImplementation((input) => {
+        const output = originalPulse(input);
+        if (closing) pulses.push({ input: structuredClone(input), output: structuredClone(output) });
+        return output;
+      });
+      const originalMaterial = materialUse.selectResidentMaterialUser;
+      const materialObserver = vi.spyOn(materialUse, "selectResidentMaterialUser").mockImplementation((...args) => {
+        const selected = originalMaterial(...args);
+        if (closing && selected !== null) {
+          const site = args[0].settlements.find(({ id }) => id === args[1])!;
+          expect(selected.activity?.materialTask).toMatchObject({ phase: "arrived", usedAtTick: null,
+            settlementId: site.id, projectId: site.project.id, resource: site.project.resource });
+          expect(selected.activity?.poses.at(-1)?.position).toEqual(selected.activity!.materialTask!.target);
+          materialUsers.push(selected.identity.stableId);
+          materialContributions.push({ settlementId: site.id, resource: site.project.resource, progress: site.project.progress });
+        }
+        return selected;
+      });
+      const originalHold = weatherHoldExpression.residentWeatherHoldExpressionIntent;
+      const holdObserver = vi.spyOn(weatherHoldExpression, "residentWeatherHoldExpressionIntent").mockImplementation((input) => {
+        const intent = originalHold(input);
+        if (intent?.sourceActorId === courier.identity.stableId) {
+          expect(input.event).toMatchObject({ type: "resident-sheltered", subjectId: courier.id,
+            data: { contractId: commitment.id, weather: "storm" } });
+          expressionTriggers.add(intent.triggerEventId);
+        }
+        return intent;
+      });
+      const originalStep = simulation.stepWorld;
+      const stepObserver = vi.spyOn(simulation, "stepWorld").mockImplementation((...args) => {
+        closing = args[0].meta.completedTick + 1 === pulseTick;
+        if (closing) beforePulse = structuredClone(args[0]);
+        try {
+          const output = originalStep(...args);
+          if (closing) afterPulse = structuredClone(output);
+          return output;
+        } finally { closing = false; }
+      });
+      try {
+        // Capture the pending onset at its first closure, before the next
+        // interval consumes it. Empty receipts after20 steps aren't rejection.
+        advance(branch, 10);
+        await branch.save();
+        const onsetCarry = decode(branchRepository.snapshot()).perceptionCarry as Envelope["perceptionCarry"] & {
+          situatedExpressionAdmissions: SituatedExpressionAdmissionLedger;
+        };
+        const onsetHoldReceipts = onsetCarry.situatedExpressionAdmissions.records.filter((receipt) =>
+          receipt.kind === "resident-weather-hold" && receipt.sourceActorId === courier.identity.stableId)
+          .map(({ eventId }) => eventId);
+        advance(branch, 10);
+        await branch.save();
+        const early = deserializeWorld(decode(branchRepository.snapshot()).world);
+        const earlyCourier = actor(early, courier.identity.stableId);
+        const earlyCommitment = contract(early, fixture.contractId);
+        const earlyDistance = routeDistance(early, earlyCommitment, earlyCourier);
+        expect(earlyCommitment).toMatchObject({ status: "in-transit", cargoQuantity: fixture.quantity,
+          assignedResidentId: courier.id, departedTick: commitment.departedTick });
+        expect(earlyCourier.activity?.travelTask?.mode).toBe("physical");
+        const earlyCarry = decode(branchRepository.snapshot()).perceptionCarry as Envelope["perceptionCarry"] & {
+          situatedExpressionAdmissions: SituatedExpressionAdmissionLedger;
+        };
+        const admittedHoldReceipts = earlyCarry.situatedExpressionAdmissions.records.filter((receipt) =>
+          receipt.kind === "resident-weather-hold" && receipt.sourceActorId === courier.identity.stableId)
+          .map(({ eventId }) => eventId);
+        advance(branch, (pulseTick - early.meta.completedTick) * 10);
+        await branch.save();
+        const world = deserializeWorld(decode(branchRepository.snapshot()).world);
+        assertWorldInvariants(world);
+        expect(world.meta.completedTick).toBe(pulseTick);
+        if (beforePulse === undefined || afterPulse === undefined) throw new Error("No actual hourly world transaction");
+        // These actual branches have no later transfer or project completion.
+        // That fact makes the closing result a valid pulse accounting witness;
+        // it is not a generic claim about the engine's downstream ordering.
+        expect(afterPulse.events.filter(({ sequence, type }) => sequence >= beforePulse!.meta.nextEventSequence
+          && (type === "contract-departed" || type === "contract-fulfilled" || type === "project-completed"))).toHaveLength(0);
+        expect(pulses).toHaveLength(world.settlements.length);
+        const growth = Math.trunc(34_000 * pressureMultiplier(world.meta.pressureMode) / FIXED_POINT);
+        for (const [index, pulse] of pulses.entries()) {
+          const { input, output } = pulse;
+          const budget = Math.ceil(input.foodNeeds.length / 3);
+          let usedGroups = 0;
+          for (let start = 0; start < input.uses.length; start += 3) {
+            if (input.uses.slice(start, start + 3).some(Boolean)) usedGroups += 1;
+          }
+          const foodAvailable = budget > 0 && input.foodStock >= budget;
+          const waterAvailable = budget > 0 && input.freshWaterStock >= budget;
+          expect(input.hungerGrowth).toBe(growth);
+          expect(output).toEqual({
+            foodConsumed: foodAvailable ? usedGroups : 0,
+            freshWaterConsumed: waterAvailable ? usedGroups : 0,
+            nextFoodNeeds: input.foodNeeds.map((need, member) => Math.max(0, Math.min(FIXED_POINT,
+              need + growth - (input.uses[member] && foodAvailable ? 68_000 : 0)
+              - (input.uses[member] && waterAvailable ? 8_000 : 0)))),
+          });
+          const settlement = afterPulse.settlements[index]!;
+          const cohort = afterPulse.residents.filter((human) => human.location.kind === "settlement"
+            && human.location.settlementId === settlement.id).sort((a, b) =>
+              a.identity.stableId < b.identity.stableId ? -1 : a.identity.stableId > b.identity.stableId ? 1 : 0);
+          expect(cohort.map(({ needs }) => needs.food)).toEqual(output.nextFoodNeeds);
+          expect(settlement.inventory.food).toBe(input.foodStock - output.foodConsumed);
+          expect(settlement.inventory.freshWater).toBe(input.freshWaterStock - output.freshWaterConsumed);
+        }
+        for (const id of materialUsers) expect(actor(afterPulse, id).activity?.materialTask)
+          .toMatchObject({ phase: "used", usedAtTick: pulseTick });
+        const expectedStocks = beforePulse.settlements.map(({ inventory }) => ({ ...inventory }));
+        const expectedConsumed = { ...beforePulse.ledger.consumed };
+        const expectedProduced = { ...beforePulse.ledger.produced };
+        for (const [index, site] of beforePulse.settlements.entries()) {
+          const stock = expectedStocks[index]!;
+          for (const recipe of site.recipes) {
+            if (recipe.nextRunTick > pulseTick || recipe.inputs.some(({ resource, amount }) => stock[resource] < amount)) continue;
+            for (const { resource, amount } of recipe.inputs) { stock[resource] -= amount; expectedConsumed[resource] += amount; }
+            for (const { resource, amount } of recipe.outputs) { stock[resource] += amount; expectedProduced[resource] += amount; }
+          }
+          const pulse = pulses[index]!;
+          stock.food -= pulse.output.foodConsumed;
+          stock.freshWater -= pulse.output.freshWaterConsumed;
+          expectedConsumed.food += pulse.output.foodConsumed;
+          expectedConsumed.freshWater += pulse.output.freshWaterConsumed;
+          const contribution = materialContributions.find(({ settlementId }) => settlementId === site.id);
+          if (contribution !== undefined) {
+            expect(contribution.resource).toBe(site.project.resource);
+            stock[site.project.resource] -= 1;
+            expectedConsumed[site.project.resource] += 1;
+            expect(afterPulse.settlements[index]!.project.progress).toBe(contribution.progress + 1);
+          } else expect(afterPulse.settlements[index]!.project.progress).toBe(site.project.progress);
+        }
+        expect(afterPulse.settlements.map(({ inventory }) => inventory)).toEqual(expectedStocks);
+        expect(afterPulse.ledger.consumed).toEqual(expectedConsumed);
+        expect(afterPulse.ledger.produced).toEqual(expectedProduced);
+        results.push({ weather, earlyDistance, world,
+          foodUsed: pulses.reduce((sum, { output }) => sum + output.foodConsumed, 0),
+          waterUsed: pulses.reduce((sum, { output }) => sum + output.freshWaterConsumed, 0),
+          materialUsers, expressionTriggers: [...expressionTriggers], admittedHoldReceipts, onsetHoldReceipts,
+          shelterEvents: world.events.filter(({ type, subjectId, tick }) =>
+            type === "resident-sheltered" && subjectId === courier.id && tick > initialWorld.meta.completedTick).length });
+      } finally {
+        stepObserver.mockRestore();
+        holdObserver.mockRestore();
+        materialObserver.mockRestore();
+        pulseObserver.mockRestore();
+        close(branch);
+      }
+    }
+    console.info("Native weather/service preflight", JSON.stringify(results.map(({ world, ...result }) => ({
+      ...result, tick: world.meta.completedTick, commitment: contract(world, fixture.contractId),
+      courier: actor(world, courier.identity.stableId).activity,
+    }))));
+    const clear = results[0]!;
+    const storm = results[1]!;
+    expect(clear.earlyDistance).toBeGreaterThan(storm.earlyDistance);
+    expect(storm.shelterEvents).toBeGreaterThan(0);
+    expect(clear.shelterEvents).toBe(0);
+    expect(clear.expressionTriggers).toHaveLength(0);
+    expect(storm.expressionTriggers).toHaveLength(1);
+    expect(clear.onsetHoldReceipts).toHaveLength(0);
+    expect(storm.onsetHoldReceipts).toHaveLength(1);
+    expect(storm.admittedHoldReceipts).toHaveLength(0);
+    expect(clear.foodUsed + clear.waterUsed + clear.materialUsers.length).toBeGreaterThan(0);
+    expect(storm.foodUsed + storm.waterUsed + storm.materialUsers.length).toBe(0);
+    for (const { world } of results) expect(contract(world, fixture.contractId)).toMatchObject({
+      status: "in-transit", cargoQuantity: fixture.quantity, quantity: fixture.quantity,
+      assignedResidentId: courier.id, carrierKind: "resident", departedTick: commitment.departedTick,
+    });
+    expect(actor(storm.world, courier.identity.stableId).activity?.travelTask)
+      .toMatchObject({ mode: "physical", phase: "waiting", waitReason: "weather-hold" });
+    // This preflight does not infer wet contact, downstream handoff, ordinary
+    // player audibility, downstream handoff or whole mixed-row closure.
+  }, 240_000);
+
   it("releases a native food courier into actual ration use with generated needs and equal cold continuation", async () => {
     // Weather/exclusivity retain the original fixture's declared controls;
     // generated needs, body, tasks, terrain, stocks and results are not assigned.

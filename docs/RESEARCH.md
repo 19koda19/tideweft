@@ -8304,6 +8304,56 @@ full-Foliage Voice-soak-policy changes. WORLD0 remains incomplete; restored
 Firefox standing gates remain unresolved. No further perception arithmetic
 candidate is justified by these two rejected experiments alone.
 
+### Native weather, physical logistics and civic-service contrast — 2026-10-10
+
+**Test-only causal evidence; no production or save-format change.** At base
+`a20a225`, `runtime.residentTravel.integration.test.ts` uses its existing
+density-eight native food133 fixture with generated needs retained. Common
+clear-weather and offer-exclusivity controls are declared, not ordinary
+untouched play. Production selects resident99 at421 and physically picks up14
+food at422; no courier, task, body, route, stock or successful result is assigned.
+Only then does the current saved state cold-fork into clear versus severe storm
+weather. Every other initial authoritative field is equal. Each branch advances
+580 accepted fixed steps /58 world minutes422→480 with original-once observers.
+
+| Consumer | Clear | Storm |
+| --- | --- | --- |
+| Physical route distance after20 accepted steps | 1,672 units | 840 units |
+| Conserved food at480 | Same courier,14 in transit | Same courier,14 in transit |
+| Actual civic contributions at the480 hourly pulse | Three | Zero |
+| Actual food/water ration use at480 | Zero | Zero |
+| Courier shelter transition / pending Voice admission | None | One at423; consumed by424 |
+
+The storm branch legitimately moves during the first fine interval before the
+world closure establishes weather hold. The clear courier is still physically
+approaching at480 despite its old ETA460; elapsed ETA does not authorize delivery.
+The final storm body is waiting under weather hold, not a teleported refuge.
+The stock oracle independently reconstructs due recipes in authored order,
+grouped ration charges/need growth, then each actual one-unit civic contribution.
+All five resource inventories, complete produced/consumed ledgers and project
+progress agree. The actual closing transaction has no later pickup, delivery or
+project completion that could confound this pulse accounting.
+
+The expression observer calls the real owner and authenticates its committed
+courier/contract/storm event; the first closing save has one matching-source
+weather-hold admission, and the next has none. This is pending admission and
+consumption evidence, not independently observed NPC hearing, player audibility
+or audio playback. Both ration branches use zero, so this contrast proves civic
+work and need-growth accounting, not a positive meal. Source-linked wet-current
+appraisal, storm recovery/handoff, full per-fork replay, normal rendered play,
+performance and complete population/task acceptance retain their separate proofs.
+
+Selected onset validation passes1case/5unselected in58.608s; typecheck and the
+maintained six-file105-test critical suite pass. The complete directly affected
+file command `npx vitest run src/game/runtime.residentTravel.integration.test.ts
+--maxWorkers=1` passes all6 cases, none unselected or failed, in529.43s overall
+/527.567s tests. The new contrast takes36.240s in that run; these test durations
+are not matched production performance observations. Exact travel-test SHA256
+is `6d389848073580c88964a07c78a1872db5822a9a1664306bf945609810b7b6cb`.
+The local `native-weather-service-full.json` retains the result. No cumulative,
+artifact, release or whole-expansion completion follows. Current outer58 and
+body8, deliberately supported readers, dependencies and cadence are unchanged.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
