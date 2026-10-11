@@ -63,6 +63,14 @@ verifies the bounded available-producer paths below. It does not promote
 remaining `PARTIAL`/`SPECIFIED` breadth, repair the accepted Relief/world hitch,
 or certify deferred full-Foliage profiling/longitudinal evidence.
 
+The [Alpha66 resident-activity receipt](../README.md#alpha66-resident-activity-release-receipt)
+now qualifies the bounded current-v8 human body/service/transport consumers.
+Earlier local/unpublished construction descriptions retain their proof scope,
+but are no longer the publication status of those consumers. Rows stay PARTIAL
+where addressable cargo, wider crossings, sourced professions or other named
+future integrations remain absent. Release does not turn fixtures into normal
+play or remove the accepted Firefox limitation.
+
 ### Runtime evidence anchors
 
 The matrices below summarize relationships; these anchors provide the actual
@@ -426,8 +434,12 @@ interaction suite.
 1. Food, fresh water, and reed settlement recipes have empty input arrays and
    run on a timer. The conservation ledger records production, but ecology,
    water access, labor, tools, and weather are bypassed.
-2. Civic projects consume one stock unit at cadence without a worker, tool, or
-   location-owned work transaction.
+2. Current body-owned civic service replaces the represented automatic
+   contribution with an arrived, source-qualified resident action and one
+   stock/ledger/project transaction. Supported absent/v1/v2 activity worlds
+   retain their explicit coarse timer until real adoption; they are not proof
+   of enacted labor. Physical tools and broader construction remain future
+   work. See the [bounded service owner](./ARCHITECTURE.md#planned-bounded-existing-world-integration).
 3. Some completed projects append a field-tool enum to the player rather than
    transfer a persistent condition-bearing object.
 4. Physical settlement produce and abstract settlement food are separate stock

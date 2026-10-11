@@ -4,19 +4,20 @@
 
 **Play the current Alpha:** https://19koda19.github.io/tideweft/
 
-The current release is **LIVE_VERIFIED**
-`0.3.3-alpha.64 — The Living Voice`. Its exact source, CI, deployment and
-five-file live comparison are recorded in [GitHub Pages](#github-pages).
+The current release is **LIVE_VERIFIED** `0.3.3-alpha.66`, adding bounded
+resident activity and accountable travel. Its exact source, CI, deployment and
+five-file live comparison are recorded in the [Alpha66 receipt](#alpha66-resident-activity-release-receipt).
+The existing forty-two humans approach supported rest, ration, civic-material,
+keeper and courier actions; actual arrival and conserved transactions decide
+completion. This is not sourced professions, general wet-terrain capability,
+physical porter lots, living plant harvest or owned boats.
 
-The local `0.3.3-alpha.66` candidate adds bounded resident activity and
-accountable travel. It is unpublished, does not close the active integration
-directive, and retains a documented Firefox performance limitation accepted
-for this checkpoint. Repair and remeasurement follow full Living Foliage.
-Its bundled manual and patch notes describe local behavior, not deployment.
-The frozen executable's complete local regression passes 419 files / 5,473
-tests; generated web and macOS arm64 functional checks have scoped evidence.
-See the [final candidate certificate](docs/RESEARCH.md#final-resident-candidate-certification--2026-10-11).
-Remote CI, Pages and exact live verification remain pending.
+Complete local and remote regression each pass 419 files / 5,473 tests;
+generated web and macOS arm64 functional checks have scoped evidence. The
+documented Firefox performance limitation remains accepted, not fixed: repair
+and remeasurement follow full Living Foliage. See the
+[candidate certificate](docs/RESEARCH.md#final-resident-candidate-certification--2026-10-11)
+for the exact platform and verification limits.
 
 Alpha 39 remains preserved below as the historical biodiversity closure for
 Directive 04_1. Alpha 53 closes The Turning Day, Alpha 60 closes Directive
@@ -1271,6 +1272,40 @@ desktop targets remain unverified. The accepted Relief cost/world-update hitch
 remains a known limitation; extended Voice profiling/repair and longitudinal
 soaks are deferred until full Living Foliage, not passed. See the
 [research evidence and limits](docs/RESEARCH.md#remote-correctness-and-pages-timing-diagnosis--2026-10-07).
+
+### Alpha66 resident activity release receipt
+
+Alpha66 is **LIVE_VERIFIED**. Executable
+`f42845a9d958874763efbfcf38b6a76d00aa4e4c` is deployed through prose-only
+`91e2164c04b377ca94835842b438b366e879650c`; executable, test, configuration,
+dependency and product bytes remain unchanged. [CI 38135267136](https://github.com/19koda19/tideweft/actions/runs/38135267136)
+passes all 419 files / 5,473 tests in 3,533.64s plus navigation, synchronization
+and policy selftests. [Pages 38135267061](https://github.com/19koda19/tideweft/actions/runs/38135267061)
+reuses that exact successful CI, independently passes synchronization,
+typecheck/build/static smoke and deploys through environment receipt 6995441311.
+At 2026-10-11T12:23:26.469Z, cache-bypassed HTTPS checks match all five emitted
+files byte-for-byte with HTTP 200 and appropriate MIME types: 4,889,383 bytes.
+
+| Asset | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `index.html` | 4,168 | `482f02bb40beb675e1cc1b056e7268bb1f5cef6471eaffb417edaf86cfe2fe40` |
+| `icon.svg` | 895 | `b0812d52ce2507a359864395450c73181038d2ddc3abd20db2fb768aec8a8875` |
+| `manifest.webmanifest` | 486 | `a3dde946b385ac28502e38a50b749381b3a35caa4062f7af055374a97b89e132` |
+| `assets/index-CxGj8qmC.js` | 4,774,607 | `e12f30f52ef55c618255a86e804a0037c99dc32102fd224353f46418455beba1` |
+| `assets/index-BlQsrKTn.css` | 109,227 | `0a37b095c85363085c4f8206277e4d91cc8b4853ea5dc389b40eea9bf631c0bb` |
+
+The bounded existing-human consumers accompany Field Manual 76, gameplay 51,
+writer 58 / body 8 / perception carry 14. Declared supported formats 1–32 and
+50–58 remain readable; obsolete internal 33–49 fail closed
+without silent reset. Cold/current-save, conservation, rollback and conditional
+liveness proofs retain their individual scopes in the
+[research certificate](docs/RESEARCH.md#final-resident-candidate-certification--2026-10-11).
+macOS arm64 packaging/normal smoke and finite ordinary Firefox Chart/Relief
+interaction pass; installation, signing/notarization, other desktop targets,
+physical mobile and formal assistive-output checks remain unverified for this
+candidate. Exact live bytes are not an additional interactive playtest. The
+accepted Firefox world/callback miss and extended Voice evidence remain with
+the full-Foliage follow-up, not repaired or passed by publication.
 
 ### Historical Alpha60 Breathing Room receipt
 

@@ -34,8 +34,9 @@ Repair and matched production remeasurement join the existing full-Foliage
 follow-up, not an early harvest checkpoint or a new standalone optimization
 directive. All other current-save, conservation, determinism, functional
 platform, cumulative correctness and release gates remain required. Local
-Alpha66 is still unpublished/incomplete; this decision does not certify
-closure, GPU throughput, long sessions or additional hardware. No application
+Alpha66 was still unpublished/incomplete when this decision was made;
+acceptance does not certify closure, GPU throughput, long sessions or
+additional hardware. No application
 algorithm, schema/support, dependency or upstream p5/Electron change follows.
 
 ## Final resident candidate certification — 2026-10-11
@@ -44,8 +45,9 @@ Frozen local executable `f42845a9d958874763efbfcf38b6a76d00aa4e4c`
 is Alpha66 / Field Manual76 / gameplay51 / writer58 / perception carry14.
 Its declared support set remains1–32 and50–58;33–49 remain explicitly retired.
 No algorithm, support-set, dependency or upstream change accompanies this
-candidate-content checkpoint. Alpha64 remains the public release; this record
-is local certification, not publication or directive closure.
+candidate-content checkpoint. Alpha64 remained the public release at local
+certification; this historical record is not itself publication or directive
+closure. The remote receipt below establishes the later released boundary.
 
 `caffeinate -i npm run test:ci -- --reporter=default --reporter=json
 --outputFile.json=artifacts/validation/f42845a-cumulative.json` terminates0:
@@ -90,7 +92,31 @@ No new performance measurements are claimed. The accepted Firefox numerical
 miss and full-Foliage follow-up remain unchanged. ZIP/install/sign/notarization,
 other desktop targets, hardware mobile and formal assistive-technology checks
 are not run for this candidate. Remote CI, Pages and exact live verification
-remain pending. Dependency changes: NONE; upstream p5/Electron modified: NO.
+were pending at local certification. Dependency changes: NONE; upstream
+p5/Electron modified: NO.
+
+### Final resident remote release verification — 2026-10-11
+
+Exact prose-only `91e2164c04b377ca94835842b438b366e879650c` preserves the
+frozen `f42845a` executable and tested product bytes. CI 38135267136 terminates
+success with 419 files / 5,473 tests in 3,533.64s on the configured Ubuntu/Node 24
+runner; this is an independent remote certificate, not a relabeled local run.
+Pages 38135267061 reuses that successful same-SHA CI, then independently passes
+player-facing synchronization, typecheck, production build and nested static
+smoke. Environment deployment 6995441311 succeeds at 2026-10-11T12:22:25Z.
+Cache-bypassed checks at 12:23:26.469Z match all five live files, HTTP 200/MIME
+and 4,889,383 bytes to the actual local functional artifact. The
+[primary receipt](../README.md#alpha66-resident-activity-release-receipt) owns
+the exact file digests and publication status. Local CI/Pages logs and the live
+comparison are retained under `artifacts/validation/world0-release-66/`.
+
+This attestation records publication of the bounded resident consumers, not
+additional gameplay, a performance repair, universal crossing/animal behavior,
+hardware certification or a fresh interactive live playtest.
+Per-fixture/native/ordinary-control evidence above
+retains its declared controls and exclusions. The accepted numerical Firefox
+miss and full-Foliage follow-up remain unchanged. No schema/support, algorithm,
+dependency, upstream or security change accompanies this prose attestation.
 
 ## Alpha64 short production comparison — 2026-10-07
 

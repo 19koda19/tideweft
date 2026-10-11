@@ -2407,12 +2407,16 @@ systems live.
 
 ### Planned bounded existing-world integration
 
-**PARTIAL — local construction, not a completed or released expansion.**
-The existing-human integration owner must connect the original settlement and traveler populations to the
-applicable shared actor and world contracts. It must not create a second NPC
-population, cargo stock, dialogue manager, or story orchestrator. The current
-Living Weft boundary above remains unchanged until executable evidence closes
-each bridge.
+**PARTIAL — bounded consumers LIVE_VERIFIED in Alpha66; broader breadth remains
+with its named future owners.** The [release receipt](../README.md#alpha66-resident-activity-release-receipt)
+owns publication and exact artifact evidence. The heading and construction
+notes below retain earlier checkpoint terminology for stable references and
+proof provenance; their earlier local/unpublished qualification is superseded
+only for the released current-v8 consumers, not every hypothetical action or
+fixture. Original settlement and traveler populations join the shared body,
+service, observation and conserved transport owners without a second NPC
+population, cargo stock, dialogue manager or story orchestrator. Per-consumer
+limits below remain binding; publication does not close future bridges.
 
 Required adoption has one authoritative human body and a bounded action
 lifecycle: causal selection, capability and target validation, finite claims,
