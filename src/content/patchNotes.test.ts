@@ -21,11 +21,11 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.65",
+      version: "0.3.3-alpha.66",
       releaseDate: "2026-10-11",
-      buildIdentity: "0.3.3-alpha.65",
+      buildIdentity: "0.3.3-alpha.66",
       gameplayContractVersion: 51,
-      tutorialVersion: 75,
+      tutorialVersion: 76,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
@@ -54,11 +54,11 @@ describe("canonical offline patch notes", () => {
     expect(currentCopy).toContain("do not certify presented FPS");
   });
 
-  it("scopes the local resident candidate without claiming release, universal crossings or new professions", () => {
+  it("scopes resident activity without claiming release, universal crossings or new professions", () => {
     const currentCopy = PATCH_NOTE_CATEGORIES
       .flatMap((category) => LATEST_PATCH_NOTE.categories[category]).join(" ");
-    expect(LATEST_PATCH_NOTE.summary).toContain("unpublished local resident-activity and travel candidate");
-    expect(LATEST_PATCH_NOTE.summary).toContain("not a published release or completed directive");
+    expect(LATEST_PATCH_NOTE.summary).toBe("Alpha 66 adds bounded resident activity and accountable travel.");
+    expect(currentCopy).toContain("do not establish publication or directive closure");
     expect(currentCopy).toContain("forty-two residents retain their bodies");
     expect(currentCopy).toContain("occupation labels do not create professions");
     expect(currentCopy).toContain("hand off only after authenticated arrival");
@@ -69,8 +69,10 @@ describe("canonical offline patch notes", () => {
     expect(currentCopy).toContain("supported development formats 51–57");
     expect(currentCopy).toContain("loading itself grants no task success");
     expect(currentCopy).toContain("intentionally incompatible and are left untouched");
-    expect(currentCopy).toContain("Alpha 64 remains the latest LIVE_VERIFIED public baseline");
-    expect(currentCopy).toContain("Firefox performance disposition");
+    expect(currentCopy).toContain("supported resident activity, current save support and retained future boundaries");
+    expect(currentCopy).toContain("Firefox limitation is accepted for this checkpoint");
+    expect(currentCopy).toContain("repair and remeasurement follow full Living Foliage");
+    expect(currentCopy).toContain("Acceptance is not a performance fix");
     expect(currentCopy).toContain("outside their frozen limits");
     expect(currentCopy).toContain("not universal wet-terrain traversal");
     expect(currentCopy).toContain("Mid-journey alternative-route breadth remains later work");

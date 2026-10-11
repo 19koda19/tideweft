@@ -20,6 +20,24 @@ tools, current builds and validation certificates remain. Future performance
 comparisons must capture a fresh baseline if exact historical artifacts cannot
 be recovered; the recorded measurements are historical, not a current rerun.
 
+## Accepted Firefox limitation and post-Foliage repair — 2026-10-11
+
+The user explicitly directs repair of the remaining bounded resident-integration
+Firefox performance limitation after **full Living Foliage**. Retained estuary
+controls report inclusive world mean165.866667ms against the frozen163.8ms
+ceiling and callback proxy30.328962/s against30.544826796/s. Those measurements
+remain outside their limits; acceptance changes scheduling, not the numbers,
+budgets, simulation work, visual quality or a performance result. These are
+previous controls, not a new Alpha65 timing sample or presented-FPS evidence.
+
+Repair and matched production remeasurement join the existing full-Foliage
+follow-up, not an early harvest checkpoint or a new standalone optimization
+directive. All other current-save, conservation, determinism, functional
+platform, cumulative correctness and release gates remain required. Local
+Alpha66 is still unpublished/incomplete; this decision does not certify
+closure, GPU throughput, long sessions or additional hardware. No application
+algorithm, schema/support, dependency or upstream p5/Electron change follows.
+
 ## Alpha64 short production comparison — 2026-10-07
 
 Clean executable `785ff0f3359581bd3c3b2fce7550a976152c0fb5` prepares the

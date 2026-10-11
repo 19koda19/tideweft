@@ -4,6 +4,44 @@
 
 Newest release first. Patch notes are bundled into the game and remain available offline.
 
+## 0.3.3-alpha.66 — 2026-10-11
+
+Build: `0.3.3-alpha.66` · Gameplay contract: 51 · Tutorial: 76
+
+Alpha 66 adds bounded resident activity and accountable travel.
+
+### Gameplay
+
+- The original forty-two residents retain their bodies while approaching supported rest, ration, civic-material and keeper duties. Arrival and actual stock, project or store transactions decide completion; occupation labels do not create professions.
+- Nearby resident couriers approach real Promise pickups, move with the same conserved contract quantity, and hand off only after authenticated arrival. Locally observed unsafe ground can cause waiting and lawful resumption; genuinely remembered viable routes can inform origin choice.
+
+### Fixes
+
+- Neutral recognition no longer creates permanent watching or denies restorative rest. Brief attention returns to the resident's actual task, and traveling bodies retain forward or reverse route heading.
+- Stock shortages preserve pending civic requests until another real opportunity. Interrupted travel, cancellation and cold reload preserve actual location and cargo instead of manufacturing an arrival or duplicate delivery.
+- Accepted salient resident contact enters the existing acoustic path. Optional caption suppression cannot remove committed audio or other actors' lawful hearing; consumed contact and service events do not replay on reload.
+
+### Balancing
+
+- A CHALLENGING HARD remains the only difficulty. Ration use shares the existing aggregate stock budget; only authenticated users receive relief. Civic material service replaces its represented timer credit rather than adding a second contribution.
+
+### Interface
+
+- Directly visible ABOUT and both world views reflect observable resident activity and physical motion, not private task priorities or remote knowledge. Ordinary nearby GREET remains available while the settlement continues working.
+- Field Manual version 76 explains supported resident activity, current save support and retained future boundaries.
+
+### Save changes
+
+- Alpha 66 writes outer save version 58. Published formats 1–32 and 50 remain supported, as do explicitly supported development formats 51–57. Those earlier resident protocols retain their history until the normal interval boundary upgrades them; loading itself grants no task success.
+- Obsolete Voice development formats 33–49 remain intentionally incompatible and are left untouched. Current resident bodies, pending work, cargo, observations and consumed receipts restore deterministically without duplicate stock use, project credit, handoff or incidental audio.
+
+### Known limitations
+
+- Source tests and build metadata alone do not establish publication or directive closure; exact release verification establishes that separately.
+- Recurring world-advance stalls remain. The representative Firefox world-step and callback results remain outside their frozen limits. This documented Firefox limitation is accepted for this checkpoint; repair and remeasurement follow full Living Foliage. Acceptance is not a performance fix, presented-FPS, universal mobile or long-session certification.
+- Water adaptation is bounded to supported local evidence, physical capability and available aid. It is not universal wet-terrain traversal or a fix for domestic cats remaining in water. Mid-journey alternative-route breadth remains later work.
+- Sourced professions, markets, physical porter-lot conversion, general injury or death, living plant harvest, broader crafting and owned boats remain future work. The independent physical store is not a duplicate of settlement aggregate food.
+
 ## 0.3.3-alpha.65 — 2026-10-11
 
 Build: `0.3.3-alpha.65` · Gameplay contract: 51 · Tutorial: 75

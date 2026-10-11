@@ -17,7 +17,7 @@ import {
 } from "./tutorialGuide";
 
 describe("TIDEWEFT field-manual content", () => {
-  it("explains the unpublished resident candidate and its real service, travel and save boundaries", () => {
+  it("explains supported resident activity and its real service, travel and save boundaries", () => {
     const preview = tutorialSectionById("whats-new")?.steps.find(
       ({ id }) => id === "whats-new-resident-activity-preview",
     );
@@ -30,9 +30,11 @@ describe("TIDEWEFT field-manual content", () => {
     const saves = tutorialSectionById("saves-and-quiet-hour")?.steps.find(
       ({ id }) => id === "saves-alpha65-candidate",
     );
-    expect(preview?.body).toContain("unpublished local candidate");
-    expect(preview?.body).toContain("Alpha 64 remains the latest LIVE_VERIFIED public baseline");
-    expect(preview?.body).toContain("Firefox performance disposition");
+    expect(preview?.title).toBe("Alpha 66 · Resident activity and accountable travel");
+    expect(preview?.body).toContain("This build gives the original residents persistent bodies");
+    expect(preview?.body).toContain("Firefox limitation is accepted for this checkpoint");
+    expect(preview?.body).toContain("repair and remeasurement follow full Living Foliage");
+    expect(preview?.body).toContain("not a performance fix or long-session certification");
     expect(activity?.body).toContain("a real service opportunity");
     expect(activity?.body).toContain("spends existing material");
     expect(activity?.body).toContain("lawful evidence before securing the same physical store");
@@ -66,7 +68,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(75);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(76);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -538,7 +540,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedBoundary?.body).not.toContain("player WAIT");
     expect(plannedBoundary?.body).not.toContain("player REST and SLEEP");
     expect(plannedBoundary?.body).toContain("Breathing Room and the bounded Alpha 64 Living Voice scope are complete");
-    expect(plannedBoundary?.body).toContain("The resident-activity candidate remains local and unpublished");
+    expect(plannedBoundary?.body).toContain("Resident activity remains bounded to supported services");
+    expect(plannedBoundary?.body).toContain("broader professions and missing physical actions remain future work");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
