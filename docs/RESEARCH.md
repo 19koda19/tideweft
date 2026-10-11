@@ -8430,6 +8430,70 @@ failures and deferred longitudinal obligations remain unresolved; no public
 release or complete-expansion claim follows. Dependency changes: NONE.
 Upstream p5/Electron source modified: NO.
 
+### Native player mat deployment and resident service — 2026-10-10
+
+**Local command-path integration evidence, not rendered play or directive
+closure.** At base `1077782d7eb40efccfbf32f50292fd917f607b54`, the additive
+`runtime.residentRest.integration.test.ts` case starts the actual estuary
+through `new-world`, accepts7,300 ordinary fixed steps, then reaches tile43,46
+in113 ordinary movement steps. Existing scan and Wayknot commands sound the
+actual patch and deploy starter mat1 at1161: condition920,000, ready1164.
+The remaining five finite pieces and world state are unchanged by deployment;
+no actor, task, offer, need, stock, weather, knowledge or successful result is
+assigned. Sounding uses the player's real fixed-point coordinate owner, not
+raw x/y as tile coordinates.
+
+At1277phase5, native contract127 still carries parts8 with resident89. The next
+accepted step admits five actual cargo-carrying entries from source43,46 to
+the now-dry43,45 cell. The original wear kernel runs once per entry, chaining
+five12,000 debits to the same physical mat, leaving860,000. Each contract and
+the same-tick settlement/ledger roots remain unchanged. Resident89 advances
+89 position units; after cold-forking the identical pending state and actually
+reclaiming that same mat with the Wayknot command, it advances61. Reclaim spends
+the existing40,000 and leaves carried condition880,000; all five aided entries
+exceed their bare counterparts, and the bare step invokes no mat service.
+Later non-entry samples and interval closure spend no extra condition.
+
+Assisted phase4 and phase9 loads, the reclaimed bare branch, and subsequent
+accepted steps match complete authoritative roots, excluding only the existing
+session/integrity envelope convention. Loads emit no incidental audio. A
+controlled failure after real helped motion but during regional publication
+restores the entire pending body/aid/save state and releases only the existing
+integrity warning; a cold retry matches the successful successor exactly.
+
+The exact selected command is:
+
+```sh
+caffeinate -i npx vitest run src/game/runtime.residentRest.integration.test.ts \
+  --maxWorkers=1 \
+  -t 'reaches and sounds the actual patch, deploys one starter mat, and preserves benefited entry through cold restore and rollback' \
+  --reporter=default --reporter=json \
+  --outputFile.json=artifacts/validation/world0-liveness-plan/1077782-native-mat-controls-acceptance-retry.json
+```
+
+It passes one selected case in246.339s tests/248.18s overall;25 other cases are
+unselected. Test SHA256:
+`4d29aa41ace526701498d5f448aeec6d628ae3c205da73ccd142b0d4a8fd293f`.
+Report SHA256:
+`530db967dc5b42e3fb399cecf9cb8d182a7485fb1b5c013071e414b0dce6d408`.
+The preceding strict attempt's wrong fixed-point sounding-index assertion is
+retained as a failed test oracle, corrected through `playerTileIndex`; no
+production behavior or conservation assertion was weakened.
+
+At identical test bytes, the existing source-anchor rollback case also passes
+one selected case in13.717s/15.54s overall. Complete resident-execution and
+Wayknot unit/integration owners pass three files/54 tests in2.74s; maintained
+`npm run test:smoke` passes six files/105 tests in4.19s, and typecheck passes.
+These are focused slice validations, not a new complete cumulative certificate.
+
+This proves a native command-accessible finite aid → real traveler benefit →
+qualified wear → reclaim counterfactual → persistent continuation loop. It
+does not prove rendered keyboard/pointer placement, wet-anchor assistance,
+general crossing, NPC acquisition/deployment, earned alternative-route choice,
+trip handoff, performance or whole WORLD0 completion. Production, current and
+supported schemas, dependencies and platform artifacts remain unchanged.
+Dependency changes: NONE. Upstream p5/Electron source modified: NO.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

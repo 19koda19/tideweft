@@ -3055,8 +3055,13 @@ runtime publishes them under the existing fail-closed player/world transaction.
 Save/load retains condition, identity and current body work without replayed
 audio. Schemas/readers and placement/reclaim controls are unchanged. This grants
 no wet crossing, remote knowledge, NPC acquisition or deployment. Kernel-staged
-placement at a real native source remains foundation evidence, not ordinary
-player movement/F placement or normal visual play.
+placement at a real native source remains foundation evidence. A separate
+[native command-path proof](./RESEARCH.md#native-player-mat-deployment-and-resident-service--2026-10-10)
+now reaches the patch through ordinary movement, sounds and deploys one starter
+with existing commands, and attributes real benefited entries and conserved
+wear. Reclaiming that same piece removes its benefit; cold continuation and
+late publication rollback preserve the complete authoritative roots. This is
+not rendered keyboard/pointer play or complete crossing acceptance.
 
 ### Observed next-segment travel support
 

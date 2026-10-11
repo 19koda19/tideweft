@@ -16,12 +16,13 @@ import { stableStringify } from "../sim/util";
 import { deserializeBio0Ecology } from "./bio0Ecology";
 import { livingActorAddressForResident } from "./livingActor";
 import { gameSaveEnvelopeIntegrity } from "./physicalCargoState";
-import { PLAYER_FOOT_MAX_WATER_DEPTH, type PlayerState } from "./player";
+import { PLAYER_FOOT_MAX_WATER_DEPTH, playerTileIndex, type PlayerState } from "./player";
 import { restorePlayerRegionalTravel } from "./regionalPlayerTravel";
 import * as residentActivityExecution from "./residentActivityExecution";
 import * as residentCircadian from "./residentCircadian";
 import * as humanPerception from "./humanPerception";
 import * as residentContactAcoustics from "./residentContactAcoustics";
+import * as wayknots from "./wayknots";
 import { residentRestSurfaceObservationId, residentRestSurfaceKnowledge } from "../sim/residentSurfaceKnowledge";
 import * as simulation from "../sim/public";
 import * as residentMaterialUse from "../sim/residentMaterialUse";
@@ -3281,6 +3282,238 @@ describe("ordinary native resident occupied-water acoustic carry", () => {
     // One genuine native listener loop, not player playback, normal visual
     // acceptance, equipment, broad crossings, actor fairness or performance.
   }, 90_000);
+});
+
+describe("native player-deployed mat and conserved resident travel", () => {
+  it("reaches and sounds the actual patch, deploys one starter mat, and preserves benefited entry through cold restore and rollback", async () => {
+    const repository = new MemoryRepository();
+    const runtime = await open(repository);
+    runtime.dispatchUI({ type: "new-world", seed: "runtime baseline estuary", posture: "journey", sessionShape: "wander" });
+    // Command-path integration, NOT physical keyboard/rendered-play proof.
+    // Every body, task, offer, tide, need and stock remains generated. The
+    // player must actually walk here and use the existing Space/F commands.
+    advanceOrdinaryFixedSteps(runtime, 7_300);
+    const point = () => {
+      const view = runtime.getRenderView();
+      return { x: view.player.position.x / view.terrain.tileSize + (view.terrain.worldTileOrigin?.x ?? 0),
+        y: view.player.position.y / view.terrain.tileSize + (view.terrain.worldTileOrigin?.y ?? 0) };
+    };
+    const underCandidate = () => Math.floor(point().x) === 43 && Math.floor(point().y) === 46;
+    expect(runtime.getRenderView().tick).toBe(1_150);
+    let movementSteps = 0;
+    while (!underCandidate() && movementSteps < 300) {
+      const current = point();
+      runtime.dispatchRenderer({ type: "movement", vector: {
+        x: Math.abs(43.5 - current.x) < 0.1 ? 0 : Math.sign(43.5 - current.x),
+        y: Math.abs(46.5 - current.y) < 0.1 ? 0 : Math.sign(46.5 - current.y),
+      } });
+      advanceOrdinaryFixedSteps(runtime, 1);
+      movementSteps += 1;
+    }
+    runtime.dispatchRenderer({ type: "movement", vector: { x: 0, y: 0 } });
+    expect(underCandidate(), "ordinary movement must reach the mat patch").toBe(true);
+    expect(movementSteps).toBe(113);
+    await runtime.save();
+    const reached = decode(repository.snapshot());
+    const sourceIndex = 46 * deserializeWorld(reached.world).terrain.width + 43;
+    const soundingIndex = playerTileIndex(reached.player);
+    expect(reached.player.wayknots.wayknots).toHaveLength(6);
+    expect(reached.player.wayknots.wayknots.find(({ id }) => id === 1)).toMatchObject({
+      kind: "reed-mat", region: null, tileIndex: null, condition: 1_000_000,
+    });
+    expect(reached.player.depthSoundings[soundingIndex]).toBe(0);
+    runtime.dispatchUI({ type: "scan" });
+    runtime.dispatchUI({ type: "wayknot" });
+    await runtime.save();
+    const placedRecord = repository.snapshot();
+    const placed = decode(placedRecord);
+    const piece = (envelope: Envelope) => envelope.player.wayknots.wayknots.find(({ id }) => id === 1)!;
+    expect(placed.player.depthSoundings[soundingIndex]).toBeGreaterThan(0);
+    expect(piece(placed)).toMatchObject({ kind: "reed-mat", region: { x: 0, y: 0 },
+      tileIndex: sourceIndex, condition: 920_000, readyTick: 1_164, serviceWearRemainder: 0 });
+    expect(placed.player.wayknots.wayknots.filter(({ tileIndex }) => tileIndex !== null)).toHaveLength(1);
+    expect(placed.player.wayknots.wayknots.filter(({ id }) => id !== 1))
+      .toEqual(reached.player.wayknots.wayknots.filter(({ id }) => id !== 1));
+    expect(placed.world).toBe(reached.world);
+
+    // The real next cell dries at1277; the existing environment and task
+    // owners must admit an actual entry. No tide/task/knowledge is assigned.
+    advanceOrdinaryFixedSteps(runtime, (1_277 - runtime.getRenderView().tick) * 10
+      + 4 - placed.perceptionCarry.playerStepsSinceWorldTick);
+    await runtime.save();
+    const phase4Record = repository.snapshot();
+    const phase4 = decode(phase4Record);
+    expect(phase4.perceptionCarry.playerStepsSinceWorldTick).toBe(4);
+    expect(piece(phase4)).toEqual(piece(placed));
+    advanceOrdinaryFixedSteps(runtime, 1);
+    await runtime.save();
+    const pendingRecord = repository.snapshot();
+    const pending = decode(pendingRecord);
+    const world = deserializeWorld(pending.world);
+    assertWorldInvariants(world);
+    expect(world.meta.completedTick).toBe(1_277);
+    expect(pending.perceptionCarry.playerStepsSinceWorldTick).toBe(5);
+    expect(piece(pending)).toEqual(piece(placed));
+    const contract = world.contracts.find(({ id }) => id === 127)!;
+    expect(contract).toMatchObject({ status: "in-transit", assignedResidentId: 89,
+      carrierKind: "resident", resource: "parts", cargoQuantity: 8, departedTick: 721 });
+    const actor = world.residents.find(({ id }) => id === contract.assignedResidentId)!;
+    expect(actor.activeContractId).toBe(contract.id);
+    const actorId = actor.identity.stableId;
+    const source = actor.activity!.poses[5]!.position;
+    expect(source).toMatchObject({ region: { x: 0, y: 0 }, localX: 43_500, localY: 46_055 });
+    expect(waterDepthAt(world.terrain.tiles[sourceIndex]!, world.tide)).toBe(0);
+    expect(waterDepthAt(world.terrain.tiles[45 * world.terrain.width + 43]!, world.tide)).toBe(0);
+
+    // All actual services are observed once through their real kernel. Five
+    // travelers can enter together; one person's pose cannot explain all wear.
+    const services = vi.spyOn(wayknots, "applyWayknotServiceWear");
+    advanceOrdinaryFixedSteps(runtime, 1);
+    await runtime.save();
+    const used = decode(repository.snapshot());
+    const afterWorld = deserializeWorld(used.world);
+    assertWorldInvariants(afterWorld);
+    const entries = world.residents.flatMap((before) => {
+      const after = afterWorld.residents.find(({ identity }) => identity.stableId === before.identity.stableId)!;
+      const from = before.activity!.poses[5]!.position;
+      const to = after.activity!.poses[6]!.position;
+      return from.region.x === 0 && from.region.y === 0 && Math.floor(from.localX / 1_000) === 43
+        && Math.floor(from.localY / 1_000) === 46 && Math.floor(to.localY / 1_000) === 45
+        ? [{ before, after, from, to }] : [];
+    });
+    expect(entries).toHaveLength(5);
+    expect(entries.map(({ before }) => before.identity.stableId)).toContain(actorId);
+    for (const { before, after, from, to } of entries) {
+      expect(before.activeContractId).not.toBeNull();
+      expect(after.activeContractId).toBe(before.activeContractId);
+      expect(world.contracts.find(({ id }) => id === before.activeContractId)?.cargoQuantity).toBeGreaterThan(0);
+      expect(afterWorld.contracts.find(({ id }) => id === before.activeContractId))
+        .toEqual(world.contracts.find(({ id }) => id === before.activeContractId));
+      expect(from.localY - to.localY).toBeGreaterThan(0);
+      expect(from.localY - to.localY).toBeLessThanOrEqual(105);
+      expect(to.localX).toBe(from.localX);
+      expect(to.region).toEqual(from.region);
+    }
+    expect(services).toHaveBeenCalledTimes(entries.length);
+    for (const [index, call] of services.mock.calls.entries()) {
+      expect(call[0]).toEqual(index === 0 ? pending.player.wayknots
+        : services.mock.results[index - 1]!.value.state);
+      expect(call.slice(1)).toEqual([1, 1_277, 1_000_000, { x: 0, y: 0 }]);
+      expect(services.mock.results[index]).toMatchObject({ type: "return", value: {
+        ok: true, conditionSpent: 12_000, appliedBenefit: 1_000_000,
+      } });
+    }
+    expect(piece(used)).toMatchObject({ condition: 860_000, serviceWearRemainder: 0 });
+    expect(services.mock.results.at(-1)!.value.state).toEqual(used.player.wayknots);
+    expect(afterWorld.ledger).toEqual(world.ledger);
+    expect(afterWorld.settlements).toEqual(world.settlements);
+    services.mockRestore();
+    expect(resident(used, actorId).activity!.poses[6]!.position).toEqual({ ...source, localY: 45_966 });
+
+    advanceOrdinaryFixedSteps(runtime, 3);
+    await runtime.save();
+    const phase9Record = repository.snapshot();
+    const phase9 = decode(phase9Record);
+    expect(piece(phase9)).toEqual(piece(used));
+    advanceOrdinaryFixedSteps(runtime, 1);
+    await runtime.save();
+    const closed = decode(repository.snapshot());
+    expect(deserializeWorld(closed.world).meta.completedTick).toBe(1_278);
+    expect(piece(closed)).toEqual(piece(used));
+    close(runtime);
+
+    // Reclaim the SAME starter with the actual F command: no deletion or
+    // edited save substitutes for removing this physical source of benefit.
+    const bareRepository = new MemoryRepository(pendingRecord);
+    const bare = await open(bareRepository);
+    bare.dispatchUI({ type: "wayknot" });
+    await bare.save();
+    const reclaimedRecord = bareRepository.snapshot();
+    const reclaimed = decode(reclaimedRecord);
+    expect(reclaimed.world).toBe(pending.world);
+    expect(piece(reclaimed)).toMatchObject({ id: 1, region: null, tileIndex: null, condition: 880_000 });
+    expect(reclaimed.perceptionCarry).toEqual(pending.perceptionCarry);
+    const noServices = vi.spyOn(wayknots, "applyWayknotServiceWear");
+    advanceOrdinaryFixedSteps(bare, 1);
+    await bare.save();
+    const unassisted = decode(bareRepository.snapshot());
+    expect(noServices).not.toHaveBeenCalled();
+    noServices.mockRestore();
+    expect(piece(unassisted)).toEqual(piece(reclaimed));
+    expect(resident(unassisted, actorId).activity!.poses[6]!.position).toEqual({ ...source, localY: 45_994 });
+    for (const { before, from, to } of entries) {
+      const barePosition = resident(unassisted, before.identity.stableId).activity!.poses[6]!.position;
+      expect(from.localY - to.localY).toBeGreaterThan(from.localY - barePosition.localY);
+    }
+    expect(deserializeWorld(unassisted.world).contracts).toEqual(afterWorld.contracts);
+    expect(deserializeWorld(unassisted.world).ledger).toEqual(afterWorld.ledger);
+    close(bare);
+
+    soundscapePlay.mockClear();
+    const bareColdRepository = new MemoryRepository(reclaimedRecord);
+    const bareCold = await open(bareColdRepository);
+    await bareCold.save();
+    expect(authoritativeRoots(decode(bareColdRepository.snapshot()))).toEqual(authoritativeRoots(reclaimed));
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advanceOrdinaryFixedSteps(bareCold, 1);
+    await bareCold.save();
+    expect(authoritativeRoots(decode(bareColdRepository.snapshot()))).toEqual(authoritativeRoots(unassisted));
+    close(bareCold);
+
+    for (const [record, prefix, count, expected] of [
+      [phase4Record, phase4, 2, used], [phase9Record, phase9, 1, closed],
+    ] as const) {
+      soundscapePlay.mockClear();
+      const coldRepository = new MemoryRepository(record);
+      const cold = await open(coldRepository);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(prefix));
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      advanceOrdinaryFixedSteps(cold, count);
+      await cold.save();
+      expect(authoritativeRoots(decode(coldRepository.snapshot()))).toEqual(authoritativeRoots(expected));
+      close(cold);
+    }
+
+    const failedRepository = new MemoryRepository(pendingRecord);
+    const failed = await open(failedRepository);
+    const originalAdvance = residentActivityExecution.advanceResidentRestActivities;
+    let attempted: unknown;
+    const motion = vi.spyOn(residentActivityExecution, "advanceResidentRestActivities").mockImplementation((...args) => {
+      const result = originalAdvance(...args);
+      if (result !== null && args[1] === 6) attempted = {
+        pose: structuredClone(args[0].residents.find(({ identity }) => identity.stableId === actorId)!.activity!.poses[6]),
+        wayknots: structuredClone(result.wayknots),
+      };
+      return result;
+    });
+    const regionalWorldView = await import("./regionalWorldView");
+    const originalPublication = regionalWorldView.replaceRegionalWorldViewResidents;
+    const publication = vi.spyOn(regionalWorldView, "replaceRegionalWorldViewResidents").mockImplementationOnce((...args) => {
+      originalPublication(...args);
+      throw new Error("controlled post-native-mat publication failure");
+    });
+    soundscapePlay.mockClear();
+    advanceOrdinaryFixedStepsForExpectedFailure(failed, 1);
+    expect(attempted).toEqual({ pose: resident(used, actorId).activity!.poses[6], wayknots: used.player.wayknots });
+    expect(publication).toHaveBeenCalledTimes(1);
+    expect(failed.getUIView().announcement?.message).toContain("INTEGRITY HALT");
+    expect(soundscapePlay.mock.calls).toEqual([["warning", 1]]);
+    await failed.save();
+    const rollback = failedRepository.snapshot();
+    expect(authoritativeRoots(decode(rollback))).toEqual(authoritativeRoots(pending));
+    publication.mockRestore();
+    motion.mockRestore();
+    close(failed);
+    soundscapePlay.mockClear();
+    const retryRepository = new MemoryRepository(rollback);
+    const retry = await open(retryRepository);
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advanceOrdinaryFixedSteps(retry, 1);
+    await retry.save();
+    expect(authoritativeRoots(decode(retryRepository.snapshot()))).toEqual(authoritativeRoots(used));
+    close(retry);
+  }, 600_000);
 });
 
 describe("runtime source-anchor transaction foundation", () => {
