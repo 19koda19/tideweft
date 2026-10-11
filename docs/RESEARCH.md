@@ -8384,6 +8384,52 @@ the local `future-endpoint-runtime.json` retains the result. Production,
 current/support schemas, dependencies and platform artifacts are unchanged.
 No performance, cumulative, release or whole-expansion closure is claimed.
 
+### Ordinary resting-resident inspection in both views — 2026-10-10
+
+**Local painted presentation evidence, not whole-directive closure.** Clean
+`68969b74aaadb9c9ebd0f7292e43c59b90672aae` retains accepted executable
+`6e4572ff0880effcdea5de3fa1be33a8e07ecc43`; production JS SHA256 is
+`37ba0db0e278bfb346d1a107dcb0b05900231b837a0366505b187b87065d1810`.
+Disposable Firefox157.0.1 serves the actual static `/tideweft/` files at
+1440×900/DPR1 on AC power. The existing local estuary observer uses physical
+START, ten-minute WAIT/cancel, view, canvas selection and ABOUT-close controls.
+It assigns no task, body, needs, weather, stock, knowledge or successful result;
+no diagnostic save or GREET occurs. Camera focus on an already publicly
+projected person is disclosed assistance, not a physical camera-gesture proof.
+
+The bounded command adds `--native-traveler-preflight --inspect-resting-resident
+--wait-to-tick 1170 --observe-until-tick 1195 --max-wall-ms 600000
+--watch-resident 91 --run-name rest-about-68969b7-native-01` to the retained
+local observer under `caffeinate -i`. It finishes successfully after473.350s,
+723 public samples and420→1177, stopping after the requested inspection rather
+than extending to1195. Native resident91 is publicly resting before contact;
+one physical Chart canvas click selects that same stable person. Both views'
+two-frame DOM paints at1176 show `Current state: Resting` and `Behavior: Resting
+here`, with matching current public identity/state. Both screenshots were
+visually inspected: the ABOUT facts are legible; coincident field labels near
+the player remain crowded, so general field-label legibility is not certified.
+Physical close clears selection at1177, WAIT is inactive, Firefox exits0 and
+its disposable profile is removed. The user's browser and save are untouched.
+
+All five artifact and eleven recorded source/driver fingerprints match before/
+after. Report SHA256 is
+`72ee7c4ec8f91dafe0696241e4fd67e44cbec53b92a6f0a7f09bb442c6f1081f`;
+ignored evidence remains in `artifacts/validation/world0-normal-native/
+rest-about-68969b7-native-01/`. Guarded errors/navigation/prompts/context losses
+are zero; one startup CSP-eval denial is retained, not reported as zero console
+errors. This does not prove asleep presentation, private rest transactions,
+attention return after conversation, audio, complete network coverage, mobile,
+desktop lifecycle, performance or a resource soak.
+
+After the capture, the local-only recognition predicate was corrected from the
+unused `sleeping` suffix to production's `asleep`; all eleven Node self-tests
+pass. The captured driver remains fingerprinted separately and its successful
+`resting` result is unaffected. No production, schema, supported-format,
+dependency, build, security or cadence change occurred. Existing performance
+failures and deferred longitudinal obligations remain unresolved; no public
+release or complete-expansion claim follows. Dependency changes: NONE.
+Upstream p5/Electron source modified: NO.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
