@@ -3138,6 +3138,14 @@ consumer and cold lower-world work, not earned native familiarity, normal visual
 play or complete crossing acceptance. Native alternate topology additionally
 requires actual route reinforcement; the initial active network is a chain.
 
+Post-departure adaptation remains a specified **T1 route-planning continuation**,
+not a capability of this origin-only consumer. At a legitimate reached junction,
+its owner must qualify a known path through lawful evidence and preserve the
+same body, cargo and validated itinerary/cursor through existing travel
+transactions. This allocation does not discharge the current core's earned
+origin-choice acceptance or make every later adaptation consumer a prerequisite
+of T1's initial planning proof.
+
 ## First porter-dog living web
 
 The game host creates one dog from the root seed, the selected existing porter's immutable origin identity, and stable regional generation inputs. Dog identity, actor address, needs, condition, perception, intent, bounded memory, player knowledge, and persistence tier are distinct from the porter's resident state. Their deterministic pairing is an interaction fixture, not ownership, adoption, or a companion relationship. Full-detail movement and new sensing are limited to the bounded loaded interaction window; promoted state preserves earned history without claiming a full coarse animal population simulation.
