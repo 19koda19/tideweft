@@ -8560,6 +8560,42 @@ desktop lifecycle, publication or directive closure. Existing standing
 performance limitations and deferred longitudinal evidence remain unchanged.
 Dependency changes: NONE. Upstream p5/Electron source modified: NO.
 
+### Civic shortage, pending age and cold recovery — 2026-10-10
+
+**Controlled-fixture whole-runtime evidence, not untouched normal play or a
+player stock-transfer feature.** At base `054fd7e525a84db8f711035a40adc094d788b22b`,
+one additive `runtime.residentRest.integration.test.ts` case reuses the existing
+three-contender fixture's declared need, schedule and supply controls. Actual
+runtime selection and approach reach430. Only the same four existing material
+units move to another settlement; totals, ledger, people, tasks, projects and
+contracts stay exact. No actor, body, target, request age or result is assigned.
+
+Loaded phase4/9 retain the already-prepared arrived action, without spending
+missing stock. Actual431 preparation changes it to waiting/no-material. Through
+480 all three requests retain their420 ages and poses, with no project or
+ledger credit. The actual stock-zero waiting save cold-opens unchanged and
+silently. Returning those same four units allows real540 service: oldest
+stable-tie worker consumes exactly one, stock4→3, project and consumed ledger
+each+1. Other requests keep their old age;541 does not repeat the debit.
+Cold phase4/9→431,539phase9→540 and540→541 match every saved root except the
+existing nonauthoritative session recap; loading never replays work audio.
+
+The initial strict oracle failed because it expected fresh preparation inside
+an already-prepared loaded interval. Its failure remains retained; inspection
+of actual runtime preparation corrected the test to distinct430 and431
+assertions, not a permissive either/or or production change.
+
+Final test SHA256 `b29c0bdf48de41866f57f3805e7bb5d41260eba743c1f7a9068b5fe49356b3ef`.
+`npx vitest run src/game/runtime.residentRest.integration.test.ts -t 'serves every continuously eligible native civic contender|preserves pending civic age through a conserved shortage|revokes pending civic eligibility' --maxWorkers=1`
+passes3 selected/24 unselected in84.28s. Complete
+`residentMaterialActivity.integration.test.ts` plus `residentMaterialActivity.test.ts`
+pass34 in19.15s; maintained `npm run test:smoke` passes105 in4.16s;
+`npm run typecheck` passes. JSON reports/logs remain local under the current
+validation evidence owner. No general starvation, all-contender completion,
+visual, performance, cumulative, release or directive-closure claim follows.
+Production, schemas/support, dependencies and accepted platform artifacts
+are unchanged. Dependency changes: NONE. Upstream p5/Electron modified: NO.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.

@@ -1851,6 +1851,152 @@ describe("ordinary runtime resident rest execution", () => {
     }
   }, 240_000);
 
+  it("preserves pending civic age through a conserved shortage, cold recovery and one real subsequent use", async () => {
+    // Existing controlled need/schedule/supply fixture, not untouched play or
+    // a new player stock-transfer verb. Only existing quantities move between
+    // settlements; no actor, task, age, body, arrival or result is assigned.
+    const fixture = await civicContendersFixture();
+    const initialRepository = new MemoryRepository(fixture.record);
+    const initial = await open(initialRepository);
+    advanceOrdinaryFixedSteps(initial, 100);
+    await initial.save();
+    const approached = decode(initialRepository.snapshot());
+    const approachedWorld = deserializeWorld(approached.world);
+    expect(approachedWorld.meta.completedTick).toBe(fixture.tick + 10);
+    expect(approached.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+    const pending = fixture.workerIds.map((id) => {
+      const human = approachedWorld.residents.find(({ identity }) => identity.stableId === id)!;
+      expect(human.activity?.materialTask).toMatchObject({ phase: "arrived", selectedAtTick: fixture.tick, usedAtTick: null });
+      return { id, target: human.activity!.materialTask!.target, position: human.activity!.poses[0]!.position };
+    });
+    const donorId = approachedWorld.settlements.find(({ id }) => id !== fixture.settlementId)!.id;
+    close(initial);
+
+    const redistribute = (record: SaveRecord, returning: boolean): SaveRecord => {
+      const envelope = decode(record), world = deserializeWorld(envelope.world);
+      expect(envelope.perceptionCarry.playerStepsSinceWorldTick).toBe(0);
+      const site = world.settlements.find(({ id }) => id === fixture.settlementId)!;
+      const donor = world.settlements.find(({ id }) => id === donorId)!;
+      const roots = stableStringify({ ledger: world.ledger, residents: world.residents, contracts: world.contracts,
+        projects: world.settlements.map(({ project }) => project) });
+      const total = world.settlements.reduce((sum, settlement) => sum + settlement.inventory[fixture.resource], 0);
+      const from = returning ? donor : site, to = returning ? site : donor;
+      expect(from.inventory[fixture.resource]).toBeGreaterThanOrEqual(4);
+      from.inventory[fixture.resource] -= 4;
+      to.inventory[fixture.resource] += 4;
+      expect(world.settlements.reduce((sum, settlement) => sum + settlement.inventory[fixture.resource], 0)).toBe(total);
+      expect(stableStringify({ ledger: world.ledger, residents: world.residents, contracts: world.contracts,
+        projects: world.settlements.map(({ project }) => project) })).toBe(roots);
+      assertWorldInvariants(world);
+      envelope.world = serializeWorld(world);
+      return recordWith(record, envelope);
+    };
+    const shortageRecord = redistribute(initialRepository.snapshot(), false);
+    const shortageRepository = new MemoryRepository(shortageRecord), shortage = await open(shortageRepository);
+    const prefixes: { record: SaveRecord; envelope: Envelope; steps: number }[] = [];
+    advanceOrdinaryFixedSteps(shortage, 4);
+    await shortage.save();
+    prefixes.push({ record: shortageRepository.snapshot(), envelope: decode(shortageRepository.snapshot()), steps: 6 });
+    advanceOrdinaryFixedSteps(shortage, 5);
+    await shortage.save();
+    prefixes.push({ record: shortageRepository.snapshot(), envelope: decode(shortageRepository.snapshot()), steps: 1 });
+    advanceOrdinaryFixedSteps(shortage, 1);
+    await shortage.save();
+    const firstWaiting = decode(shortageRepository.snapshot());
+    expect(deserializeWorld(firstWaiting.world).meta.completedTick).toBe(fixture.tick + 11);
+    advanceOrdinaryFixedSteps(shortage, 490);
+    await shortage.save();
+    const waitingRecord = shortageRepository.snapshot(), waiting = decode(waitingRecord);
+    const waitingWorld = deserializeWorld(waiting.world);
+    expect(waitingWorld.meta.completedTick).toBe(480);
+    const expectPending = (envelope: Envelope, phase: "arrived" | "waiting") => {
+      const world = deserializeWorld(envelope.world);
+      for (const { id, target, position } of pending) {
+        const human = world.residents.find(({ identity }) => identity.stableId === id)!;
+        expect(human.activity?.materialTask).toMatchObject({ phase, waitReason: phase === "waiting" ? "no-material" : null,
+          selectedAtTick: fixture.tick, usedAtTick: null, target });
+        expect(human.activity?.poses.at(-1)?.position).toEqual(position);
+      }
+      expect(world.settlements.find(({ id }) => id === fixture.settlementId)!.project.progress).toBe(fixture.progress);
+      expect(world.settlements.find(({ id }) => id === fixture.settlementId)!.inventory[fixture.resource]).toBe(0);
+      expect(world.ledger.consumed[fixture.resource]).toBe(fixture.consumed);
+      assertWorldInvariants(world);
+    };
+    // A loaded interval retains its already-prepared action. Changed source
+    // conditions revoke use immediately, but do not invent a preparation before
+    // the real next interval. The431 boundary performs the actual waiting retry.
+    for (const { envelope } of prefixes) expectPending(envelope, "arrived");
+    expectPending(firstWaiting, "waiting");
+    expectPending(waiting, "waiting");
+    close(shortage);
+
+    // Open the ACTUAL persisted shortage, before restoring its stock. Loading
+    // itself must neither clear the waiting cause/age nor emit old work audio.
+    soundscapePlay.mockClear();
+    const waitingRepository = new MemoryRepository(waitingRecord), waitingCold = await open(waitingRepository);
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    await waitingCold.save();
+    expect(authoritativeRoots(decode(waitingRepository.snapshot()))).toEqual(authoritativeRoots(waiting));
+    close(waitingCold);
+
+    for (const { record, envelope, steps } of prefixes) {
+      soundscapePlay.mockClear();
+      const repository = new MemoryRepository(record), cold = await open(repository);
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      await cold.save();
+      expect(authoritativeRoots(decode(repository.snapshot()))).toEqual(authoritativeRoots(envelope));
+      advanceOrdinaryFixedSteps(cold, steps);
+      await cold.save();
+      expect(authoritativeRoots(decode(repository.snapshot()))).toEqual(authoritativeRoots(firstWaiting));
+      close(cold);
+    }
+    const recoveredRecord = redistribute(waitingRecord, true);
+    soundscapePlay.mockClear();
+    const recoveredRepository = new MemoryRepository(recoveredRecord), recovered = await open(recoveredRepository);
+    await recovered.save();
+    expect(authoritativeRoots(decode(recoveredRepository.snapshot()))).toEqual(authoritativeRoots(decode(recoveredRecord)));
+    expect(soundscapePlay).not.toHaveBeenCalled();
+    advanceOrdinaryFixedSteps(recovered, 599);
+    await recovered.save();
+    const readyRecord = recoveredRepository.snapshot(), ready = decode(readyRecord);
+    expect(deserializeWorld(ready.world).meta.completedTick).toBe(539);
+    expect(ready.perceptionCarry.playerStepsSinceWorldTick).toBe(9);
+    for (const id of fixture.workerIds) expect(resident(ready, id).activity?.materialTask)
+      .toMatchObject({ phase: "arrived", selectedAtTick: fixture.tick, usedAtTick: null });
+    advanceOrdinaryFixedSteps(recovered, 1);
+    await recovered.save();
+    const usedRecord = recoveredRepository.snapshot(), used = decode(usedRecord), usedWorld = deserializeWorld(used.world);
+    expect(usedWorld.meta.completedTick).toBe(540);
+    expect(resident(used, fixture.workerIds[0]!).activity?.materialTask)
+      .toMatchObject({ phase: "used", selectedAtTick: fixture.tick, usedAtTick: 540 });
+    for (const id of fixture.workerIds.slice(1)) expect(resident(used, id).activity?.materialTask)
+      .toMatchObject({ phase: "arrived", selectedAtTick: fixture.tick, usedAtTick: null });
+    expect(usedWorld.settlements.find(({ id }) => id === fixture.settlementId)!.inventory[fixture.resource]).toBe(3);
+    expect(usedWorld.settlements.find(({ id }) => id === fixture.settlementId)!.project.progress).toBe(fixture.progress + 1);
+    expect(usedWorld.ledger.consumed[fixture.resource]).toBe(fixture.consumed + 1);
+    assertWorldInvariants(usedWorld);
+    advanceOrdinaryFixedSteps(recovered, 10);
+    await recovered.save();
+    const next = decode(recoveredRepository.snapshot());
+    expect(deserializeWorld(next.world).ledger.consumed[fixture.resource]).toBe(fixture.consumed + 1);
+    for (const id of fixture.workerIds.slice(1)) expect(resident(next, id).activity?.materialTask?.selectedAtTick).toBe(fixture.tick);
+    expect(resident(next, fixture.workerIds[0]!).activity?.materialTask?.selectedAtTick).toBeGreaterThan(fixture.tick);
+    close(recovered);
+    for (const [record, expectedBefore, steps, expectedAfter] of [
+      [readyRecord, ready, 1, used], [usedRecord, used, 10, next],
+    ] as const) {
+      soundscapePlay.mockClear();
+      const repository = new MemoryRepository(record), cold = await open(repository);
+      expect(soundscapePlay).not.toHaveBeenCalled();
+      await cold.save();
+      expect(authoritativeRoots(decode(repository.snapshot()))).toEqual(authoritativeRoots(expectedBefore));
+      advanceOrdinaryFixedSteps(cold, steps);
+      await cold.save();
+      expect(authoritativeRoots(decode(repository.snapshot()))).toEqual(authoritativeRoots(expectedAfter));
+      close(cold);
+    }
+  }, 240_000);
+
   it("revokes pending civic eligibility when the real hourly hunger pulse creates an urgent need", async () => {
     const fixture = await civicContendersFixture(true);
     const repository = new MemoryRepository(fixture.record), runtime = await open(repository);
