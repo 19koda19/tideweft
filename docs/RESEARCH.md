@@ -8596,6 +8596,36 @@ visual, performance, cumulative, release or directive-closure claim follows.
 Production, schemas/support, dependencies and accepted platform artifacts
 are unchanged. Dependency changes: NONE. Upstream p5/Electron modified: NO.
 
+### WORLD0 cumulative correctness checkpoint — 2026-10-10
+
+**Local correctness evidence, not publication or performance closure.** Clean
+`d406bb1b98299e89dfb1f49fea3fd7417f7a03e1` passes the maintained complete command:
+
+```sh
+caffeinate -i npm run test:ci -- --reporter=default --reporter=json \
+  --outputFile.json=artifacts/validation/d406bb1-cumulative.json
+```
+
+The command exits0. Node prerequisite checks pass28 context-index,40
+player-facing and45 documentation self-tests. Vitest passes419 unique product
+files and5,470 assertions, with zero failures, pending or todo assertions, in
+3001.70s. Actual report paths match all419 frozen test paths with no missing,
+extra or duplicate files; nested-suite counts are not treated as file coverage.
+The complete27-case resident-rest integration owner passes, including the new
+civic shortage/cold-recovery case. All750 tracked inputs, path membership,
+HEAD and clean worktree remain unchanged throughout this run.
+
+Local JSON SHA256 `cd6da262702cc36a4400e6a84c0bf25d77dab606f46a941ccd052f0681ab7577`;
+log `46b3a6024b1a0a3ad6ad6a4e88c0ca884d4bd8d655ec67ee2a521beaa2c6b629`.
+Node22.20.0/npm10.9.3, AC power, no competing game or profiler. This is batched
+correctness, not the deferred extended profiling/soak. No new production build,
+packaged launch, platform performance, CI, Pages or exact-live check follows.
+The certificate belongs to the exact tested source/test/configuration bytes;
+later qualifying prose-only changes may reuse it under the documented policy.
+Existing standing Firefox limits remain unmet. No schema/support, dependency,
+upstream-source or gameplay change, acceptance waiver or directive closure is
+claimed by this checkpoint.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
