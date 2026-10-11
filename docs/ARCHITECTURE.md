@@ -3141,19 +3141,27 @@ The final itinerary is selected before stock debit, cargo transfer, cursor
 initialization and Voice capture. No departed itinerary, accepted pose, receipt
 or speech event is rewritten. Missing proof preserves existing behavior; this
 adds no persistent pre-pickup water hold or mid-route rerouting. Body8/outer58,
-world4/rules6/carry14 and the supported-reader set remain unchanged. Adapter
-tests arrange past history, pickup and contrasting surfaces; they prove source/
-consumer and cold lower-world work, not earned native familiarity, normal visual
-play or complete crossing acceptance. Native alternate topology additionally
-requires actual route reinforcement; the initial active network is a chain.
+world4/rules6/carry14 and the supported-reader set remain unchanged. Original
+adapter tests arrange past history, pickup and contrasting surfaces. A separate
+[controlled earned-origin proof](./RESEARCH.md#controlled-earned-origin-route-choice--2026-10-10)
+joins genuinely completed coarse courier history and paid route reinforcement
+to automatic recruitment, actual fine-step approach, lawful entrance sight and
+conserved alternative departure. Declared stock, schedule, needs, fatigue and
+ground conditions remain fixture inputs, not results of untouched play. Cold
+lower-world continuations agree; removing the earned history or restoring dry
+default support removes the informed alternative, not ordinary departure.
+Neither proof certifies normal visual play, outer-save continuity, later
+deadline viability or a complete crossing. Native alternate topology requires
+actual route reinforcement; the initial active network is a chain.
 
 Post-departure adaptation remains a specified **T1 route-planning continuation**,
 not a capability of this origin-only consumer. At a legitimate reached junction,
 its owner must qualify a known path through lawful evidence and preserve the
 same body, cargo and validated itinerary/cursor through existing travel
-transactions. This allocation does not discharge the current core's earned
-origin-choice acceptance or make every later adaptation consumer a prerequisite
-of T1's initial planning proof.
+transactions. The current core retains its normal-play and applicable crossing
+acceptance beyond the controlled origin-choice proof. This allocation does not
+make every later adaptation consumer a prerequisite of T1's initial planning
+proof.
 
 ## First porter-dog living web
 

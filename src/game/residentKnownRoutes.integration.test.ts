@@ -2,20 +2,24 @@ import { describe, expect, it } from "vitest";
 import { assertWorldInvariants, createWorld, createWorldView, deserializeWorld, serializeWorld, stepWorld } from "../sim/public";
 import { findAutonomousRoutePlan } from "../sim/network";
 import { replaceResidentActivity, RESIDENT_TRAVEL_ACTIVITY_OWNER_ID, RESIDENT_TRAVEL_ACTIVITY_VERSION, RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_OWNER_ID, RESIDENT_TRAVEL_ENVIRONMENT_ACTIVITY_VERSION } from "../sim/residentActivity";
-import { residentAcceptedPickupBinding } from "../sim/residentActivityWorld";
+import { residentAcceptedPickupBinding, residentRestTargetHasDrySupport } from "../sim/residentActivityWorld";
 import { prepareResidentTravelAdvance, revokeResidentTravelAdvance } from "../sim/residentTravelAdvance";
 import { residentTravelSegment } from "../sim/residentTravelRoute";
 import { MAX_TIDE_LEVEL } from "../sim/terrain";
-import { FIXED_POINT, type WorldState } from "../sim/types";
+import { createRegionCoord } from "../sim/regions";
+import { FIXED_POINT, RESOURCE_KINDS, type WorldState } from "../sim/types";
 import { stableStringify } from "../sim/util";
 import { collectExistingHumanObservations, humanObservationCollectionRejected } from "./humanPerception";
 import { headingFromRadians } from "./livingActor";
-import { adoptResidentActivities } from "./residentActivityExecution";
+import { adoptResidentActivities, advanceResidentRestActivities, prepareResidentRestActivities } from "./residentActivityExecution";
 import { createRegionalCartography, projectRegionalCartographyWindow } from "./regionalCartography";
 import { createTerrainRegionStreamingState } from "./regionStreaming";
 import { createRegionalTerrainWindow } from "./regionalTravel";
 import { createRegionalWorldView } from "./regionalWorldView";
 import { workingPeopleExpressionIntent } from "./workingPeopleExpression";
+import { createCoreEcologyAggregatePatch } from "./coreEcology";
+import { deriveCoreEcologyHarborEdgeHabitatAssemblage } from "./coreEcologyHabitat";
+import { createSettlementEcologyState, type SettlementEcologyState } from "./settlementEcology";
 
 const WINDOW = { origin: { x: -10, y: -10 }, terrain: { width: 120, height: 120 } };
 
@@ -109,7 +113,183 @@ function closing(world: WorldState, actorId: string) {
   return observations;
 }
 
+/**
+ * Controlled integration, not untouched play or earned pressure/stock transfers.
+ * History128 is genuinely fulfilled by automatic coarse logistics. A paid
+ * reinforcement and ONE conserved shortage distribution produce real offer156.
+ * Declared exclusivity/weather/needs reach daylight through240 actual body
+ * intervals, rather than jumping the clock or authoring a gaze/arrival/task.
+ * The explicit finite-store/keeper binding enables the normal v8 adoption;
+ * it is not a runtime-bootstrap or inspection-completion witness.
+ */
+function earnedOriginFixture() {
+  const world = createWorld("runtime baseline estuary", "standard");
+  world.weather = { kind: "clear", intensity: 0, windX: 0, windY: 0,
+    nextChangeTick: world.meta.completedTick + 1_441 };
+  const history = world.contracts.find(({ id }) => id === 128)!;
+  expect(history.status).toBe("offered");
+  for (let count = 0; count < 1_440 && history.status !== "fulfilled"
+    && history.status !== "expired" && history.status !== "cancelled"; count += 1) {
+    stepWorld(world, []);
+  }
+  expect(history.status).toBe("fulfilled");
+  const historyBytes = stableStringify(history);
+  const actorId = world.residents.find(({ id }) => id === history.assignedResidentId)!.identity.stableId;
+  stepWorld(world, [{ id: "earned-origin:paid", type: "reinforce-route", routeId: 109, settlementId: 5, parts: 2 }]);
+  expect(findAutonomousRoutePlan(world, 2, 5)?.routeIds).toEqual([106, 109]);
+  while (world.meta.completedTick < 1_319) stepWorld(world, []);
+  const people = stableStringify(world.residents);
+  const ledger = stableStringify(world.ledger);
+  const cargo = world.contracts.map(({ id, cargoQuantity }) => ({ id, cargoQuantity }));
+  const totals = Object.fromEntries(RESOURCE_KINDS.map((resource) => [resource,
+    world.settlements.reduce((sum, settlement) => sum + settlement.inventory[resource], 0),
+  ])) as Record<(typeof RESOURCE_KINDS)[number], number>;
+  expect(totals.freshWater).toBeGreaterThan(330);
+  for (const resource of RESOURCE_KINDS) {
+    if (resource === "freshWater") {
+      for (const settlement of world.settlements) settlement.inventory[resource] = settlement.id === 5 ? 0
+        : settlement.id === 2 ? totals[resource] - 270 : 54;
+    } else {
+      expect(totals[resource]).toBeGreaterThanOrEqual(46);
+      const originAmount = Math.min(54, totals[resource] - 46);
+      const remainder = totals[resource] - 46 - originAmount;
+      const others = world.settlements.filter(({ id }) => id !== 2 && id !== 5);
+      for (const settlement of world.settlements) settlement.inventory[resource] = settlement.id === 5 ? 46
+        : settlement.id === 2 ? originAmount : Math.floor(remainder / others.length);
+      for (let index = 0; index < remainder % others.length; index += 1) others[index]!.inventory[resource] += 1;
+    }
+    expect(world.settlements.reduce((sum, settlement) => sum + settlement.inventory[resource], 0)).toBe(totals[resource]);
+  }
+  expect(stableStringify(world.residents)).toBe(people);
+  expect(stableStringify(world.ledger)).toBe(ledger);
+  expect(world.contracts.map(({ id, cargoQuantity }) => ({ id, cargoQuantity }))).toEqual(cargo);
+  stepWorld(world, []);
+  const offer = world.contracts.find(({ createdTick, originSettlementId, destinationSettlementId }) =>
+    createdTick === 1_320 && originSettlementId === 2 && destinationSettlementId === 5)!;
+  expect(offer).toMatchObject({ status: "offered", quantity: 8, resource: "freshWater", playerExclusiveUntilTick: 1_620 });
+  while (world.meta.completedTick < 1_619) stepWorld(world, []);
+  offer.playerExclusiveUntilTick = 1_860;
+  world.weather.nextChangeTick = 2_041;
+  for (const resident of world.residents) resident.needs = { food: 0, rest: 0, belonging: 900_000 };
+  const region = createRegionCoord(0, 0);
+  const keeper = world.residents.find(({ homeSettlementId }) => homeSettlementId === 1)!;
+  const site = world.settlements.find(({ id }) => id === keeper.homeSettlementId)!;
+  const tile = world.terrain.tiles[site.tileIndex]!;
+  const habitat = deriveCoreEcologyHarborEdgeHabitatAssemblage({ rootSeed: world.meta.rootSeed, originRegion: region });
+  const aggregatePatch = createCoreEcologyAggregatePatch({ seed: world.meta.rootSeed,
+    patchKey: "earned-origin:v1", originRegion: region, tick: world.meta.completedTick,
+    populations: habitat.populations.flatMap((population) => population.representation !== "individual-representatives"
+      || population.populationUnits === 0 ? [] : [{ species: population.species, populationKey: population.populationKey,
+        populationSize: population.populationUnits, members: population.allocations.map((allocation) => ({
+          populationOrdinal: allocation.allocationOrdinal, representedUnits: allocation.representedUnits,
+          position: allocation.position, materialization: "coarse" as const,
+        })) }]), derivation: { kind: "habitat-v2", habitat } });
+  const store = createSettlementEcologyState({ rootSeed: world.meta.rootSeed, settlementId: site.id,
+    keeperActorId: keeper.identity.stableId,
+    position: { region, localX: tile.x * 1_000 + 500, localY: tile.y * 1_000 + 500 }, aggregatePatch });
+  expect(adoptResidentActivities(world)).toBe(true);
+  const sourcePosition = world.residents.find(({ identity }) => identity.stableId === actorId)!.activity!.poses[0]!.position;
+  for (let count = 0; count < 240; count += 1) earnedInterval(world, store, actorId);
+  expect(world.meta.completedTick).toBe(1_859);
+  const resident = world.residents.find(({ identity }) => identity.stableId === actorId)!;
+  expect(resident).toMatchObject({ activeContractId: null, location: { kind: "settlement", settlementId: 2 } });
+  expect(resident.activity!.poses[0]!.position).toEqual(sourcePosition);
+  expect(stableStringify(world.contracts.find(({ id }) => id === history.id))).toBe(historyBytes);
+  expect(world.contracts.find(({ id }) => id === offer.id)!.status).toBe("offered");
+  assertWorldInvariants(world);
+  return { world, store, actorId, historyId: history.id, contractId: offer.id, sourcePosition };
+}
+
+function earnedInterval(world: WorldState, store: SettlementEcologyState, actorId: string) {
+  expect(prepareResidentRestActivities(world, [], store)).toBe(true);
+  for (let phase = 1; phase <= 10; phase += 1) expect(advanceResidentRestActivities(world, phase, WINDOW)).not.toBeNull();
+  return closing(world, actorId);
+}
+
 describe("source-bound familiar predeparture adapter integration", () => {
+  it("joins genuine history, automatic recruitment, actual approach and lawful choice without assigning their results", () => {
+    const current = earnedOriginFixture();
+    const world = current.world;
+    const contract = world.contracts.find(({ id }) => id === current.contractId)!;
+    const resident = () => world.residents.find(({ identity }) => identity.stableId === current.actorId)!;
+    const history = world.contracts.find(({ id }) => id === current.historyId)!;
+    const plan = findAutonomousRoutePlan(world, 2, 5)!;
+    const primary = residentTravelSegment(world, { ...contract, porterRouteIds: plan.routeIds,
+      porterSettlementIds: plan.settlementIds }, { contractId: contract.id, legIndex: 0, waypointIndex: 1 })!;
+    const familiarRouteIds = [...history.porterRouteIds].reverse();
+    const familiarSettlementIds = [...history.porterSettlementIds].reverse();
+    const familiar = residentTravelSegment(world, { ...contract, porterRouteIds: familiarRouteIds,
+      porterSettlementIds: familiarSettlementIds }, { contractId: contract.id, legIndex: 0, waypointIndex: 1 })!;
+    // One declared capability/ground contrast, not continuously forced
+    // recruitment or a fabricated availability/knowledge/task/body record.
+    for (const candidate of world.residents) if (candidate.id !== resident().id
+      && candidate.activeContractId === null && candidate.location.kind === "settlement"
+      && candidate.location.settlementId === 2) candidate.condition.exhaustion = FIXED_POINT;
+    const index = Math.floor(primary.end.localY / 1_000) * world.terrain.width + Math.floor(primary.end.localX / 1_000);
+    const nativeTile = structuredClone(world.terrain.tiles[index]!);
+    Object.assign(world.terrain.tiles[index]!, { terrain: "deep-water", elevation: 0 });
+    const cold = deserializeWorld(serializeWorld(world));
+    const forgotten = deserializeWorld(serializeWorld(world));
+    forgotten.contracts = forgotten.contracts.filter(({ id }) => id !== history.id);
+    const dry = deserializeWorld(serializeWorld(world));
+    Object.assign(dry.terrain.tiles[index]!, nativeTile);
+    expect(residentRestTargetHasDrySupport(dry, primary.end)).toBe(true);
+    expect(residentRestTargetHasDrySupport(world, primary.end)).toBe(false);
+    expect(residentRestTargetHasDrySupport(world, familiar.end)).toBe(true);
+    for (const branch of [world, cold, forgotten, dry]) assertWorldInvariants(branch);
+    const coldStore = structuredClone(current.store);
+    const forgottenStore = structuredClone(current.store);
+    const dryStore = structuredClone(current.store);
+    const stock = world.settlements.find(({ id }) => id === 2)!.inventory.freshWater;
+    const stages: WorldState[] = [];
+    let observations: ReturnType<typeof closing> = [];
+    for (let interval = 0; interval < 3; interval += 1) {
+      observations = earnedInterval(world, current.store, current.actorId);
+      expect(earnedInterval(cold, coldStore, current.actorId)).toEqual(observations);
+      earnedInterval(forgotten, forgottenStore, current.actorId);
+      earnedInterval(dry, dryStore, current.actorId);
+      expect(serializeWorld(cold)).toBe(serializeWorld(world));
+      stages.push(deserializeWorld(serializeWorld(world)));
+      if (interval < 2) {
+        expect(contract).toMatchObject({ status: "accepted", assignedResidentId: resident().id, cargoQuantity: 0 });
+        expect(world.settlements.find(({ id }) => id === 2)!.inventory.freshWater).toBe(stock);
+        expect(world.events.filter(({ type, subjectId }) => type === "contract-departed" && subjectId === contract.id)).toHaveLength(0);
+      }
+    }
+    expect(stages.map(({ meta }) => meta.completedTick)).toEqual([1_860, 1_861, 1_862]);
+    const firstPose = stages[0]!.residents.find(({ identity }) => identity.stableId === current.actorId)!.activity!.poses[0]!;
+    const middlePose = stages[1]!.residents.find(({ identity }) => identity.stableId === current.actorId)!.activity!.poses[0]!;
+    expect(firstPose.position).toEqual(current.sourcePosition);
+    expect(middlePose.position).not.toEqual(firstPose.position);
+    expect(middlePose.position).not.toEqual(primary.start);
+    expect(resident().activity!.poses[0]!.position).toEqual(primary.start);
+    expect(resident().activity!.poses[0]!.heading).toBe(firstPose.heading);
+    expect(observations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ perceivedClass: "water-covered-ground", observedAtTick: 1_862,
+        area: { center: primary.end, radiusUnits: 0 } }),
+      expect.objectContaining({ perceivedClass: "dry-ground", observedAtTick: 1_862,
+        area: { center: familiar.end, radiusUnits: 0 } }),
+    ]));
+    expect(contract).toMatchObject({ status: "in-transit", assignedResidentId: resident().id, cargoQuantity: 8,
+      porterRouteIds: familiarRouteIds, porterSettlementIds: familiarSettlementIds });
+    expect(world.settlements.find(({ id }) => id === 2)!.inventory.freshWater).toBe(stock - 8);
+    expect(resident().activity?.travelTask).toMatchObject({ mode: "physical", legIndex: 0, waypointIndex: 1 });
+    const departure = world.events.filter(({ type, subjectId }) => type === "contract-departed" && subjectId === contract.id);
+    expect(departure).toHaveLength(1);
+    expect(workingPeopleExpressionIntent({ world: createWorldView(world), event: departure[0]! })).not.toBeNull();
+    for (const branch of [forgotten, dry]) {
+      expect(branch.contracts.find(({ id }) => id === contract.id)).toMatchObject({
+        status: "in-transit", cargoQuantity: 8, porterRouteIds: plan.routeIds, porterSettlementIds: plan.settlementIds,
+      });
+      expect(branch.settlements.find(({ id }) => id === 2)!.inventory.freshWater).toBe(stock - 8);
+    }
+    expect(serializeWorld(deserializeWorld(serializeWorld(world)))).toBe(serializeWorld(world));
+    // Before-departure proof only: no later delivery, deadline viability,
+    // audio hardware, outer-save or ordinary-controls success is inferred.
+    // This bounded240-interval source plus four equal-work continuations needs
+    // an integration-sized timeout; no existing test timeout is changed.
+  }, 30_000);
+
   it("characterizes genuinely completed coarse history and paid native alternative topology", () => {
     // Supported coarse fulfillment is topology history only, not physical
     // walking, a normal survey/button witness or an earned current reroute.

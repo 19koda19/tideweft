@@ -8626,6 +8626,61 @@ Existing standing Firefox limits remain unmet. No schema/support, dependency,
 upstream-source or gameplay change, acceptance waiver or directive closure is
 claimed by this checkpoint.
 
+### Controlled earned-origin route choice — 2026-10-10
+
+**Local controlled integration, not untouched normal play or directive closure.**
+On source base `6a7260aab31cca7ea70d736d8ceec4c46c9634ee`, the additive
+`residentKnownRoutes.integration.test.ts` case joins the previously separate
+earned-history and origin-choice proofs without changing production code.
+Real coarse logistics fulfills contract128 with resident92; a real paid109
+reinforcement opens native default106/109 versus the remembered reverse
+112/117/121. One explicitly arranged settlement-stock distribution preserves
+every resource total, ledger, cargo and resident record and causes actual1320
+offer156 for eight fresh-water units from2 to5. It is not a player stock-transfer
+verb or a sourced livelihood.
+
+Declared exclusivity, clear weather and need pressure retain the opportunity
+through daylight. A finite store/home-keeper binding through existing factories
+allows current-body adoption; it does not prove runtime bootstrap or keeper
+work. Two hundred forty actual fine-step intervals preserve the same native
+origin body and completed history. One declared competitor-fatigue and ground
+contrast then makes the familiar courier eligible and the default first support
+wet. No task, pose, gaze, belief, recruitment result or arrival is assigned.
+
+At1860 production authority automatically accepts the offer with the same
+courier, with no cargo or debit. At1861 actual locomotion approaches the pickup.
+At1862 the arrived body obtains fresh lawful wet-default/dry-familiar sight,
+chooses its remembered reverse itinerary before transfer, debits stock198→190
+and carries exactly8. Exactly one departure event supplies a real work-expression
+intent. Every continuation uses a fresh collector and one-shot travel receipt.
+Independent cold lower-world/store clones match observations and full serialized
+world state at all three boundaries. Removing completed history, or restoring
+independently dry native default support, preserves ordinary conserved departure
+but removes the informed alternative. Current lower-world roundtrip is exact.
+
+`npx vitest run src/game/residentKnownRoutes.integration.test.ts --maxWorkers=1`
+passes all9 cases in17.26s overall; the new bounded integration case has a30s
+timeout, leaving old test timeouts and assertions unchanged. Its first run
+exceeded the default15s timeout; that is retained as a test-duration failure,
+not a gameplay failure or positive result. Maintained `npm run test:smoke`
+passes6 files/105 assertions in4.30s and `npm run typecheck` passes. These are
+new targeted results, not part of the earlier exact d406bb1 cumulative certificate.
+The affected lower-route, travel-advance, surface-knowledge and pickup owners
+plus `humanPerception.travelSurface.test.ts` pass5 files/140 assertions in8.77s
+with `npx vitest run src/sim/residentKnownRoutes.test.ts src/sim/residentTravelAdvance.test.ts src/sim/residentSurfaceKnowledge.test.ts src/sim/residentPickupUse.test.ts src/game/humanPerception.travelSurface.test.ts --maxWorkers=2`.
+The new integration test's SHA256 is
+`56df7977e81cfa9d4efddd958f782a4408b162ac4c2d3ce9f98058c9cf944ea4`.
+
+The chosen route's ETA2700 exceeds the offer's due2040; this before-departure
+fixture makes **no** later delivery or deadline-viability claim. Coarse past
+fulfillment teaches topology, not physical walking or remote safety. Controlled
+stock, schedule, needs, fatigue, store and ground inputs are disclosed; ordinary
+controls, full production-runtime bootstrap, outer-save continuation, rendered
+crossing, player hearing/audio hardware and untouched normal-play success remain
+outside this proof. Post-departure adaptation retains its T1 continuation.
+No production/schema/support, build, performance, release or directive-closure
+change follows. Dependency changes: NONE. Upstream p5/Electron modified: NO.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
