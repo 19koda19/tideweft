@@ -2,6 +2,42 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "0.3.3-alpha.65",
+      "releaseDate": "2026-10-11",
+      "buildIdentity": "0.3.3-alpha.65",
+      "summary": "Alpha 65 is an unpublished local resident-activity and travel candidate, not a published release or completed directive.",
+      "gameplayContractVersion": 51,
+      "tutorialVersion": 75,
+      "categories": {
+        "gameplay": [
+          "The original forty-two residents retain their bodies while approaching supported rest, ration, civic-material and keeper duties. Arrival and actual stock, project or store transactions decide completion; occupation labels do not create professions.",
+          "Nearby resident couriers approach real Promise pickups, move with the same conserved contract quantity, and hand off only after authenticated arrival. Locally observed unsafe ground can cause waiting and lawful resumption; genuinely remembered viable routes can inform origin choice."
+        ],
+        "fixes": [
+          "Neutral recognition no longer creates permanent watching or denies restorative rest. Brief attention returns to the resident's actual task, and traveling bodies retain forward or reverse route heading.",
+          "Stock shortages preserve pending civic requests until another real opportunity. Interrupted travel, cancellation and cold reload preserve actual location and cargo instead of manufacturing an arrival or duplicate delivery.",
+          "Accepted salient resident contact enters the existing acoustic path. Optional caption suppression cannot remove committed audio or other actors' lawful hearing; consumed contact and service events do not replay on reload."
+        ],
+        "balancing": [
+          "A CHALLENGING HARD remains the only difficulty. Ration use shares the existing aggregate stock budget; only authenticated users receive relief. Civic material service replaces its represented timer credit rather than adding a second contribution."
+        ],
+        "interface": [
+          "Directly visible ABOUT and both world views reflect observable resident activity and physical motion, not private task priorities or remote knowledge. Ordinary nearby GREET remains available while the settlement continues working.",
+          "Field Manual version 75 explains the local candidate, current save support and retained future boundaries. Alpha 64 remains the latest LIVE_VERIFIED public baseline."
+        ],
+        "saves": [
+          "This candidate writes outer save version 58. Published formats 1–32 and 50 remain supported, as do explicitly supported development formats 51–57. Those earlier resident protocols retain their history until the normal interval boundary upgrades them; loading itself grants no task success.",
+          "Obsolete Voice development formats 33–49 remain intentionally incompatible and are left untouched. Current resident bodies, pending work, cargo, observations and consumed receipts restore deterministically without duplicate stock use, project credit, handoff or incidental audio."
+        ],
+        "knownLimitations": [
+          "This is local, unpublished work. Final candidate certification, the Firefox performance disposition and release verification remain outstanding; source tests and build metadata do not establish publication or directive closure.",
+          "Recurring world-advance stalls remain. The representative Firefox world-step and callback results remain outside their frozen limits; no presented-FPS, universal mobile or long-session performance certification is claimed.",
+          "Water adaptation is bounded to supported local evidence, physical capability and available aid. It is not universal wet-terrain traversal or a fix for domestic cats remaining in water. Mid-journey alternative-route breadth remains later work.",
+          "Sourced professions, markets, physical porter-lot conversion, general injury or death, living plant harvest, broader crafting and owned boats remain future work. The independent physical store is not a duplicate of settlement aggregate food."
+        ]
+      }
+    },
+    {
       "version": "0.3.3-alpha.64",
       "releaseDate": "2026-10-07",
       "buildIdentity": "0.3.3-alpha.64",

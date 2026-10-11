@@ -17,6 +17,39 @@ import {
 } from "./tutorialGuide";
 
 describe("TIDEWEFT field-manual content", () => {
+  it("explains the unpublished resident candidate and its real service, travel and save boundaries", () => {
+    const preview = tutorialSectionById("whats-new")?.steps.find(
+      ({ id }) => id === "whats-new-resident-activity-preview",
+    );
+    const activity = tutorialSectionById("people-and-about")?.steps.find(
+      ({ id }) => id === "people-enacted-activity",
+    );
+    const travel = tutorialSectionById("people-and-about")?.steps.find(
+      ({ id }) => id === "people-accountable-travel",
+    );
+    const saves = tutorialSectionById("saves-and-quiet-hour")?.steps.find(
+      ({ id }) => id === "saves-alpha65-candidate",
+    );
+    expect(preview?.body).toContain("unpublished local candidate");
+    expect(preview?.body).toContain("Alpha 64 remains the latest LIVE_VERIFIED public baseline");
+    expect(preview?.body).toContain("Firefox performance disposition");
+    expect(activity?.body).toContain("a real service opportunity");
+    expect(activity?.body).toContain("spends existing material");
+    expect(activity?.body).toContain("lawful evidence before securing the same physical store");
+    expect(activity?.body).toContain("not an extra physical inventory");
+    expect(activity?.body).toContain("never their hidden plan");
+    expect(travel?.body).toContain("An elapsed estimate alone is not delivery");
+    expect(travel?.body).toContain("remote loaded terrain does not reveal hazards");
+    expect(travel?.body).toContain("not universal water traversal");
+    expect(travel?.body).toContain("general mid-journey rerouting");
+    expect(saves?.body).toContain("outer save version 58");
+    expect(saves?.body).toContain("Published formats 1–32 and 50");
+    expect(saves?.body).toContain("supported development formats 51–57");
+    expect(saves?.body).toContain("loading itself grants no work, recovery or arrival");
+    expect(saves?.body).toContain("Voice formats 33–49 remain incompatible and untouched");
+    expect(saves?.body).toContain("not permission to wipe data");
+  });
+
   it("explains one player field without promising sight through hills or remote interaction", () => {
     const perception = tutorialSectionById("views-and-hud")?.steps.find(
       ({ id }) => id === "views-perception",
@@ -33,7 +66,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("keeps one deterministic, complete page order with globally unique content IDs", () => {
     expect(TUTORIAL_GUIDE_SECTIONS.map((section) => section.id)).toEqual(TUTORIAL_SECTION_IDS);
     expect(TIDEWEFT_TUTORIAL_GUIDE.sections).toBe(TUTORIAL_GUIDE_SECTIONS);
-    expect(TUTORIAL_CONTENT_VERSION).toBe(74);
+    expect(TUTORIAL_CONTENT_VERSION).toBe(75);
     expect(TIDEWEFT_TUTORIAL_GUIDE.version).toBe(TUTORIAL_CONTENT_VERSION);
 
     const sectionIds = TUTORIAL_GUIDE_SECTIONS.map((section) => section.id);
@@ -147,7 +180,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("All forty-two current original-estuary residents now use that shared reciprocal settlement-rest routine");
     expect(copy).toContain("contract-free person can rest only while physically present at a real settlement");
     expect(copy).toContain("onward or return travel still requires real Promise work");
-    expect(copy).toContain("Promise work, route travel, storms, urgent needs, and current identified/alert/searching attention keep a person active");
+    expect(copy).toContain("Promise work, route travel, storms, urgent needs, and meaningful alarm/search attention keep a person active");
     expect(copy).toContain("weak uncertainty does not force wakefulness");
     expect(copy).toContain("settlement working dog retains its separate physical kennel routine and relationships");
     expect(copy).toContain("All seventeen current wildlife activity profiles use the same arrival-gated routine contract");
@@ -179,7 +212,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(liveBoundary?.body).toContain("current catalog derives rhythm and cadence from the binding registry while exact Alpha 32 through Alpha 39 historical catalogs remain unchanged");
     expect(liveBoundary?.body).toContain("all forty-two current original-estuary residents with an overrideable reciprocal settlement-rest routine");
     expect(liveBoundary?.body).toContain("visiting courier can recover only while physically present at a settlement");
-    expect(liveBoundary?.body).toContain("Real Promise work, route travel, storms, urgent needs, and current watch/search cognition outrank human rest");
+    expect(liveBoundary?.body).toContain("Real Promise work, route travel, storms, urgent needs, and meaningful alarm/search attention outrank human rest");
     expect(liveBoundary?.body).toContain("eligible current human physically present at a settlement on an ordinary authoritative tick");
     expect(liveBoundary?.body).toContain("exact Alpha 51 resident-home digest bytes");
     expect(liveBoundary?.body).toContain("Alpha 54 reuses only a bounded internally generated terrain fingerprint across ecology owners");
@@ -431,7 +464,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(copy).toContain("copy—or absence—is authoritative");
     expect(copy).toContain("disables Continue, seed creation, and restart");
     expect(copy).toContain("performs no write");
-    expect(copy).toContain("latest LIVE_VERIFIED Alpha 60 baseline uses outer save version 32");
+    expect(copy).toContain("Historical Alpha 60 used outer save version 32");
     expect(copy).toContain("RegionalEcologyStateV6");
     expect(copy).toContain("sealed outer-version-29 Alpha-36 save is authenticated and adopted exactly once into version 30");
     expect(copy).toContain("exact RegionalEcologyStateV5 Alpha-36 child");
@@ -489,7 +522,7 @@ describe("TIDEWEFT field-manual content", () => {
     expect(recoveryStep?.body).toContain("Cancel or Wake");
     expect(recoveryStep?.body).toContain("physical incident, or qualifying current lawful disturbance");
     expect(recoveryStep?.body).toContain("broad terrain remains readable but exact actors, items, labels, interactions, and unseen events do not become player knowledge");
-    expect(recoveryStep?.body).toContain("in-progress REST or SLEEP is saved in current outer version 50");
+    expect(recoveryStep?.body).toContain("in-progress REST or SLEEP is saved in current outer version 58");
     expect(recoveryStep?.body).toContain("resumes after reload");
     expect(recoveryStep?.body).toContain("hidden or closed app advances nothing");
     expect(saves?.steps.find((step) => step.id === "saves-quiet-hour")?.body).toContain(
@@ -504,8 +537,8 @@ describe("TIDEWEFT field-manual content", () => {
     expect(plannedBoundary?.body).not.toContain("player sleep/wait");
     expect(plannedBoundary?.body).not.toContain("player WAIT");
     expect(plannedBoundary?.body).not.toContain("player REST and SLEEP");
-    expect(plannedBoundary?.body).toContain("Breathing Room is complete");
-    expect(plannedBoundary?.body).toContain("Living Voice is the active local development directive");
+    expect(plannedBoundary?.body).toContain("Breathing Room and the bounded Alpha 64 Living Voice scope are complete");
+    expect(plannedBoundary?.body).toContain("The resident-activity candidate remains local and unpublished");
   });
 
   it("teaches live gathering, combined inventory, atomic crafting, and durable gear", () => {
@@ -851,7 +884,7 @@ describe("TIDEWEFT field-manual content", () => {
   it("teaches the v6 breadth wrapper without rewriting the exact v5 ecology", () => {
     const saves = tutorialSectionById("saves-and-quiet-hour");
     const copy = saves?.steps.map((step) => step.body).join(" ") ?? "";
-    expect(copy).toContain("latest LIVE_VERIFIED Alpha 60 baseline uses outer save version 32 while RegionalEcologyStateV6 remains the unchanged nested ecology authority");
+    expect(copy).toContain("Historical Alpha 60 used outer save version 32 while RegionalEcologyStateV6 remains the unchanged nested ecology authority");
     expect(copy).toContain("Later unpublished pre-1.0 source may use a newer explicitly versioned development schema");
     expect(copy).toContain("Version 32 adds only the nullable player time-action receipt");
     expect(copy).toContain("exact RegionalEcologyStateV5 Alpha-36 child");

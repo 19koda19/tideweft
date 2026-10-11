@@ -21,20 +21,29 @@ describe("canonical offline patch notes", () => {
     expect(TIDEWEFT_PATCH_NOTES.schemaVersion).toBe(PATCH_NOTES_SCHEMA_VERSION);
     expect(Object.keys(LATEST_PATCH_NOTE.categories)).toEqual(PATCH_NOTE_CATEGORIES);
     expect(LATEST_PATCH_NOTE).toMatchObject({
-      version: "0.3.3-alpha.64",
-      releaseDate: "2026-10-07",
-      buildIdentity: "0.3.3-alpha.64",
+      version: "0.3.3-alpha.65",
+      releaseDate: "2026-10-11",
+      buildIdentity: "0.3.3-alpha.65",
       gameplayContractVersion: 51,
-      tutorialVersion: 74,
+      tutorialVersion: 75,
     });
     expect(PATCH_NOTE_CATEGORIES.every(
       (category) => LATEST_PATCH_NOTE.categories[category].length > 0,
     )).toBe(true);
   });
 
-  it("keeps current acoustic behavior separate from future breadth and performance certification", () => {
+  it("preserves the published Alpha-64 acoustic and save boundary as history", () => {
+    const publishedVoice = TIDEWEFT_PATCH_NOTES.releases.find(
+      (release) => release.version === "0.3.3-alpha.64",
+    )!;
+    expect(publishedVoice).toMatchObject({
+      releaseDate: "2026-10-07",
+      buildIdentity: "0.3.3-alpha.64",
+      gameplayContractVersion: 51,
+      tutorialVersion: 74,
+    });
     const currentCopy = PATCH_NOTE_CATEGORIES
-      .flatMap((category) => LATEST_PATCH_NOTE.categories[category]).join(" ");
+      .flatMap((category) => publishedVoice.categories[category]).join(" ");
     expect(currentCopy).toContain("fox call or chicken call without brackets");
     expect(currentCopy).toContain("other actors' lawful hearing");
     expect(currentCopy).toContain("without losing pending messages or replaying an old announcement");
@@ -43,6 +52,30 @@ describe("canonical offline patch notes", () => {
     expect(currentCopy).toContain("do not make those actions playable");
     expect(currentCopy).toContain("recurring world-advance stalls remain");
     expect(currentCopy).toContain("do not certify presented FPS");
+  });
+
+  it("scopes the local resident candidate without claiming release, universal crossings or new professions", () => {
+    const currentCopy = PATCH_NOTE_CATEGORIES
+      .flatMap((category) => LATEST_PATCH_NOTE.categories[category]).join(" ");
+    expect(LATEST_PATCH_NOTE.summary).toContain("unpublished local resident-activity and travel candidate");
+    expect(LATEST_PATCH_NOTE.summary).toContain("not a published release or completed directive");
+    expect(currentCopy).toContain("forty-two residents retain their bodies");
+    expect(currentCopy).toContain("occupation labels do not create professions");
+    expect(currentCopy).toContain("hand off only after authenticated arrival");
+    expect(currentCopy).toContain("replaces its represented timer credit");
+    expect(currentCopy).toContain("Optional caption suppression cannot remove committed audio");
+    expect(currentCopy).toContain("outer save version 58");
+    expect(currentCopy).toContain("Published formats 1–32 and 50 remain supported");
+    expect(currentCopy).toContain("supported development formats 51–57");
+    expect(currentCopy).toContain("loading itself grants no task success");
+    expect(currentCopy).toContain("intentionally incompatible and are left untouched");
+    expect(currentCopy).toContain("Alpha 64 remains the latest LIVE_VERIFIED public baseline");
+    expect(currentCopy).toContain("Firefox performance disposition");
+    expect(currentCopy).toContain("outside their frozen limits");
+    expect(currentCopy).toContain("not universal wet-terrain traversal");
+    expect(currentCopy).toContain("Mid-journey alternative-route breadth remains later work");
+    expect(currentCopy).toContain("physical porter-lot conversion");
+    expect(currentCopy).toContain("not a duplicate of settlement aggregate food");
   });
 
   it("uses SemVer precedence to reject newest-first mistakes on the same date", () => {

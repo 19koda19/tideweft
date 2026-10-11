@@ -8,6 +8,11 @@ The current release is **LIVE_VERIFIED**
 `0.3.3-alpha.64 — The Living Voice`. Its exact source, CI, deployment and
 five-file live comparison are recorded in [GitHub Pages](#github-pages).
 
+The local `0.3.3-alpha.65` candidate adds bounded resident activity and
+accountable travel. It is unpublished, does not close the active integration
+directive, and has an unresolved Firefox performance gate. Its bundled manual
+and patch notes describe local behavior; they are not evidence of deployment.
+
 Alpha 39 remains preserved below as the historical biodiversity closure for
 Directive 04_1. Alpha 53 closes The Turning Day, Alpha 60 closes Directive
 04_1B **Breathing Room**, and Alpha64 closes the currently available Living
