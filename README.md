@@ -13,6 +13,10 @@ accountable travel. It is unpublished, does not close the active integration
 directive, and retains a documented Firefox performance limitation accepted
 for this checkpoint. Repair and remeasurement follow full Living Foliage.
 Its bundled manual and patch notes describe local behavior, not deployment.
+The frozen executable's complete local regression passes 419 files / 5,473
+tests; generated web and macOS arm64 functional checks have scoped evidence.
+See the [final candidate certificate](docs/RESEARCH.md#final-resident-candidate-certification--2026-10-11).
+Remote CI, Pages and exact live verification remain pending.
 
 Alpha 39 remains preserved below as the historical biodiversity closure for
 Directive 04_1. Alpha 53 closes The Turning Day, Alpha 60 closes Directive

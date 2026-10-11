@@ -38,6 +38,60 @@ Alpha66 is still unpublished/incomplete; this decision does not certify
 closure, GPU throughput, long sessions or additional hardware. No application
 algorithm, schema/support, dependency or upstream p5/Electron change follows.
 
+## Final resident candidate certification — 2026-10-11
+
+Frozen local executable `f42845a9d958874763efbfcf38b6a76d00aa4e4c`
+is Alpha66 / Field Manual76 / gameplay51 / writer58 / perception carry14.
+Its declared support set remains1–32 and50–58;33–49 remain explicitly retired.
+No algorithm, support-set, dependency or upstream change accompanies this
+candidate-content checkpoint. Alpha64 remains the public release; this record
+is local certification, not publication or directive closure.
+
+`caffeinate -i npm run test:ci -- --reporter=default --reporter=json
+--outputFile.json=artifacts/validation/f42845a-cumulative.json` terminates0:
+419 product files /5,473 tests PASS in2,968.28s, no failed, pending or TODO
+cases. Context28, player-facing synchronization40 and documentation-reuse45
+selftests pass separately. All750 tracked input bytes/membership and419 test
+paths match their pre-run freeze after termination. Node22.20.0/npm10.9.3,
+AC100% and no competing game/test/profiler are recorded at launch. Report
+SHA256 `ed7313f0e2e9e6a6f94da9f615b783da9a59c44f10e0e0818ba1eacfc9f5cc01`;
+log `1f01fa64b5d878f93de6abe28939b8ed9f5eb21408055c34b7d4bfe448b66044`;
+input manifest `fcd12a098c4691bea262b95e4e5bd5571fdd7e79fcafa8c3e66d0991e6ac05d0`.
+Later qualifying prose can reuse this executable certificate only with exact
+unchanged executable/test/configuration/dependency bytes; it is not a new run.
+
+Current `npm run package:desktop` passes, including `build:web`/typecheck and
+638 Vite modules. Static `smoke:web` passes five emitted files beneath
+`/tideweft/` with appropriate references/MIME. macOS arm64 normal packaged
+`smoke:desktop` passes on Electron44.1.0/app:// with renderer warnings,
+navigation diagnostics and resource failures empty. ASAR SHA256 is
+`3d93ef939a559d22e7c97051f429a1982bb525f425b4514debe4b20241719245`;
+all seven runtime files match checkout bytes. Production JS is
+`index-CxGj8qmC.js`, SHA256
+`e12f30f52ef55c618255a86e804a0037c99dc32102fd224353f46418455beba1`.
+The first package attempt encountered a Finder-created `.DS_Store` in the
+emptied output directory; preserving that leftover and retrying unchanged
+passes. A corrected read-only ASAR path probe passes after its initial API-path
+mistake; neither operational failure was hidden by a product workaround.
+
+The existing ordinary browser driver runs this actual static artifact in
+Firefox157.0.1,1440×900/DPR1, AC100% for140.527s/278 bounded public samples,
+ticks420→560. Physical GREET91 shows acquaintance and closes, then the same
+resident returns to ordinary activity; civic480/ration540 cues have eleven
+same-mode captures. Greeting Chart/returned-activity Relief were visually
+reviewed. Guarded runtime errors/navigation/prompts are zero; the known
+pre-guard startup CSP denial remains recorded. No authored task/save/pose was
+used. This proves sampled public interaction/presentation, not universal
+visual QA, complete event/conservation equivalence, audible playback or a soak.
+Browser report SHA256 is
+`e8cd7581df5bb6ddc12681c268a349df15569ae0516478193535e91bcc691aaf`.
+
+No new performance measurements are claimed. The accepted Firefox numerical
+miss and full-Foliage follow-up remain unchanged. ZIP/install/sign/notarization,
+other desktop targets, hardware mobile and formal assistive-technology checks
+are not run for this candidate. Remote CI, Pages and exact live verification
+remain pending. Dependency changes: NONE; upstream p5/Electron modified: NO.
+
 ## Alpha64 short production comparison — 2026-10-07
 
 Clean executable `785ff0f3359581bd3c3b2fce7550a976152c0fb5` prepares the

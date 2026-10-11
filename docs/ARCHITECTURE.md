@@ -2256,9 +2256,11 @@ head representation. Legacy unbound settlement placements retain their existing
 attention-facing cue. A native adapter-produced rest walker with a lawful
 sideways neutral glance proves projection preserves actual movement heading
 without mutating the body or recognition. There is no new speech/audio event,
-presentation timer or save root. The [rest integration boundary](#planned-bounded-existing-world-integration)
-owns current approach evidence; complete services, traveler enactment and broader
-body/look presentation remain unfinished. No new public release is claimed.
+presentation timer or save root. The [activity integration owner](#planned-bounded-existing-world-integration)
+records bounded rest, service and traveler enactment. [Ordinary greeting and
+same-resident task-return evidence](./RESEARCH.md#water-contact-candidate-artifact-and-ordinary-interaction-checks--2026-10-10)
+complements the adapter proof. Broader body/look visual breadth remains separate;
+release remains pending. No new public release is claimed.
 
 Current local movement copy in Chart/Relief and ABOUT derives only from the
 last two canonical body poses bound to that resident and perception tick.
@@ -2279,7 +2281,9 @@ progress owner. Bends and endpoints use that direction's physical tangent;
 position, occupied cell and cargo/progress accounting are unchanged. Missing
 or invalid live itinerary metadata cannot establish reverse direction. Legacy
 event-time loci retain their original reconstruction rather than borrowing a
-later Promise's heading. This is not yet fine-step physical route execution.
+later Promise's heading. This tangent derivation alone does not certify movement;
+[accountable ordered resident travel](#accountable-ordered-resident-travel) owns
+fine-step execution, cursor continuity and authenticated arrival.
 
 ## World representation
 
