@@ -3060,8 +3060,12 @@ placement at a real native source remains foundation evidence. A separate
 now reaches the patch through ordinary movement, sounds and deploys one starter
 with existing commands, and attributes real benefited entries and conserved
 wear. Reclaiming that same piece removes its benefit; cold continuation and
-late publication rollback preserve the complete authoritative roots. This is
-not rendered keyboard/pointer play or complete crossing acceptance.
+late publication rollback preserve the complete authoritative roots. A separate
+[ordinary-control browser witness](./RESEARCH.md#ordinary-control-reed-mat-witness-in-chart-and-relief--2026-10-10)
+now physically reaches, sounds and deploys that same starter, then shows its
+field label and KIT condition changing92%→86% in both views. Public sampling
+does not attribute individual wear/cargo or certify complete crossing acceptance;
+the exact transaction and cold/rollback claims remain with the integration test.
 
 ### Observed next-segment travel support
 

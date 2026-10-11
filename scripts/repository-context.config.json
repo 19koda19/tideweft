@@ -197,7 +197,7 @@
         "locatorType": "heading",
         "locator": "Embodied acoustic event and receipt pipeline"
       },
-      "reviewedSourceFingerprint": "71c1f9de733d5ed7bf9e72b8b5164b5f5ede209cf8aa20a277ed5bacbcb7aaf1",
+      "reviewedSourceFingerprint": "26c4489b4b4fffa9f0c2ce29d04a7c4778385c9ef2955e48319a8c99aad3892c",
       "purpose": "Route committed vocal and physical causes through structured acoustic events, lawful listener receipts, and shared bounded presentation.",
       "preconditions": [
         "A causal domain has committed the action or experience that produced the sound."
@@ -259,7 +259,7 @@
         "locatorType": "heading",
         "locator": "Compatibility lifecycle"
       },
-      "reviewedSourceFingerprint": "71c1f9de733d5ed7bf9e72b8b5164b5f5ede209cf8aa20a277ed5bacbcb7aaf1",
+      "reviewedSourceFingerprint": "26c4489b4b4fffa9f0c2ce29d04a7c4778385c9ef2955e48319a8c99aad3892c",
       "purpose": "Preserve current authoritative saves now while distinguishing explicitly retired pre-1.0 development formats from supported post-1.0 saves.",
       "preconditions": [
         "Every save carries explicit schema and generator identity sufficient for fail-closed validation."

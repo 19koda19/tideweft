@@ -8494,6 +8494,72 @@ trip handoff, performance or whole WORLD0 completion. Production, current and
 supported schemas, dependencies and platform artifacts remain unchanged.
 Dependency changes: NONE. Upstream p5/Electron source modified: NO.
 
+### Ordinary-control reed-mat witness in Chart and Relief — 2026-10-10
+
+**Finite local/unpublished production-browser evidence, not whole-directive or
+performance acceptance.** At clean `314bc110ec58465d222108d4ee8506bdfc3be081`,
+the existing ignored native-estuary driver gained one default-off mat mode.
+Its14 local synthetic selftests pass, including unchanged old-mode ceilings,
+signed public coordinates, malformed/duplicate identity and condition-only
+false witnesses. Maintained `npm run test:smoke` passes six files/105 tests
+in4.18s. No product, schema, support set, dependency or build bytes changed.
+
+The actual command was:
+
+```sh
+caffeinate -i node artifacts/validation/world0-normal-native/estuary-play.cjs \
+  --native-traveler-preflight --native-mat-controls --wait-to-tick 1150 \
+  --observe-until-tick 1280 --max-wall-ms 600000 --watch-resident 89 \
+  --run-name 314bc11-native-mat-controls-1
+```
+
+Firefox157.0.1 served the production `dist/` at the static `/tideweft/` path,
+1440×900 CSS/DPR1, on the AC-powered host with no other game/test/profiler.
+The user's browser/save stayed untouched; a disposable profile was removed
+after browser exit0. The same executable assets remained unchanged before and
+after: JavaScript SHA256 `37ba0db0e278bfb346d1a107dcb0b05900231b837a0366505b187b87065d1810`;
+packaged ASAR `ca30899b629d12859d6a1d9c3770a0767fd33a97b2ac85f482974e368c1855e9`
+was separately reverified, not launched by this browser check.
+
+The run lasts529.666s with834 bounded public samples. Physical WAIT/cancel
+reaches ordinary observation1150; actual Chart WASD moves from37.5,55.5 at1151
+to43.433,46.997 at1164, with stopped velocity and no destination. One physical
+Space yields the enabled painted Lay Reed mat control; one physical F deploys
+starter1 at1165, condition92%. No authored pose, body, task, need, weather,
+stock, knowledge, successful result, save or forced simulation step is used.
+After placement, the player remains at that same position; no further
+deployment, reclaim or repair is requested. Ordinary WAIT is cancelled at1274.
+Public samples show native nearby bodies move from43,46 toward43,45 and the
+same deployed mat's condition reaches86% at1278. This matches the separate
+native integration proof's consequence, but public projection sampling does
+not independently prove each cargo quantity or debit.
+
+All eight placement/use field and KIT screenshots were visually inspected.
+Both views show the numbered source label. Painted KIT MEND rows show the
+same identity/address and92% then86%, with matching normalized progress and
+accessible condition. The Chart lattice is visible; Relief's existing raised
+water surface can partially obscure the physical mark while its label remains
+readable. Coincident people are not individually certified by these images.
+Public-source `focusWorld` assistance is disclosed; camera gestures, mobile,
+audible output and hardware assistive output were not tested.
+
+The witness is found before the1280 event-search bound, at1278. Non-pausing
+view/KIT capture and cleanup continue to terminal1285; the search ceiling is
+not an exact terminal-tick certificate. This bounded capture tail is recorded,
+not a reason to extend missing-opportunity searches. The600000ms/1300sample
+ceilings hold. One known startup CSP-eval denial remains retained; guarded
+errors/navigation/prompts are zero. Original instructions, all26 directive
+fingerprints/membership and production source/artifact identity are unchanged.
+
+Driver SHA256 `ac7893e78b8ad2422a2db0b59c284070417bb351fea01adc0871b25bfcdd90b2`;
+report `3b39d9dce1c5646457fa979da7cbbc448e7a5197a55c7e7bdf4f6f935b622084`.
+This supplies ordinary-control deployment and readable persistent-piece
+presentation, not wet assistance, full crossing/handoff, earned alternative
+choice, cold-load proof, long-run certification, measured FPS improvement,
+desktop lifecycle, publication or directive closure. Existing standing
+performance limitations and deferred longitudinal evidence remain unchanged.
+Dependency changes: NONE. Upstream p5/Electron source modified: NO.
+
 ### Mixed-resolution ecology must preserve absence, identity, and causal limits
 
 The Alpha 14 Wave-A implementation establishes a bounded scaling pattern for later biodiversity work. Habitat capacity, aggregate population units, pressure, and trend are authoritative facts separate from the small number of exact actors used to represent them nearby. A valid habitat can support no local member of a species; quiet ecology must not be treated as a generation failure. Deer and gull representatives retain stable herd/flock state across full and coarse simulation, while unloaded individuals age physiology and already-committed intent without inventing perception, movement, food claims, or harm. Bounded player-absent group displacement can occur only from persisted habitat pressure and validated anchors, remains nonlethal and cargo-neutral, and does not become player knowledge automatically.
